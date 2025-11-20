@@ -21,22 +21,22 @@ based_on: specs/stories/1-foundation-and-scheduler/plan.md
 
 ## 対象ファイル
 
-- [ ] src/types/env.ts
+- [x] src/types/env.ts
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
 
-- [ ] ディレクトリ作成
+- [x] ディレクトリ作成
   ```bash
   mkdir -p src/types
   ```
-- [ ] 型定義ファイルの作成（空）
-- [ ] TypeScriptビルドが失敗することを確認（実装前）
+- [x] 型定義ファイルの作成（空）
+- [x] TypeScriptビルドが失敗することを確認（実装前）
 
 ### 2. Green Phase
 
-- [ ] EnvSchemaの実装（Design Doc準拠）
+- [x] EnvSchemaの実装（Design Doc準拠）
   ```typescript
   // src/types/env.ts
   import { z } from 'zod'
@@ -58,21 +58,21 @@ based_on: specs/stories/1-foundation-and-scheduler/plan.md
 
   export type EnvConfig = z.infer<typeof envSchema>
   ```
-- [ ] TypeScriptビルドが成功することを確認
+- [x] TypeScriptビルドが成功することを確認
 
 ### 3. Refactor Phase
 
-- [ ] コード品質確認
+- [x] コード品質確認
   - インポートの整理
   - コメントの追加（必要に応じて）
-- [ ] `npm run check` でlint/formatエラーなし
+- [x] `npm run check` でlint/formatエラーなし
 
 ## 完了条件
 
-- [ ] Design DocのenvSchemaと完全一致
-- [ ] TypeScript strict mode: エラー0件
-- [ ] Biome lint: エラー0件
-- [ ] 動作確認完了（L1: ビルド成功）
+- [x] Design DocのenvSchemaと完全一致
+- [x] TypeScript strict mode: エラー0件
+- [x] Biome lint: エラー0件
+- [x] 動作確認完了（L1: ビルド成功）
   ```bash
   npm run build && npm run check
   ```
