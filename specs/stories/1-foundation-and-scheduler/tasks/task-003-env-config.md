@@ -21,31 +21,31 @@ dotenvとZodを使用した環境変数管理モジュールを実装する。�
 
 ## 対象ファイル
 
-- [ ] src/config/env-config.ts
-- [ ] test/integration/foundation-and-scheduler.int.test.ts（AC-ENV部分）
+- [x] src/config/env-config.ts
+- [x] test/integration/foundation-and-scheduler.int.test.ts（AC-ENV部分）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
 
-- [ ] ディレクトリ作成
+- [x] ディレクトリ作成
   ```bash
   mkdir -p src/config test/integration
   ```
-- [ ] 統合テストファイルの作成（AC-ENV-1〜5）
+- [x] 統合テストファイルの作成（AC-ENV-1〜5）
   - AC-ENV-1: 起動時の環境変数読み込み（2件）
   - AC-ENV-2: 必須環境変数未設定時のエラー処理（5件）
   - AC-ENV-3: 不正値時のZodエラー処理（8件）
   - AC-ENV-4: オプション環境変数のデフォルト値（5件）
   - AC-ENV-5: loadConfig()経由の設定取得（2件）
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   npm run test:integration
   ```
 
 ### 2. Green Phase
 
-- [ ] loadConfig()関数の実装（Design Doc準拠）
+- [x] loadConfig()関数の実装（Design Doc準拠）
   ```typescript
   // src/config/env-config.ts
   import dotenv from 'dotenv'
@@ -65,12 +65,12 @@ dotenvとZodを使用した環境変数管理モジュールを実装する。�
     return result.data
   }
   ```
-- [ ] テスト実行して通ることを確認
+- [x] テスト実行して通ることを確認
 
 ### 3. Refactor Phase
 
-- [ ] コード改善（テストが通る状態を維持）
-- [ ] `npm run check` でlint/formatエラーなし
+- [x] コード改善（テストが通る状態を維持）
+- [x] `npm run check` でlint/formatエラーなし
 
 ## テストケース詳細
 
@@ -108,15 +108,15 @@ dotenvとZodを使用した環境変数管理モジュールを実装する。�
 
 ## 完了条件
 
-- [ ] 追加したテストが全てパス（22件）
-- [ ] TypeScript strict mode: エラー0件
-- [ ] Biome lint: エラー0件
-- [ ] 動作確認完了（L2: 統合テスト実行）
+- [x] 追加したテストが全てパス（22件）
+- [x] TypeScript strict mode: エラー0件
+- [x] Biome lint: エラー0件
+- [x] 動作確認完了（L2: 統合テスト実行）
   ```bash
   npm run test:integration -- foundation-and-scheduler.int.test.ts
   ```
-- [ ] 必須環境変数検証が1秒以内に完了
-- [ ] トレーサビリティ: AC-ENV-1（2件）、AC-ENV-2（5件）、AC-ENV-3（8件）、AC-ENV-4（5件）、AC-ENV-5（2件）
+- [x] 必須環境変数検証が1秒以内に完了
+- [x] トレーサビリティ: AC-ENV-1（2件）、AC-ENV-2（5件）、AC-ENV-3（8件）、AC-ENV-4（5件）、AC-ENV-5（2件）
 
 ## 注意事項
 
