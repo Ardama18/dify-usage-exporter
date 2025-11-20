@@ -21,14 +21,14 @@ Dockerマルチステージビルドを設定し、本番用の軽量イメー�
 
 ## 対象ファイル
 
-- [ ] Dockerfile
-- [ ] .dockerignore
+- [x] Dockerfile
+- [x] .dockerignore
 
 ## 実装手順
 
 ### 1. Dockerfile作成
 
-- [ ] マルチステージビルドのDockerfile作成（Design Doc準拠）
+- [x] マルチステージビルドのDockerfile作成（Design Doc準拠）
   ```dockerfile
   # ビルドステージ
   FROM node:20-alpine AS builder
@@ -68,7 +68,7 @@ Dockerマルチステージビルドを設定し、本番用の軽量イメー�
 
 ### 2. .dockerignore作成
 
-- [ ] .dockerignore作成
+- [x] .dockerignore作成
   ```
   node_modules
   dist
@@ -87,23 +87,23 @@ Dockerマルチステージビルドを設定し、本番用の軽量イメー�
 
 ### 3. ビルド確認
 
-- [ ] docker build コマンドで成功確認
+- [x] docker build コマンドで成功確認
   ```bash
   docker build -t dify-usage-exporter .
   ```
-- [ ] イメージサイズ確認
+- [x] イメージサイズ確認
   ```bash
   docker images dify-usage-exporter
   ```
 
 ### 4. 起動確認
 
-- [ ] docker run で起動確認
+- [x] docker run で起動確認
   ```bash
   docker run --env-file .env dify-usage-exporter
   ```
-- [ ] ログ出力確認
-- [ ] 非rootユーザー確認
+- [x] ログ出力確認
+- [x] 非rootユーザー確認
   ```bash
   docker run --rm dify-usage-exporter whoami
   # 出力: exporter
@@ -111,17 +111,17 @@ Dockerマルチステージビルドを設定し、本番用の軽量イメー�
 
 ## 完了条件
 
-- [ ] AC-DOCKER-1: マルチステージビルドでDockerイメージを構築
-- [ ] AC-DOCKER-2: 非rootユーザー（exporter）でコンテナを実行
-- [ ] AC-DOCKER-3: node:20-alpineベースイメージを使用
-- [ ] TypeScript strict mode: エラー0件（Dockerfileに型はないが、ビルド成功を確認）
-- [ ] Biome lint: エラー0件（Dockerfileに対するlintは対象外）
-- [ ] 動作確認完了（L2: Docker build/run成功）
+- [x] AC-DOCKER-1: マルチステージビルドでDockerイメージを構築
+- [x] AC-DOCKER-2: 非rootユーザー（exporter）でコンテナを実行
+- [x] AC-DOCKER-3: node:20-alpineベースイメージを使用
+- [x] TypeScript strict mode: エラー0件（Dockerfileに型はないが、ビルド成功を確認）
+- [x] Biome lint: エラー0件（Dockerfileに対するlintは対象外）
+- [x] 動作確認完了（L2: Docker build/run成功）
   ```bash
   docker build -t dify-usage-exporter . && \
   docker run --rm --env-file .env dify-usage-exporter
   ```
-- [ ] ビルドイメージサイズの最適化（alpine + 本番依存のみ）
+- [x] ビルドイメージサイズの最適化（alpine + 本番依存のみ）
 
 ## 注意事項
 
