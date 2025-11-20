@@ -21,32 +21,32 @@ winstonを使用したJSON形式ログ出力基盤を実装する。Loggerイン
 
 ## 対象ファイル
 
-- [ ] src/logger/winston-logger.ts
-- [ ] test/integration/foundation-and-scheduler.int.test.ts（AC-LOG部分追記）
+- [x] src/logger/winston-logger.ts
+- [x] test/integration/foundation-and-scheduler.int.test.ts（AC-LOG部分追記）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
 
-- [ ] ディレクトリ作成
+- [x] ディレクトリ作成
   ```bash
   mkdir -p src/logger
   ```
-- [ ] 統合テストの追記（AC-LOG-1〜5）
+- [x] 統合テストの追記（AC-LOG-1〜5）
   - AC-LOG-1: JSON Lines形式での標準出力（4件）
   - AC-LOG-2: ログフィールドの含有（5件）
   - AC-LOG-3: 4つのログレベルサポート（7件）
   - AC-LOG-4: エラーログのスタックトレース（3件）
   - AC-LOG-5: シークレット情報の非出力（3件）
   - Logger子インスタンス（2件）
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   npm run test:integration
   ```
 
 ### 2. Green Phase
 
-- [ ] Loggerインターフェースの定義
+- [x] Loggerインターフェースの定義
   ```typescript
   export interface Logger {
     error(message: string, meta?: Record<string, unknown>): void
@@ -57,7 +57,7 @@ winstonを使用したJSON形式ログ出力基盤を実装する。Loggerイン
   }
   ```
 
-- [ ] createLogger()関数の実装（Design Doc準拠）
+- [x] createLogger()関数の実装（Design Doc準拠）
   ```typescript
   export function createLogger(config: EnvConfig): Logger {
     const winstonLogger = winston.createLogger({
@@ -80,7 +80,7 @@ winstonを使用したJSON形式ログ出力基盤を実装する。Loggerイン
   }
   ```
 
-- [ ] wrapWinstonLogger()関数の実装
+- [x] wrapWinstonLogger()関数の実装
   ```typescript
   function wrapWinstonLogger(winstonLogger: winston.Logger): Logger {
     return {
@@ -93,12 +93,12 @@ winstonを使用したJSON形式ログ出力基盤を実装する。Loggerイン
   }
   ```
 
-- [ ] テスト実行して通ることを確認
+- [x] テスト実行して通ることを確認
 
 ### 3. Refactor Phase
 
-- [ ] コード改善（テストが通る状態を維持）
-- [ ] `npm run check` でlint/formatエラーなし
+- [x] コード改善（テストが通る状態を維持）
+- [x] `npm run check` でlint/formatエラーなし
 
 ## テストケース詳細
 
@@ -140,15 +140,15 @@ winstonを使用したJSON形式ログ出力基盤を実装する。Loggerイン
 
 ## 完了条件
 
-- [ ] 追加したテストが全てパス（24件）
-- [ ] TypeScript strict mode: エラー0件
-- [ ] Biome lint: エラー0件
-- [ ] 動作確認完了（L2: 統合テスト実行）
+- [x] 追加したテストが全てパス（24件）
+- [x] TypeScript strict mode: エラー0件
+- [x] Biome lint: エラー0件
+- [x] 動作確認完了（L2: 統合テスト実行）
   ```bash
   npm run test:integration -- foundation-and-scheduler.int.test.ts
   ```
-- [ ] ログオーバーヘッド5%以内（パフォーマンス要件）
-- [ ] トレーサビリティ: AC-LOG-1（4件）、AC-LOG-2（5件）、AC-LOG-3（7件）、AC-LOG-4（3件）、AC-LOG-5（3件）、子インスタンス（2件）
+- [x] ログオーバーヘッド5%以内（パフォーマンス要件）
+- [x] トレーサビリティ: AC-LOG-1（4件）、AC-LOG-2（5件）、AC-LOG-3（7件）、AC-LOG-4（3件）、AC-LOG-5（3件）、子インスタンス（2件）
 
 ## 注意事項
 
