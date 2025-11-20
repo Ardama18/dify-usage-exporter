@@ -1,0 +1,59 @@
+{
+  "database_id": "691bf7ef1ad843e8814c71b8444fff01",
+  "database_url": "https://www.notion.so/691bf7ef1ad843e8814c71b8444fff01",
+  "title": "タイムコイン_エピック",
+  "data_source_id": "e5c41b94-b365-49e5-9345-0d7fd3e287ec",
+  "access_mode": "read_only",
+  "description": "エピックは手動作成。システムは読み取りのみ。",
+  "properties": {
+    "名前": {
+      "type": "title",
+      "description": "エピックタイトル"
+    },
+    "userDefined:ID": {
+      "type": "auto_increment_id",
+      "description": "自動採番ID（設定不要）"
+    },
+    "ステータス": {
+      "type": "status",
+      "options": [
+        "1. Not started",
+        "2. In progress",
+        "3. Stopped",
+        "3. Done"
+      ],
+      "groups": {
+        "to_do": ["1. Not started"],
+        "in_progress": ["2. In progress"],
+        "complete": ["3. Stopped", "3. Done"]
+      }
+    },
+    "カテゴリ": {
+      "type": "select",
+      "options": [
+        "運用",
+        "運用改善",
+        "リファクタ",
+        "バグ",
+        "事業継続リスク",
+        "メジャー",
+        "マイナー"
+      ]
+    },
+    "ストーリー ": {
+      "type": "relation",
+      "relation_to": "11357efe-e3bd-469f-8f94-78c64620c8ca",
+      "description": "ストーリーDBへのリレーション"
+    },
+    "リリース日": {
+      "type": "date",
+      "description": "資産計上する日付"
+    },
+    "担当者": {
+      "type": "person"
+    },
+    "開発承認": {
+      "type": "checkbox"
+    }
+  }
+}

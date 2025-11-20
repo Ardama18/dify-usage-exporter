@@ -1,0 +1,66 @@
+{
+  "database_id": "0ba78b85a3e34ec4aff736d1e0e1b466",
+  "database_url": "https://www.notion.so/0ba78b85a3e34ec4aff736d1e0e1b466",
+  "title": "タイムコイン_タスク",
+  "data_source_id": "5d7e599e-9cea-44cb-a11e-f0a5007f2d25",
+  "access_mode": "read_write",
+  "description": "システムがレビュータスクを作成する。",
+  "properties": {
+    "名前": {
+      "type": "title",
+      "description": "タスク名",
+      "required": true
+    },
+    "userDefined:ID": {
+      "type": "auto_increment_id",
+      "description": "自動採番ID（設定不要）"
+    },
+    "ステータス": {
+      "type": "status",
+      "options": [
+        "1. Not started",
+        "2. In progress",
+        "2. In Review",
+        "3. Stopped",
+        "3. Done"
+      ],
+      "groups": {
+        "to_do": ["1. Not started"],
+        "in_progress": ["2. In progress", "2. In Review"],
+        "complete": ["3. Stopped", "3. Done"]
+      }
+    },
+    "ストーリー": {
+      "type": "relation",
+      "relation_to": "11357efe-e3bd-469f-8f94-78c64620c8ca",
+      "limit": 1,
+      "description": "ストーリーDBへのリレーション（単一選択）",
+      "required": true
+    },
+    "カテゴリ": {
+      "type": "select",
+      "options": [
+        "テスト",
+        "実装",
+        "要件定義/設計",
+        "調査",
+        "研修/教育/勉強会",
+        "プロジェクト管理",
+        "運用改善",
+        "運用",
+        "評価",
+        "採用",
+        "サービス企画",
+        "必須(適切な項目を設定してください)"
+      ],
+      "description": "必須"
+    },
+    "完了予定": {
+      "type": "date"
+    },
+    "最終更新日時": {
+      "type": "last_edited_time",
+      "description": "自動更新"
+    }
+  }
+}

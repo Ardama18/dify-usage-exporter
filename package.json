@@ -1,0 +1,41 @@
+{
+  "name": "dify-usage-exporter",
+  "version": "1.0.0",
+  "description": "Dify usage data exporter with scheduled execution",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run test/integration",
+    "test:e2e": "vitest run test/e2e",
+    "check": "biome check .",
+    "format": "biome format --write .",
+    "lint:fix": "biome lint --write .",
+    "check:all": "npm run check && npm run build && npm run test"
+  },
+  "keywords": [
+    "dify",
+    "usage",
+    "exporter",
+    "scheduler"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cron": "^3.5.0",
+    "dotenv": "^16.6.1",
+    "winston": "^3.18.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.6",
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.12"
+  }
+}

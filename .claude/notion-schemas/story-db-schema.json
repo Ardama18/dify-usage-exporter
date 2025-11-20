@@ -1,0 +1,42 @@
+{
+  "database_id": "b233f5a20428417ba6dc884fa000ee58",
+  "database_url": "https://www.notion.so/b233f5a20428417ba6dc884fa000ee58",
+  "title": "DIFY-USAGE-EXPORTER_ストーリー",
+  "data_source_id": "00b58444-901b-40ba-b1e2-f344ff0e891b",
+  "access_mode": "read_write",
+  "description": "システムがストーリーを作成・更新する。",
+  "properties": {
+    "名前": {
+      "type": "title",
+      "description": "ストーリータイトル",
+      "required": true
+    },
+    "userDefined:ID": {
+      "type": "auto_increment_id",
+      "description": "自動採番ID（設定不要）"
+    },
+    "エピック": {
+      "type": "relation",
+      "relation_to": "3a28eaa9-a7bb-4f48-9ce6-13fc7b0062e7",
+      "limit": 1,
+      "description": "エピックDBへのリレーション（単一選択）",
+      "required": true
+    },
+    "タスク": {
+      "type": "relation",
+      "relation_to": "2df17ab1-9dc4-4220-a69d-4f039d7873c9",
+      "description": "タスクDBへのリレーション（複数可）"
+    },
+    "担当者": {
+      "type": "person"
+    },
+    "予定期間": {
+      "type": "date",
+      "description": "対外的に伝えている期間"
+    },
+    "主担当チーム": {
+      "type": "select",
+      "options": ["PM", "PD", "DEV"]
+    }
+  }
+}
