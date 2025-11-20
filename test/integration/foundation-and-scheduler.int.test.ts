@@ -2278,3 +2278,287 @@ describe('Graceful Shutdown - setupGracefulShutdown()', () => {
     })
   })
 })
+
+// エントリーポイントのテスト - main()関数をテスト
+describe('エントリーポイント - main()', () => {
+  const originalEnv = process.env
+
+  beforeEach(() => {
+    vi.resetModules()
+    process.env = { ...originalEnv }
+    // 必須環境変数を設定
+    process.env.DIFY_API_URL = 'https://api.dify.ai'
+    process.env.DIFY_API_TOKEN = 'dify-token-123'
+    process.env.EXTERNAL_API_URL = 'https://external.api.com'
+    process.env.EXTERNAL_API_TOKEN = 'external-token-456'
+    process.env.NODE_ENV = 'test'
+    process.env.CRON_SCHEDULE = '0 0 * * *'
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
+    vi.restoreAllMocks()
+  })
+
+  // 正常起動フロー（4件）
+  describe('正常起動フロー', () => {
+    it('loadConfig()が呼ばれる', async () => {
+      // Arrange
+      const mockLoadConfig = vi.fn().mockReturnValue({
+        DIFY_API_URL: 'https://api.dify.ai',
+        DIFY_API_TOKEN: 'dify-token-123',
+        EXTERNAL_API_URL: 'https://external.api.com',
+        EXTERNAL_API_TOKEN: 'external-token-456',
+        CRON_SCHEDULE: '0 0 * * *',
+        LOG_LEVEL: 'info',
+        GRACEFUL_SHUTDOWN_TIMEOUT: 30,
+        MAX_RETRY: 3,
+        NODE_ENV: 'test',
+      })
+
+      vi.doMock('../../src/config/env-config.js', () => ({
+        loadConfig: mockLoadConfig,
+      }))
+
+      vi.doMock('../../src/logger/winston-logger.js', () => ({
+        createLogger: vi.fn().mockReturnValue({
+          info: vi.fn(),
+          error: vi.fn(),
+          warn: vi.fn(),
+          debug: vi.fn(),
+          child: vi.fn().mockReturnValue({
+            info: vi.fn(),
+            error: vi.fn(),
+            warn: vi.fn(),
+            debug: vi.fn(),
+          }),
+        }),
+      }))
+
+      vi.doMock('../../src/scheduler/cron-scheduler.js', () => ({
+        createScheduler: vi.fn().mockReturnValue({
+          start: vi.fn(),
+          stop: vi.fn(),
+          isRunning: vi.fn().mockReturnValue(false),
+        }),
+      }))
+
+      vi.doMock('../../src/shutdown/graceful-shutdown.js', () => ({
+        setupGracefulShutdown: vi.fn(),
+      }))
+
+      // Act
+      const { main } = await import('../../src/index.js')
+      await main()
+
+      // Assert
+      expect(mockLoadConfig).toHaveBeenCalled()
+    })
+
+    it('createLogger()が呼ばれる', async () => {
+      // Arrange
+      const mockConfig = {
+        DIFY_API_URL: 'https://api.dify.ai',
+        DIFY_API_TOKEN: 'dify-token-123',
+        EXTERNAL_API_URL: 'https://external.api.com',
+        EXTERNAL_API_TOKEN: 'external-token-456',
+        CRON_SCHEDULE: '0 0 * * *',
+        LOG_LEVEL: 'info',
+        GRACEFUL_SHUTDOWN_TIMEOUT: 30,
+        MAX_RETRY: 3,
+        NODE_ENV: 'test',
+      }
+
+      vi.doMock('../../src/config/env-config.js', () => ({
+        loadConfig: vi.fn().mockReturnValue(mockConfig),
+      }))
+
+      const mockCreateLogger = vi.fn().mockReturnValue({
+        info: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        debug: vi.fn(),
+        child: vi.fn().mockReturnValue({
+          info: vi.fn(),
+          error: vi.fn(),
+          warn: vi.fn(),
+          debug: vi.fn(),
+        }),
+      })
+
+      vi.doMock('../../src/logger/winston-logger.js', () => ({
+        createLogger: mockCreateLogger,
+      }))
+
+      vi.doMock('../../src/scheduler/cron-scheduler.js', () => ({
+        createScheduler: vi.fn().mockReturnValue({
+          start: vi.fn(),
+          stop: vi.fn(),
+          isRunning: vi.fn().mockReturnValue(false),
+        }),
+      }))
+
+      vi.doMock('../../src/shutdown/graceful-shutdown.js', () => ({
+        setupGracefulShutdown: vi.fn(),
+      }))
+
+      // Act
+      const { main } = await import('../../src/index.js')
+      await main()
+
+      // Assert
+      expect(mockCreateLogger).toHaveBeenCalledWith(mockConfig)
+    })
+
+    it('createScheduler()が呼ばれる', async () => {
+      // Arrange
+      const mockConfig = {
+        DIFY_API_URL: 'https://api.dify.ai',
+        DIFY_API_TOKEN: 'dify-token-123',
+        EXTERNAL_API_URL: 'https://external.api.com',
+        EXTERNAL_API_TOKEN: 'external-token-456',
+        CRON_SCHEDULE: '0 0 * * *',
+        LOG_LEVEL: 'info',
+        GRACEFUL_SHUTDOWN_TIMEOUT: 30,
+        MAX_RETRY: 3,
+        NODE_ENV: 'test',
+      }
+
+      const mockLogger = {
+        info: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        debug: vi.fn(),
+        child: vi.fn().mockReturnValue({
+          info: vi.fn(),
+          error: vi.fn(),
+          warn: vi.fn(),
+          debug: vi.fn(),
+        }),
+      }
+
+      vi.doMock('../../src/config/env-config.js', () => ({
+        loadConfig: vi.fn().mockReturnValue(mockConfig),
+      }))
+
+      vi.doMock('../../src/logger/winston-logger.js', () => ({
+        createLogger: vi.fn().mockReturnValue(mockLogger),
+      }))
+
+      const mockCreateScheduler = vi.fn().mockReturnValue({
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      })
+
+      vi.doMock('../../src/scheduler/cron-scheduler.js', () => ({
+        createScheduler: mockCreateScheduler,
+      }))
+
+      vi.doMock('../../src/shutdown/graceful-shutdown.js', () => ({
+        setupGracefulShutdown: vi.fn(),
+      }))
+
+      // Act
+      const { main } = await import('../../src/index.js')
+      await main()
+
+      // Assert
+      expect(mockCreateScheduler).toHaveBeenCalledWith(mockConfig, mockLogger, expect.any(Function))
+    })
+
+    it('setupGracefulShutdown()が呼ばれる', async () => {
+      // Arrange
+      const mockConfig = {
+        DIFY_API_URL: 'https://api.dify.ai',
+        DIFY_API_TOKEN: 'dify-token-123',
+        EXTERNAL_API_URL: 'https://external.api.com',
+        EXTERNAL_API_TOKEN: 'external-token-456',
+        CRON_SCHEDULE: '0 0 * * *',
+        LOG_LEVEL: 'info',
+        GRACEFUL_SHUTDOWN_TIMEOUT: 30,
+        MAX_RETRY: 3,
+        NODE_ENV: 'test',
+      }
+
+      const mockLogger = {
+        info: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+        debug: vi.fn(),
+        child: vi.fn().mockReturnValue({
+          info: vi.fn(),
+          error: vi.fn(),
+          warn: vi.fn(),
+          debug: vi.fn(),
+        }),
+      }
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      }
+
+      vi.doMock('../../src/config/env-config.js', () => ({
+        loadConfig: vi.fn().mockReturnValue(mockConfig),
+      }))
+
+      vi.doMock('../../src/logger/winston-logger.js', () => ({
+        createLogger: vi.fn().mockReturnValue(mockLogger),
+      }))
+
+      vi.doMock('../../src/scheduler/cron-scheduler.js', () => ({
+        createScheduler: vi.fn().mockReturnValue(mockScheduler),
+      }))
+
+      const mockSetupGracefulShutdown = vi.fn()
+
+      vi.doMock('../../src/shutdown/graceful-shutdown.js', () => ({
+        setupGracefulShutdown: mockSetupGracefulShutdown,
+      }))
+
+      // Act
+      const { main } = await import('../../src/index.js')
+      await main()
+
+      // Assert
+      expect(mockSetupGracefulShutdown).toHaveBeenCalledWith({
+        timeoutMs: 30000, // 30秒 * 1000
+        scheduler: mockScheduler,
+        logger: mockLogger,
+      })
+    })
+  })
+
+  // main()のエラーハンドリング（2件）
+  describe('main()のエラーハンドリング', () => {
+    it('main()内でエラー発生時にエラーがthrowされる', async () => {
+      // Arrange
+      const testError = new Error('テストエラー')
+
+      vi.doMock('../../src/config/env-config.js', () => ({
+        loadConfig: vi.fn().mockImplementation(() => {
+          throw testError
+        }),
+      }))
+
+      // Act & Assert
+      const indexModule = await import('../../src/index.js')
+      await expect(indexModule.main()).rejects.toThrow('テストエラー')
+    })
+
+    it('エラー発生時にエラーメッセージが保持される', async () => {
+      // Arrange
+      vi.doMock('../../src/config/env-config.js', () => ({
+        loadConfig: vi.fn().mockImplementation(() => {
+          throw new Error('設定読み込みエラー')
+        }),
+      }))
+
+      // Act & Assert
+      const indexModule = await import('../../src/index.js')
+      await expect(indexModule.main()).rejects.toThrow('設定読み込みエラー')
+    })
+  })
+})

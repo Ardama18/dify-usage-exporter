@@ -21,24 +21,24 @@ based_on: specs/stories/1-foundation-and-scheduler/plan.md
 
 ## 対象ファイル
 
-- [ ] src/index.ts
-- [ ] test/integration/foundation-and-scheduler.int.test.ts（エントリーポイント部分追記）
+- [x] src/index.ts
+- [x] test/integration/foundation-and-scheduler.int.test.ts（エントリーポイント部分追記）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
 
-- [ ] 統合テストの追記
+- [x] 統合テストの追記
   - 正常起動フロー（4件）
   - main()のエラーハンドリング（2件）
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   npm run test:integration
   ```
 
 ### 2. Green Phase
 
-- [ ] main()関数の実装（Design Doc準拠）
+- [x] main()関数の実装（Design Doc準拠）
   ```typescript
   async function main(): Promise<void> {
     // 1. 環境変数を読み込み・検証
@@ -84,12 +84,12 @@ based_on: specs/stories/1-foundation-and-scheduler/plan.md
   })
   ```
 
-- [ ] テスト実行して通ることを確認
+- [x] テスト実行して通ることを確認
 
 ### 3. Refactor Phase
 
-- [ ] コード改善（テストが通る状態を維持）
-- [ ] `npm run check` でlint/formatエラーなし
+- [x] コード改善（テストが通る状態を維持）
+- [x] `npm run check` でlint/formatエラーなし
 
 ## テストケース詳細
 
@@ -105,15 +105,15 @@ based_on: specs/stories/1-foundation-and-scheduler/plan.md
 
 ## 完了条件
 
-- [ ] 追加したテストが全てパス（6件）
-- [ ] TypeScript strict mode: エラー0件
-- [ ] Biome lint: エラー0件
-- [ ] 動作確認完了（L2: 統合テスト実行）
+- [x] 追加したテストが全てパス（6件）
+- [x] TypeScript strict mode: エラー0件
+- [x] Biome lint: エラー0件
+- [x] 動作確認完了（L2: 統合テスト実行）
   ```bash
   npm run test:integration -- foundation-and-scheduler.int.test.ts
   ```
-- [ ] 起動時間5秒以内
-- [ ] トレーサビリティ: 正常起動（4件）、エラーハンドリング（2件）
+- [x] 起動時間5秒以内
+- [x] トレーサビリティ: 正常起動（4件）、エラーハンドリング（2件）
 
 ### Phase 3 動作確認手順
 
