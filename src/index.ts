@@ -43,7 +43,16 @@ export async function main(): Promise<void> {
 
 // ES Moduleの直接実行を検出
 // Node.jsでimport.meta.urlとprocess.argv[1]を比較
-const isMainModule = import.meta.url === `file://${process.argv[1]}`
+// URL encodingの問題を回避するためdecodeURIComponentを使用
+const isMainModule = (() => {
+  const scriptPath = process.argv[1]
+  if (!scriptPath) return false
+  const moduleUrl = import.meta.url
+  // file://をデコードしてパスを正規化
+  const decodedModuleUrl = decodeURIComponent(moduleUrl)
+  const expectedUrl = `file://${scriptPath}`
+  return decodedModuleUrl === expectedUrl
+})()
 
 if (isMainModule) {
   main().catch((error) => {
