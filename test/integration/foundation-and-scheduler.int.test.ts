@@ -1559,3 +1559,722 @@ describe('定期実行スケジューラ - createScheduler()', () => {
     }, 5000)
   })
 })
+
+// Graceful Shutdownのテスト - setupGracefulShutdown関数をテスト
+describe('Graceful Shutdown - setupGracefulShutdown()', () => {
+  const originalEnv = process.env
+  let capturedOutput: string[]
+  let captureStream: Writable
+  let mockExit: ReturnType<typeof vi.spyOn>
+  let mockProcessOn: ReturnType<typeof vi.spyOn>
+  let signalHandlers: Map<string, (...args: unknown[]) => void>
+
+  beforeEach(() => {
+    vi.resetModules()
+    process.env = { ...originalEnv }
+    // 必須環境変数を設定
+    process.env.DIFY_API_URL = 'https://api.dify.ai'
+    process.env.DIFY_API_TOKEN = 'dify-token-123'
+    process.env.EXTERNAL_API_URL = 'https://external.api.com'
+    process.env.EXTERNAL_API_TOKEN = 'external-token-456'
+    process.env.NODE_ENV = 'test'
+
+    // カスタムストリームでログ出力をキャプチャ
+    capturedOutput = []
+    captureStream = createCaptureStream(capturedOutput)
+
+    // シグナルハンドラを保存するMap
+    signalHandlers = new Map()
+
+    // process.exit()をモック
+    mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('process.exit called')
+    })
+
+    // process.on()をモックしてシグナルハンドラをキャプチャ
+    mockProcessOn = vi.spyOn(process, 'on').mockImplementation((event, handler) => {
+      signalHandlers.set(event as string, handler as (...args: unknown[]) => void)
+      return process
+    })
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
+    mockExit.mockRestore()
+    mockProcessOn.mockRestore()
+  })
+
+  // AC-SHUT-1: SIGINTによるShutdown開始（2件）
+  describe('AC-SHUT-1: SIGINTによるShutdown開始', () => {
+    it('SIGINT受信でシャットダウンログが出力される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 1000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      // SIGINTハンドラを実行
+      const handler = signalHandlers.get('SIGINT')
+      expect(handler).toBeDefined()
+
+      try {
+        await handler?.()
+      } catch {
+        // exit呼び出しでエラーが発生するのは想定通り
+      }
+
+      // Assert
+      const shutdownLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'シャットダウンシグナル受信'
+      })
+      expect(shutdownLog).toBeDefined()
+    })
+
+    it('ログにsignal: "SIGINT"を含む', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 1000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('SIGINT')
+      try {
+        await handler?.()
+      } catch {
+        // expected
+      }
+
+      // Assert
+      const shutdownLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'シャットダウンシグナル受信'
+      })
+      expect(shutdownLog).toBeDefined()
+      const parsed = JSON.parse(shutdownLog as string)
+      expect(parsed.signal).toBe('SIGINT')
+    })
+  })
+
+  // AC-SHUT-2: SIGTERMによるShutdown開始（2件）
+  describe('AC-SHUT-2: SIGTERMによるShutdown開始', () => {
+    it('SIGTERM受信でシャットダウンログが出力される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 1000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('SIGTERM')
+      expect(handler).toBeDefined()
+
+      try {
+        await handler?.()
+      } catch {
+        // expected
+      }
+
+      // Assert
+      const shutdownLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'シャットダウンシグナル受信'
+      })
+      expect(shutdownLog).toBeDefined()
+    })
+
+    it('ログにsignal: "SIGTERM"を含む', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 1000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('SIGTERM')
+      try {
+        await handler?.()
+      } catch {
+        // expected
+      }
+
+      // Assert
+      const shutdownLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'シャットダウンシグナル受信'
+      })
+      expect(shutdownLog).toBeDefined()
+      const parsed = JSON.parse(shutdownLog as string)
+      expect(parsed.signal).toBe('SIGTERM')
+    })
+  })
+
+  // AC-SHUT-3: タスクなしでの即座終了（2件）
+  describe('AC-SHUT-3: タスクなしでの即座終了', () => {
+    it('isRunning()がfalseの場合即座にexit(0)が呼ばれる', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 1000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('SIGTERM')
+      try {
+        await handler?.()
+      } catch {
+        // expected
+      }
+
+      // Assert
+      expect(mockExit).toHaveBeenCalledWith(0)
+    })
+
+    it('完了ログが出力される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 1000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('SIGTERM')
+      try {
+        await handler?.()
+      } catch {
+        // expected
+      }
+
+      // Assert
+      const completeLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'Graceful Shutdown完了'
+      })
+      expect(completeLog).toBeDefined()
+    })
+  })
+
+  // AC-SHUT-4: 実行中タスクの完了待機（2件）
+  describe('AC-SHUT-4: 実行中タスクの完了待機', () => {
+    it('isRunning()がtrueの間待機する', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      // isRunning()が2回目の呼び出しでfalseを返す
+      let callCount = 0
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockImplementation(() => {
+          callCount++
+          return callCount <= 2 // 最初の2回はtrue
+        }),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 5000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('SIGTERM')
+      try {
+        await handler?.()
+      } catch {
+        // expected
+      }
+
+      // Assert - isRunning()が複数回呼ばれることを確認
+      expect(mockScheduler.isRunning).toHaveBeenCalledTimes(3)
+    })
+
+    it('タスク完了後にexit(0)が呼ばれる', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      let callCount = 0
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockImplementation(() => {
+          callCount++
+          return callCount <= 1
+        }),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 5000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('SIGTERM')
+      try {
+        await handler?.()
+      } catch {
+        // expected
+      }
+
+      // Assert
+      expect(mockExit).toHaveBeenCalledWith(0)
+    })
+  })
+
+  // AC-SHUT-5: タイムアウト超過による強制終了（3件）
+  describe('AC-SHUT-5: タイムアウト超過による強制終了', () => {
+    it('タイムアウト超過でエラーログが出力される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      // isRunning()が常にtrueを返す（タイムアウトさせる）
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(true),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 200, // 短いタイムアウト
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('SIGTERM')
+      try {
+        await handler?.()
+      } catch {
+        // expected
+      }
+
+      // Assert
+      const timeoutLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.level === 'error' && parsed.message === 'Graceful Shutdownタイムアウト'
+      })
+      expect(timeoutLog).toBeDefined()
+    }, 10000)
+
+    it('エラーログにtimeoutMsを含む', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(true),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 200,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('SIGTERM')
+      try {
+        await handler?.()
+      } catch {
+        // expected
+      }
+
+      // Assert
+      const timeoutLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'Graceful Shutdownタイムアウト'
+      })
+      expect(timeoutLog).toBeDefined()
+      const parsed = JSON.parse(timeoutLog as string)
+      expect(parsed.timeoutMs).toBe(200)
+    }, 10000)
+
+    it('exit(1)で終了する', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(true),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 200,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('SIGTERM')
+      try {
+        await handler?.()
+      } catch {
+        // expected
+      }
+
+      // Assert
+      expect(mockExit).toHaveBeenCalledWith(1)
+    }, 10000)
+  })
+
+  // AC-SHUT-6: unhandledRejectionでのexit（3件）
+  describe('AC-SHUT-6: unhandledRejectionでのexit', () => {
+    it('unhandledRejection発生でエラーログが出力される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 1000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('unhandledRejection')
+      expect(handler).toBeDefined()
+
+      try {
+        handler?.(new Error('Unhandled rejection error'), Promise.resolve())
+      } catch {
+        // expected
+      }
+
+      // Assert
+      const errorLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.level === 'error' && parsed.message === '未処理のPromise rejection'
+      })
+      expect(errorLog).toBeDefined()
+    })
+
+    it('エラーログにreasonを含む', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 1000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('unhandledRejection')
+      try {
+        handler?.(new Error('Unhandled rejection error'), Promise.resolve())
+      } catch {
+        // expected
+      }
+
+      // Assert
+      const errorLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === '未処理のPromise rejection'
+      })
+      expect(errorLog).toBeDefined()
+      const parsed = JSON.parse(errorLog as string)
+      expect(parsed.reason).toBe('Unhandled rejection error')
+    })
+
+    it('exit(1)で終了する（Fail-Fast原則）', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 1000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('unhandledRejection')
+      try {
+        handler?.(new Error('Unhandled rejection error'), Promise.resolve())
+      } catch {
+        // expected
+      }
+
+      // Assert
+      expect(mockExit).toHaveBeenCalledWith(1)
+    })
+  })
+
+  // AC-SHUT-7: uncaughtExceptionでのexit（3件）
+  describe('AC-SHUT-7: uncaughtExceptionでのexit', () => {
+    it('uncaughtException発生でエラーログが出力される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 1000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('uncaughtException')
+      expect(handler).toBeDefined()
+
+      try {
+        handler?.(new Error('Uncaught exception error'))
+      } catch {
+        // expected
+      }
+
+      // Assert
+      const errorLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.level === 'error' && parsed.message === '未捕捉の例外'
+      })
+      expect(errorLog).toBeDefined()
+    })
+
+    it('エラーログにerror/stackを含む', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 1000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('uncaughtException')
+      try {
+        handler?.(new Error('Uncaught exception error'))
+      } catch {
+        // expected
+      }
+
+      // Assert
+      const errorLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === '未捕捉の例外'
+      })
+      expect(errorLog).toBeDefined()
+      const parsed = JSON.parse(errorLog as string)
+      expect(parsed.error).toBe('Uncaught exception error')
+      expect(parsed.stack).toBeDefined()
+    })
+
+    it('exit(1)で終了する', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 1000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('uncaughtException')
+      try {
+        handler?.(new Error('Uncaught exception error'))
+      } catch {
+        // expected
+      }
+
+      // Assert
+      expect(mockExit).toHaveBeenCalledWith(1)
+    })
+  })
+
+  // スケジューラ停止の確認（1件）
+  describe('スケジューラ停止の確認', () => {
+    it('シャットダウン時にscheduler.stop()が呼ばれる', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { setupGracefulShutdown } = await import('../../src/shutdown/graceful-shutdown.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      const mockScheduler = {
+        start: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn().mockReturnValue(false),
+      }
+
+      // Act
+      setupGracefulShutdown({
+        timeoutMs: 1000,
+        scheduler: mockScheduler,
+        logger,
+      })
+
+      const handler = signalHandlers.get('SIGTERM')
+      try {
+        await handler?.()
+      } catch {
+        // expected
+      }
+
+      // Assert
+      expect(mockScheduler.stop).toHaveBeenCalled()
+    })
+  })
+})

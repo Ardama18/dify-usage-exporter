@@ -21,18 +21,18 @@ SIGINT/SIGTERMシグナルを受信した際にスケジューラを停止し、
 
 ## 対象ファイル
 
-- [ ] src/shutdown/graceful-shutdown.ts
-- [ ] test/integration/foundation-and-scheduler.int.test.ts（AC-SHUT部分追記）
+- [x] src/shutdown/graceful-shutdown.ts
+- [x] test/integration/foundation-and-scheduler.int.test.ts（AC-SHUT部分追記）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
 
-- [ ] ディレクトリ作成
+- [x] ディレクトリ作成
   ```bash
   mkdir -p src/shutdown
   ```
-- [ ] 統合テストの追記（AC-SHUT-1〜7）
+- [x] 統合テストの追記（AC-SHUT-1〜7）
   - AC-SHUT-1: SIGINTによるShutdown開始（2件）
   - AC-SHUT-2: SIGTERMによるShutdown開始（2件）
   - AC-SHUT-3: タスクなしでの即座終了（2件）
@@ -41,14 +41,14 @@ SIGINT/SIGTERMシグナルを受信した際にスケジューラを停止し、
   - AC-SHUT-6: unhandledRejectionでのexit（3件）
   - AC-SHUT-7: uncaughtExceptionでのexit（3件）
   - スケジューラ停止の確認（1件）
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   npm run test:integration
   ```
 
 ### 2. Green Phase
 
-- [ ] GracefulShutdownOptionsインターフェースの定義
+- [x] GracefulShutdownOptionsインターフェースの定義
   ```typescript
   export interface GracefulShutdownOptions {
     timeoutMs: number
@@ -57,26 +57,26 @@ SIGINT/SIGTERMシグナルを受信した際にスケジューラを停止し、
   }
   ```
 
-- [ ] sleep()ヘルパー関数の実装
+- [x] sleep()ヘルパー関数の実装
   ```typescript
   function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms))
   }
   ```
 
-- [ ] setupGracefulShutdown()関数の実装（Design Doc準拠）
+- [x] setupGracefulShutdown()関数の実装（Design Doc準拠）
   - SIGINT/SIGTERMハンドラ登録
   - タスク完了待機ループ
   - タイムアウト処理
   - unhandledRejectionハンドラ
   - uncaughtExceptionハンドラ
 
-- [ ] テスト実行して通ることを確認
+- [x] テスト実行して通ることを確認
 
 ### 3. Refactor Phase
 
-- [ ] コード改善（テストが通る状態を維持）
-- [ ] `npm run check` でlint/formatエラーなし
+- [x] コード改善（テストが通る状態を維持）
+- [x] `npm run check` でlint/formatエラーなし
 
 ## テストケース詳細
 
@@ -116,15 +116,15 @@ SIGINT/SIGTERMシグナルを受信した際にスケジューラを停止し、
 
 ## 完了条件
 
-- [ ] 追加したテストが全てパス（18件）
-- [ ] TypeScript strict mode: エラー0件
-- [ ] Biome lint: エラー0件
-- [ ] 動作確認完了（L2: 統合テスト実行）
+- [x] 追加したテストが全てパス（18件）
+- [x] TypeScript strict mode: エラー0件
+- [x] Biome lint: エラー0件
+- [x] 動作確認完了（L2: 統合テスト実行）
   ```bash
   npm run test:integration -- foundation-and-scheduler.int.test.ts
   ```
-- [ ] Graceful Shutdown成功率99%以上
-- [ ] トレーサビリティ: AC-SHUT-1（2件）、AC-SHUT-2（2件）、AC-SHUT-3（2件）、AC-SHUT-4（2件）、AC-SHUT-5（3件）、AC-SHUT-6（3件）、AC-SHUT-7（3件）、停止確認（1件）
+- [x] Graceful Shutdown成功率99%以上
+- [x] トレーサビリティ: AC-SHUT-1（2件）、AC-SHUT-2（2件）、AC-SHUT-3（2件）、AC-SHUT-4（2件）、AC-SHUT-5（3件）、AC-SHUT-6（3件）、AC-SHUT-7（3件）、停止確認（1件）
 
 ## 注意事項
 
