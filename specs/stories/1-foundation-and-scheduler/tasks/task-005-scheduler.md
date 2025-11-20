@@ -21,18 +21,18 @@ cronパッケージを使用した定期実行スケジューラを実装する�
 
 ## 対象ファイル
 
-- [ ] src/scheduler/cron-scheduler.ts
-- [ ] test/integration/foundation-and-scheduler.int.test.ts（AC-SCHED部分追記）
+- [x] src/scheduler/cron-scheduler.ts
+- [x] test/integration/foundation-and-scheduler.int.test.ts（AC-SCHED部分追記）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
 
-- [ ] ディレクトリ作成
+- [x] ディレクトリ作成
   ```bash
   mkdir -p src/scheduler
   ```
-- [ ] 統合テストの追記（AC-SCHED-1〜7）
+- [x] 統合テストの追記（AC-SCHED-1〜7）
   - AC-SCHED-1: スケジューラ起動と次回実行予定ログ（3件）
   - AC-SCHED-2: cron時刻到達時のonTick実行（4件）
   - AC-SCHED-3: CRON_SCHEDULE環境変数の使用（2件）
@@ -43,14 +43,14 @@ cronパッケージを使用した定期実行スケジューラを実装する�
   - スケジューラ停止（2件）
   - ジョブ実行エラーハンドリング（4件）
   - isRunning()状態確認（2件）
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   npm run test:integration
   ```
 
 ### 2. Green Phase
 
-- [ ] Schedulerインターフェースの定義
+- [x] Schedulerインターフェースの定義
   ```typescript
   export interface Scheduler {
     start(): void
@@ -59,7 +59,7 @@ cronパッケージを使用した定期実行スケジューラを実装する�
   }
   ```
 
-- [ ] validateCronExpression()関数の実装
+- [x] validateCronExpression()関数の実装
   ```typescript
   function validateCronExpression(expression: string): boolean {
     try {
@@ -76,26 +76,26 @@ cronパッケージを使用した定期実行スケジューラを実装する�
   }
   ```
 
-- [ ] generateExecutionId()関数の実装
+- [x] generateExecutionId()関数の実装
   ```typescript
   function generateExecutionId(): string {
     return `exec-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
   }
   ```
 
-- [ ] createScheduler()関数の実装（Design Doc準拠）
+- [x] createScheduler()関数の実装（Design Doc準拠）
   - cron式検証
   - isTaskRunningフラグによる重複実行防止
   - executionId生成
   - ジョブ実行ログ（開始/完了/失敗）
   - UTCタイムゾーン設定
 
-- [ ] テスト実行して通ることを確認
+- [x] テスト実行して通ることを確認
 
 ### 3. Refactor Phase
 
-- [ ] コード改善（テストが通る状態を維持）
-- [ ] `npm run check` でlint/formatエラーなし
+- [x] コード改善（テストが通る状態を維持）
+- [x] `npm run check` でlint/formatエラーなし
 
 ## テストケース詳細
 
@@ -149,15 +149,15 @@ cronパッケージを使用した定期実行スケジューラを実装する�
 
 ## 完了条件
 
-- [ ] 追加したテストが全てパス（28件）
-- [ ] TypeScript strict mode: エラー0件
-- [ ] Biome lint: エラー0件
-- [ ] 動作確認完了（L2: 統合テスト実行）
+- [x] 追加したテストが全てパス（28件）
+- [x] TypeScript strict mode: エラー0件
+- [x] Biome lint: エラー0件
+- [x] 動作確認完了（L2: 統合テスト実行）
   ```bash
   npm run test:integration -- foundation-and-scheduler.int.test.ts
   ```
-- [ ] cron時刻から±5秒以内でジョブ実行開始
-- [ ] トレーサビリティ: AC-SCHED-1（3件）、AC-SCHED-2（4件）、AC-SCHED-3（2件）、AC-SCHED-4（3件）、AC-SCHED-5（3件）、AC-SCHED-6（4件）、AC-SCHED-7（1件）、停止（2件）、エラー（4件）、状態（2件）
+- [x] cron時刻から±5秒以内でジョブ実行開始
+- [x] トレーサビリティ: AC-SCHED-1（3件）、AC-SCHED-2（4件）、AC-SCHED-3（2件）、AC-SCHED-4（3件）、AC-SCHED-5（3件）、AC-SCHED-6（4件）、AC-SCHED-7（1件）、停止（2件）、エラー（4件）、状態（2件）
 
 ## 注意事項
 

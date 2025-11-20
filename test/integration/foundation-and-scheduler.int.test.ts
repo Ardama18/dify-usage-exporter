@@ -799,3 +799,763 @@ describe('ログ出力基盤 - createLogger()', () => {
     })
   })
 })
+
+// 定期実行スケジューラのテスト - createScheduler関数をテスト
+describe('定期実行スケジューラ - createScheduler()', () => {
+  const originalEnv = process.env
+  let capturedOutput: string[]
+  let captureStream: Writable
+  const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {
+    throw new Error('process.exit called')
+  })
+
+  beforeEach(() => {
+    vi.resetModules()
+    process.env = { ...originalEnv }
+    // 必須環境変数を設定
+    process.env.DIFY_API_URL = 'https://api.dify.ai'
+    process.env.DIFY_API_TOKEN = 'dify-token-123'
+    process.env.EXTERNAL_API_URL = 'https://external.api.com'
+    process.env.EXTERNAL_API_TOKEN = 'external-token-456'
+    process.env.NODE_ENV = 'test'
+    process.env.CRON_SCHEDULE = '* * * * * *' // 毎秒実行（テスト用）
+
+    // カスタムストリームでログ出力をキャプチャ
+    capturedOutput = []
+    captureStream = createCaptureStream(capturedOutput)
+    mockExit.mockClear()
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
+  })
+
+  // ジョブ実行を待機するヘルパー関数
+  const waitForJobExecution = (timeout = 2000): Promise<void> => {
+    return new Promise((resolve) => setTimeout(resolve, timeout))
+  }
+
+  // AC-SCHED-1: スケジューラ起動と次回実行予定ログ（3件）
+  describe('AC-SCHED-1: スケジューラ起動と次回実行予定ログ', () => {
+    it('start()呼び出しで起動ログが出力される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+
+      // Assert
+      expect(capturedOutput.length).toBeGreaterThan(0)
+      const parsed = JSON.parse(capturedOutput[0])
+      expect(parsed.message).toBe('スケジューラ起動完了')
+
+      // Cleanup
+      scheduler.stop()
+    })
+
+    it('起動ログにcronScheduleを含む', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+
+      // Assert
+      const parsed = JSON.parse(capturedOutput[0])
+      expect(parsed.cronSchedule).toBe('* * * * * *') // 毎秒実行（テスト用）
+
+      // Cleanup
+      scheduler.stop()
+    })
+
+    it('起動ログにnextExecutionを含む', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+
+      // Assert
+      const parsed = JSON.parse(capturedOutput[0])
+      expect(parsed.nextExecution).toBeDefined()
+
+      // Cleanup
+      scheduler.stop()
+    })
+  })
+
+  // AC-SCHED-2: cron時刻到達時のonTick実行（4件）
+  describe('AC-SCHED-2: cron時刻到達時のonTick実行', () => {
+    it('cron時刻到達でonTick関数が実行される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      await waitForJobExecution()
+
+      // Assert
+      expect(onTick).toHaveBeenCalled()
+
+      // Cleanup
+      scheduler.stop()
+    }, 5000)
+
+    it('ジョブ実行開始ログが出力される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      await waitForJobExecution()
+
+      // Assert
+      const startLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'ジョブ実行開始'
+      })
+      expect(startLog).toBeDefined()
+
+      // Cleanup
+      scheduler.stop()
+    }, 5000)
+
+    it('ジョブ実行完了ログが出力される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      await waitForJobExecution()
+
+      // Assert
+      const completeLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'ジョブ実行完了'
+      })
+      expect(completeLog).toBeDefined()
+
+      // Cleanup
+      scheduler.stop()
+    }, 5000)
+
+    it('完了ログにdurationMsを含む', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      await waitForJobExecution()
+
+      // Assert
+      const completeLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'ジョブ実行完了'
+      })
+      expect(completeLog).toBeDefined()
+      const parsed = JSON.parse(completeLog as string)
+      expect(parsed.durationMs).toBeDefined()
+      expect(typeof parsed.durationMs).toBe('number')
+
+      // Cleanup
+      scheduler.stop()
+    }, 5000)
+  })
+
+  // AC-SCHED-3: CRON_SCHEDULE環境変数の使用（2件）
+  describe('AC-SCHED-3: CRON_SCHEDULE環境変数の使用', () => {
+    it('環境変数の値をcron式として使用する', async () => {
+      // Arrange
+      process.env.CRON_SCHEDULE = '0 12 * * *' // 毎日12時
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+
+      // Assert
+      const parsed = JSON.parse(capturedOutput[0])
+      expect(parsed.cronSchedule).toBe('0 12 * * *')
+
+      // Cleanup
+      scheduler.stop()
+    })
+
+    it('デフォルト値（0 0 * * *）が使用される', async () => {
+      // Arrange
+      delete process.env.CRON_SCHEDULE
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+
+      // Assert
+      const parsed = JSON.parse(capturedOutput[0])
+      expect(parsed.cronSchedule).toBe('0 0 * * *')
+
+      // Cleanup
+      scheduler.stop()
+    })
+  })
+
+  // AC-SCHED-4: 無効なcron式でのexit（3件）
+  describe('AC-SCHED-4: 無効なcron式でのexit', () => {
+    it('無効なcron式でエラーログが出力される', async () => {
+      // Arrange
+      process.env.CRON_SCHEDULE = 'invalid-cron'
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+
+      // Act & Assert
+      expect(() => createScheduler(config, logger, onTick)).toThrow('process.exit called')
+
+      const errorLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.level === 'error'
+      })
+      expect(errorLog).toBeDefined()
+    })
+
+    it('無効なcron式でexit(1)が呼ばれる', async () => {
+      // Arrange
+      process.env.CRON_SCHEDULE = 'invalid-cron'
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+
+      // Act & Assert
+      expect(() => createScheduler(config, logger, onTick)).toThrow('process.exit called')
+      expect(mockExit).toHaveBeenCalledWith(1)
+    })
+
+    it('エラーログにcronScheduleを含む', async () => {
+      // Arrange
+      process.env.CRON_SCHEDULE = 'invalid-cron'
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+
+      // Act
+      try {
+        createScheduler(config, logger, onTick)
+      } catch {
+        // expected
+      }
+
+      // Assert
+      const errorLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.level === 'error'
+      })
+      expect(errorLog).toBeDefined()
+      const parsed = JSON.parse(errorLog as string)
+      expect(parsed.cronSchedule).toBe('invalid-cron')
+    })
+  })
+
+  // AC-SCHED-5: 実行中ジョブのスキップ（3件）
+  describe('AC-SCHED-5: 実行中ジョブのスキップ', () => {
+    it('実行中に新しいジョブがスキップされる', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      // 長時間実行されるジョブ（3秒かかる）
+      let resolveJob: () => void
+      const jobPromise = new Promise<void>((resolve) => {
+        resolveJob = resolve
+      })
+      const onTick = vi.fn().mockImplementation(() => jobPromise)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      // 最初のジョブが開始されるまで待機
+      await waitForJobExecution()
+      // 2回目のcron時刻（ジョブ実行中）を待機
+      await waitForJobExecution(1500)
+
+      // Assert - onTickは1回のみ呼ばれる
+      expect(onTick).toHaveBeenCalledTimes(1)
+
+      // Cleanup
+      resolveJob?.()
+      await jobPromise
+      scheduler.stop()
+    }, 10000)
+
+    it('スキップ時にwarningログが出力される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      let resolveJob: () => void
+      const jobPromise = new Promise<void>((resolve) => {
+        resolveJob = resolve
+      })
+      const onTick = vi.fn().mockImplementation(() => jobPromise)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      await waitForJobExecution()
+      await waitForJobExecution(1500)
+
+      // Assert
+      const warnLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.level === 'warn' && parsed.message.includes('スキップ')
+      })
+      expect(warnLog).toBeDefined()
+
+      // Cleanup
+      resolveJob?.()
+      await jobPromise
+      scheduler.stop()
+    }, 10000)
+
+    it('前回ジョブ完了後は次回ジョブが実行される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      // 2回のジョブ実行を待機
+      await waitForJobExecution(3000)
+
+      // Assert - 毎秒実行なので2回以上実行される
+      expect(onTick.mock.calls.length).toBeGreaterThanOrEqual(2)
+
+      // Cleanup
+      scheduler.stop()
+    }, 10000)
+  })
+
+  // AC-SCHED-6: executionId生成とログ含有（4件）
+  describe('AC-SCHED-6: executionId生成とログ含有', () => {
+    it('各ジョブに一意のexecutionIdが生成される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      // 複数回のジョブ実行を待機
+      await waitForJobExecution(3000)
+
+      // Assert
+      const startLogs = capturedOutput.filter((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'ジョブ実行開始'
+      })
+      expect(startLogs.length).toBeGreaterThanOrEqual(2)
+
+      const executionIds = startLogs.map((log) => JSON.parse(log).executionId)
+      // 最初の2つのIDが異なることを確認
+      expect(executionIds[0]).not.toBe(executionIds[1])
+
+      // Cleanup
+      scheduler.stop()
+    }, 10000)
+
+    it('開始ログにexecutionIdを含む', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      await waitForJobExecution()
+
+      // Assert
+      const startLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'ジョブ実行開始'
+      })
+      expect(startLog).toBeDefined()
+      const parsed = JSON.parse(startLog as string)
+      expect(parsed.executionId).toBeDefined()
+      expect(parsed.executionId).toMatch(/^exec-\d+-[a-z0-9]+$/)
+
+      // Cleanup
+      scheduler.stop()
+    }, 5000)
+
+    it('完了ログにexecutionIdを含む', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      await waitForJobExecution()
+
+      // Assert
+      const completeLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'ジョブ実行完了'
+      })
+      expect(completeLog).toBeDefined()
+      const parsed = JSON.parse(completeLog as string)
+      expect(parsed.executionId).toBeDefined()
+
+      // Cleanup
+      scheduler.stop()
+    }, 5000)
+
+    it('失敗ログにexecutionIdを含む', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockRejectedValue(new Error('テストエラー'))
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      await waitForJobExecution()
+
+      // Assert
+      const errorLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'ジョブ実行失敗'
+      })
+      expect(errorLog).toBeDefined()
+      const parsed = JSON.parse(errorLog as string)
+      expect(parsed.executionId).toBeDefined()
+
+      // Cleanup
+      scheduler.stop()
+    }, 5000)
+  })
+
+  // AC-SCHED-7: cron時刻からの実行精度（1件）
+  describe('AC-SCHED-7: cron時刻からの実行精度', () => {
+    it('cron時刻から±5秒以内でジョブ実行開始する', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      let executionTime: number | undefined
+      const onTick = vi.fn().mockImplementation(() => {
+        executionTime = Date.now()
+        return Promise.resolve()
+      })
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      const startTime = Date.now()
+      await waitForJobExecution()
+
+      // Assert
+      expect(onTick).toHaveBeenCalled()
+      expect(executionTime).toBeDefined()
+      // 毎秒実行なので、開始から2秒以内に実行される
+      const timeDiff = (executionTime ?? 0) - startTime
+      expect(timeDiff).toBeLessThan(5000) // 5秒以内
+
+      // Cleanup
+      scheduler.stop()
+    }, 5000)
+  })
+
+  // スケジューラ停止（2件）
+  describe('スケジューラ停止', () => {
+    it('stop()呼び出しで停止ログが出力される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      scheduler.stop()
+
+      // Assert
+      const stopLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'スケジューラ停止完了'
+      })
+      expect(stopLog).toBeDefined()
+    })
+
+    it('停止後はジョブが実行されない', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      scheduler.stop()
+      await waitForJobExecution()
+
+      // Assert
+      expect(onTick).not.toHaveBeenCalled()
+    }, 5000)
+  })
+
+  // ジョブ実行エラーハンドリング（4件）
+  describe('ジョブ実行エラーハンドリング', () => {
+    it('onTickでエラー発生時にエラーログが出力される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockRejectedValue(new Error('テストエラー'))
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      await waitForJobExecution()
+
+      // Assert
+      const errorLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.level === 'error' && parsed.message === 'ジョブ実行失敗'
+      })
+      expect(errorLog).toBeDefined()
+
+      // Cleanup
+      scheduler.stop()
+    }, 5000)
+
+    it('エラーログにerrorメッセージを含む', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockRejectedValue(new Error('テストエラー'))
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      await waitForJobExecution()
+
+      // Assert
+      const errorLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'ジョブ実行失敗'
+      })
+      expect(errorLog).toBeDefined()
+      const parsed = JSON.parse(errorLog as string)
+      expect(parsed.error).toBe('テストエラー')
+
+      // Cleanup
+      scheduler.stop()
+    }, 5000)
+
+    it('エラーログにstackを含む', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockRejectedValue(new Error('テストエラー'))
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      await waitForJobExecution()
+
+      // Assert
+      const errorLog = capturedOutput.find((output) => {
+        const parsed = JSON.parse(output)
+        return parsed.message === 'ジョブ実行失敗'
+      })
+      expect(errorLog).toBeDefined()
+      const parsed = JSON.parse(errorLog as string)
+      expect(parsed.stack).toBeDefined()
+      expect(parsed.stack).toContain('Error: テストエラー')
+
+      // Cleanup
+      scheduler.stop()
+    }, 5000)
+
+    it('エラー後も次回ジョブは実行される', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('1回目エラー'))
+        .mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      // 複数回のジョブ実行を待機
+      await waitForJobExecution(3000)
+
+      // Assert - 毎秒実行なので2回以上実行される
+      expect(onTick.mock.calls.length).toBeGreaterThanOrEqual(2)
+
+      // Cleanup
+      scheduler.stop()
+    }, 10000)
+  })
+
+  // isRunning()状態確認（2件）
+  describe('isRunning()状態確認', () => {
+    it('ジョブ実行中はisRunning()がtrueを返す', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+
+      let resolveJob: () => void
+      const jobPromise = new Promise<void>((resolve) => {
+        resolveJob = resolve
+      })
+      const onTick = vi.fn().mockImplementation(() => jobPromise)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      await waitForJobExecution()
+
+      // Assert
+      expect(scheduler.isRunning()).toBe(true)
+
+      // Cleanup
+      resolveJob?.()
+      await jobPromise
+      scheduler.stop()
+    }, 5000)
+
+    it('ジョブ完了後はisRunning()がfalseを返す', async () => {
+      // Arrange
+      const { loadConfig } = await import('../../src/config/env-config.js')
+      const { createLogger } = await import('../../src/logger/winston-logger.js')
+      const { createScheduler } = await import('../../src/scheduler/cron-scheduler.js')
+      const config = loadConfig()
+      const logger = createLogger(config, { stream: captureStream })
+      const onTick = vi.fn().mockResolvedValue(undefined)
+      const scheduler = createScheduler(config, logger, onTick)
+
+      // Act
+      scheduler.start()
+      await waitForJobExecution()
+
+      // Assert
+      expect(scheduler.isRunning()).toBe(false)
+
+      // Cleanup
+      scheduler.stop()
+    }, 5000)
+  })
+})
