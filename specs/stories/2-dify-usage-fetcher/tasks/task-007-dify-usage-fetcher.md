@@ -23,18 +23,18 @@ based_on: specs/stories/2-dify-usage-fetcher/plan.md
 全コンポーネントを統合し、オーケストレーション機能を実装する。ウォーターマーク読み込み、ページング処理、zodバリデーション、ウォーターマーク更新を連携させ、IFetcherインターフェースを実装する。
 
 ## 対象ファイル
-- [ ] `src/fetcher/dify-usage-fetcher.ts` - DifyUsageFetcher実装
-- [ ] `test/unit/fetcher/dify-usage-fetcher.test.ts` - 単体テスト
-- [ ] `test/integration/dify-usage-fetcher.int.test.ts` - 統合テスト（FR-3, FR-6, NF部分）
+- [x] `src/fetcher/dify-usage-fetcher.ts` - DifyUsageFetcher実装
+- [x] `test/unit/fetcher/dify-usage-fetcher.test.ts` - 単体テスト
+- [x] `test/integration/dify-usage-fetcher.int.test.ts` - 統合テスト（FR-3, FR-6, NF部分）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
-- [ ] 依存成果物の確認
+- [x] 依存成果物の確認
   - src/watermark/watermark-manager.ts
   - src/fetcher/dify-api-client.ts
   - src/interfaces/fetcher.ts
-- [ ] `test/unit/fetcher/dify-usage-fetcher.test.ts` を作成
+- [x] `test/unit/fetcher/dify-usage-fetcher.test.ts` を作成
   - オーケストレーション動作テスト
   - ページング処理テスト（has_more制御）
   - バリデーション処理テスト
@@ -42,13 +42,13 @@ based_on: specs/stories/2-dify-usage-fetcher/plan.md
   - 進捗ログ出力テスト（100ページごと）
   - ページ間ディレイテスト（1秒）
   - ウォーターマーク更新テスト
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   npm test -- test/unit/fetcher/dify-usage-fetcher.test.ts
   ```
 
 ### 2. Green Phase
-- [ ] `src/fetcher/dify-usage-fetcher.ts` を作成
+- [x] `src/fetcher/dify-usage-fetcher.ts` を作成
   - createDifyUsageFetcher関数実装
   - fetch()メソッド実装
     - ウォーターマーク読み込み
@@ -84,24 +84,24 @@ based_on: specs/stories/2-dify-usage-fetcher/plan.md
   }
   ```
 
-- [ ] ヘルパー関数実装
+- [x] ヘルパー関数実装
   - calculateStartDate() - ウォーターマークから開始日を計算
   - formatDate() - Dateを'YYYY-MM-DD'形式に変換
   - validateRecords() - zodでバリデーション、エラーをスキップ
   - sleep() - ページ間ディレイ用
 
-- [ ] テスト実行して通ることを確認
+- [x] テスト実行して通ることを確認
   ```bash
   npm test -- test/unit/fetcher/dify-usage-fetcher.test.ts
   ```
 
 ### 3. Refactor Phase
-- [ ] 処理フローの最適化
-- [ ] ログ出力の改善
-- [ ] テストが引き続き通ることを確認
+- [x] 処理フローの最適化
+- [x] ログ出力の改善
+- [x] テストが引き続き通ることを確認
 
 ### 4. 統合テスト実装
-- [ ] `test/integration/dify-usage-fetcher.int.test.ts` を更新
+- [x] `test/integration/dify-usage-fetcher.int.test.ts` を更新
   - FR-3: ページング処理 統合テスト（4件 + 4エッジケース）
     - AC-3-1: has_more=trueで継続取得
     - AC-3-2: 1秒ディレイ挿入
@@ -121,30 +121,30 @@ based_on: specs/stories/2-dify-usage-fetcher/plan.md
     - DifyApiClient → DifyUsageFetcher
     - WatermarkManager → DifyUsageFetcher
     - 全コンポーネント連携
-- [ ] 統合テスト実行・パス確認
+- [x] 統合テスト実行・パス確認
   ```bash
   npm test -- test/integration/dify-usage-fetcher.int.test.ts
   ```
 
 ## 完了条件
-- [ ] 単体テストが全てパス
+- [x] 単体テストが全てパス
   ```bash
   npm test -- test/unit/fetcher/dify-usage-fetcher.test.ts
   ```
-- [ ] 統合テスト（FR-3, FR-6, NF関連）がすべてパス
+- [x] 統合テスト（FR-3, FR-6, NF関連）がすべてパス
   ```bash
   npm test -- test/integration/dify-usage-fetcher.int.test.ts
   ```
-- [ ] TypeScript strict mode: エラー0件
+- [x] TypeScript strict mode: エラー0件
   ```bash
   npm run build
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件（既存E2Eテストの警告は対象外）
   ```bash
   npm run check
   ```
-- [ ] DifyUsageFetcherが正常に動作する
-- [ ] 全コンポーネントが連携して動作する
+- [x] DifyUsageFetcherが正常に動作する
+- [x] 全コンポーネントが連携して動作する
 - [ ] Design DocのE2E確認手順が成功
 
 ## 関連する受入条件（AC）

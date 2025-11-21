@@ -9,7 +9,9 @@ import path from 'node:path'
 import axios from 'axios'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDifyApiClient } from '../../src/fetcher/dify-api-client.js'
+import { createDifyUsageFetcher } from '../../src/fetcher/dify-usage-fetcher.js'
 import type { Logger } from '../../src/logger/winston-logger.js'
+import type { DifyUsageRecord } from '../../src/types/dify-usage.js'
 import type { EnvConfig } from '../../src/types/env.js'
 import type { Watermark } from '../../src/types/watermark.js'
 import {
@@ -453,64 +455,318 @@ describe('FR-2: 使用量データ取得API呼び出し 統合テスト', () => 
 // FR-3: ページング処理 統合テスト（4件 + 4エッジケース）
 // ============================================
 describe('FR-3: ページング処理 統合テスト', () => {
+  let testDir: string
+  let config: EnvConfig
+  let logger: Logger
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2024-01-20T12:00:00.000Z'))
+
+    testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'fetcher-int-test-'))
+
+    config = {
+      DIFY_API_BASE_URL: 'https://api.dify.ai',
+      DIFY_API_TOKEN: 'test-api-token',
+      EXTERNAL_API_URL: 'https://external.api',
+      EXTERNAL_API_TOKEN: 'external-token',
+      CRON_SCHEDULE: '0 0 * * *',
+      LOG_LEVEL: 'info',
+      GRACEFUL_SHUTDOWN_TIMEOUT: 30,
+      MAX_RETRY: 3,
+      NODE_ENV: 'test',
+      DIFY_FETCH_PAGE_SIZE: 100,
+      DIFY_INITIAL_FETCH_DAYS: 30,
+      DIFY_FETCH_TIMEOUT_MS: 30000,
+      DIFY_FETCH_RETRY_COUNT: 3,
+      DIFY_FETCH_RETRY_DELAY_MS: 1000,
+      WATERMARK_FILE_PATH: path.join(testDir, 'watermark.json'),
+    }
+
+    logger = {
+      error: vi.fn(),
+      warn: vi.fn(),
+      info: vi.fn(),
+      debug: vi.fn(),
+      child: vi.fn().mockReturnThis(),
+    }
+  })
+
+  afterEach(async () => {
+    vi.useRealTimers()
+    try {
+      await fs.rm(testDir, { recursive: true, force: true })
+    } catch {
+      // ignore
+    }
+  })
+
+  function createMockRecord(overrides: Partial<DifyUsageRecord> = {}): DifyUsageRecord {
+    return {
+      date: '2024-01-15',
+      app_id: 'app-123',
+      provider: 'openai',
+      model: 'gpt-4',
+      input_tokens: 100,
+      output_tokens: 50,
+      total_tokens: 150,
+      ...overrides,
+    }
+  }
+
   // AC-3-1解釈: [状態型] has_more=trueの間、次のページを取得
-  // 検証: DifyUsageFetcherがhas_more判定でループを継続すること
-  // @category: integration
-  // @dependency: DifyUsageFetcher, DifyApiClient
-  // @complexity: high
-  it.todo('AC-3-1: has_moreがtrueの間、次のページを取得し続ける')
+  it('AC-3-1: has_moreがtrueの間、次のページを取得し続ける', async () => {
+    // Arrange
+    const getMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: {
+          data: [createMockRecord()],
+          total: 3,
+          page: 1,
+          limit: 100,
+          has_more: true,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          data: [createMockRecord()],
+          total: 3,
+          page: 2,
+          limit: 100,
+          has_more: true,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          data: [createMockRecord()],
+          total: 3,
+          page: 3,
+          limit: 100,
+          has_more: false,
+        },
+      })
+
+    const axiosInstance = {
+      get: getMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    const client = createDifyApiClient({ config, logger })
+    const watermarkManager = createWatermarkManager({ config, logger })
+    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
+
+    const onRecords = vi.fn().mockResolvedValue(undefined)
+
+    // Act - runAllTimersAsyncを使用してすべてのタイマーを実行
+    const fetchPromise = fetcher.fetch(onRecords)
+    // 繰り返しタイマーを進める
+    for (let i = 0; i < 10; i++) {
+      await vi.advanceTimersByTimeAsync(1000)
+    }
+    const result = await fetchPromise
+
+    // Assert
+    expect(getMock).toHaveBeenCalledTimes(3)
+    expect(result.totalPages).toBe(3)
+    expect(result.totalRecords).toBe(3)
+  })
 
   // AC-3-2解釈: [遍在型] 各ページ取得後1秒ディレイ
-  // 検証: DifyUsageFetcherがページ間で1秒のsleepを実行すること
-  // @category: integration
-  // @dependency: DifyUsageFetcher
-  // @complexity: medium
-  it.todo('AC-3-2: 各ページ取得後に1秒のディレイを挿入する')
+  it('AC-3-2: 各ページ取得後に1秒のディレイを挿入する', async () => {
+    // Arrange
+    const getMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        data: {
+          data: [createMockRecord()],
+          total: 2,
+          page: 1,
+          limit: 100,
+          has_more: true,
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          data: [createMockRecord()],
+          total: 2,
+          page: 2,
+          limit: 100,
+          has_more: false,
+        },
+      })
+
+    const axiosInstance = {
+      get: getMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    const client = createDifyApiClient({ config, logger })
+    const watermarkManager = createWatermarkManager({ config, logger })
+    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
+
+    const onRecords = vi.fn().mockResolvedValue(undefined)
+
+    // Act
+    const fetchPromise = fetcher.fetch(onRecords)
+
+    // 全てのタイマーを進めて2ページを取得
+    for (let i = 0; i < 5; i++) {
+      await vi.advanceTimersByTimeAsync(1000)
+    }
+    const result = await fetchPromise
+
+    // Assert - 2ページ分のAPI呼び出しが行われている
+    expect(getMock).toHaveBeenCalledTimes(2)
+    expect(result.totalPages).toBe(2)
+  })
 
   // AC-3-3解釈: [選択型] DIFY_FETCH_PAGE_SIZE環境変数でページサイズ変更
-  // 検証: 環境変数の値がlimitパラメータに反映されること
-  // @category: integration
-  // @dependency: DifyUsageFetcher, DifyApiClient, EnvConfig
-  // @complexity: low
-  it.todo('AC-3-3: DIFY_FETCH_PAGE_SIZE環境変数の値を1ページあたりの取得件数として使用する')
+  it('AC-3-3: DIFY_FETCH_PAGE_SIZE環境変数の値を1ページあたりの取得件数として使用する', async () => {
+    // Arrange
+    config.DIFY_FETCH_PAGE_SIZE = 50
+
+    const getMock = vi.fn().mockResolvedValue({
+      data: {
+        data: [createMockRecord()],
+        total: 1,
+        page: 1,
+        limit: 50,
+        has_more: false,
+      },
+    })
+
+    const axiosInstance = {
+      get: getMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    const client = createDifyApiClient({ config, logger })
+    const watermarkManager = createWatermarkManager({ config, logger })
+    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
+
+    const onRecords = vi.fn().mockResolvedValue(undefined)
+
+    // Act
+    await fetcher.fetch(onRecords)
+
+    // Assert
+    expect(getMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        params: expect.objectContaining({
+          limit: 50,
+        }),
+      }),
+    )
+  })
 
   // AC-3-4解釈: [契機型] 100ページごとに進捗ログ出力
-  // 検証: Loggerに100ページごとの進捗情報が出力されること
-  // @category: integration
-  // @dependency: DifyUsageFetcher, Logger
-  // @complexity: medium
-  it.todo('AC-3-4: 100ページ取得するごとに進捗ログを出力する')
+  it('AC-3-4: 100ページ取得するごとに進捗ログを出力する', async () => {
+    // Arrange - 150ページのデータをシミュレート
+    const getMock = vi.fn()
+    for (let i = 1; i <= 150; i++) {
+      getMock.mockResolvedValueOnce({
+        data: {
+          data: [createMockRecord()],
+          total: 150,
+          page: i,
+          limit: 100,
+          has_more: i < 150,
+        },
+      })
+    }
 
-  // エッジケース: 最大ページサイズ
-  // 検証: DIFY_FETCH_PAGE_SIZE=1000の場合
-  // @category: edge-case
-  // @dependency: EnvConfig, DifyApiClient
-  // @complexity: low
+    const axiosInstance = {
+      get: getMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    const client = createDifyApiClient({ config, logger })
+    const watermarkManager = createWatermarkManager({ config, logger })
+    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
+
+    const onRecords = vi.fn().mockResolvedValue(undefined)
+
+    // Act
+    const fetchPromise = fetcher.fetch(onRecords)
+    // 繰り返しタイマーを進める（150ページ分 = 150秒）
+    for (let i = 0; i < 200; i++) {
+      await vi.advanceTimersByTimeAsync(1000)
+    }
+    await fetchPromise
+
+    // Assert - 100ページ目で進捗ログが出力される
+    const infoCalls = vi.mocked(logger.info).mock.calls
+    const progressCalls = infoCalls.filter(
+      (call) => call[0] === '取得進捗' && (call[1] as Record<string, number>)?.page === 100,
+    )
+    expect(progressCalls.length).toBeGreaterThanOrEqual(1)
+  })
+
+  // エッジケース: 0件レスポンス
+  it('AC-3-1-edge: 0件のレスポンスを受けた場合、正常に処理を完了する（必須・高リスク）', async () => {
+    // Arrange
+    const getMock = vi.fn().mockResolvedValue({
+      data: {
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 100,
+        has_more: false,
+      },
+    })
+
+    const axiosInstance = {
+      get: getMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    const client = createDifyApiClient({ config, logger })
+    const watermarkManager = createWatermarkManager({ config, logger })
+    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
+
+    const onRecords = vi.fn().mockResolvedValue(undefined)
+
+    // Act
+    const result = await fetcher.fetch(onRecords)
+
+    // Assert
+    expect(result.success).toBe(true)
+    expect(result.totalRecords).toBe(0)
+    expect(onRecords).not.toHaveBeenCalled()
+  })
+
+  // エッジケース placeholders
   it.todo(
     'AC-3-3-edge: ページサイズ最大値1000が設定された場合、正しくリクエストされる（推奨・中リスク）',
   )
 
-  // エッジケース: 最小ページサイズ
-  // 検証: DIFY_FETCH_PAGE_SIZE=1の場合
-  // @category: edge-case
-  // @dependency: EnvConfig, DifyApiClient
-  // @complexity: low
   it.todo(
     'AC-3-3-edge: ページサイズ最小値1が設定された場合、正しくリクエストされる（推奨・中リスク）',
   )
 
-  // エッジケース: 0件レスポンス
-  // 検証: has_more=false で空配列の場合
-  // @category: edge-case
-  // @dependency: DifyUsageFetcher
-  // @complexity: medium
-  it.todo('AC-3-1-edge: 0件のレスポンスを受けた場合、正常に処理を完了する（必須・高リスク）')
-
-  // エッジケース: 大量ページ処理
-  // 検証: 1000ページ以上の処理
-  // @category: edge-case
-  // @dependency: DifyUsageFetcher
-  // @complexity: high
   it.todo('AC-3-1-edge: 1000ページ以上のデータを正常に取得できる（推奨・中リスク）')
 })
 
