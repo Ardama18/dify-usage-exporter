@@ -96,7 +96,9 @@ describe('FR-2: 使用量データ取得API呼び出し 統合テスト', () => 
   // @category: edge-case
   // @dependency: DifyApiClient, EnvConfig
   // @complexity: low
-  it.todo('AC-2-4-edge: DIFY_FETCH_TIMEOUT_MS環境変数でタイムアウト値を変更できる（推奨・中リスク）')
+  it.todo(
+    'AC-2-4-edge: DIFY_FETCH_TIMEOUT_MS環境変数でタイムアウト値を変更できる（推奨・中リスク）',
+  )
 })
 
 // ============================================
@@ -136,14 +138,18 @@ describe('FR-3: ページング処理 統合テスト', () => {
   // @category: edge-case
   // @dependency: EnvConfig, DifyApiClient
   // @complexity: low
-  it.todo('AC-3-3-edge: ページサイズ最大値1000が設定された場合、正しくリクエストされる（推奨・中リスク）')
+  it.todo(
+    'AC-3-3-edge: ページサイズ最大値1000が設定された場合、正しくリクエストされる（推奨・中リスク）',
+  )
 
   // エッジケース: 最小ページサイズ
   // 検証: DIFY_FETCH_PAGE_SIZE=1の場合
   // @category: edge-case
   // @dependency: EnvConfig, DifyApiClient
   // @complexity: low
-  it.todo('AC-3-3-edge: ページサイズ最小値1が設定された場合、正しくリクエストされる（推奨・中リスク）')
+  it.todo(
+    'AC-3-3-edge: ページサイズ最小値1が設定された場合、正しくリクエストされる（推奨・中リスク）',
+  )
 
   // エッジケース: 0件レスポンス
   // 検証: has_more=false で空配列の場合
@@ -211,7 +217,9 @@ describe('FR-4: ウォーターマーク管理 統合テスト', () => {
   // @category: edge-case
   // @dependency: WatermarkManager
   // @complexity: high
-  it.todo('AC-4-5-edge: バックアップファイルも破損している場合、WatermarkFileErrorをスローする（必須・高リスク）')
+  it.todo(
+    'AC-4-5-edge: バックアップファイルも破損している場合、WatermarkFileErrorをスローする（必須・高リスク）',
+  )
 
   // エッジケース: ディレクトリ不存在
   // 検証: data/ディレクトリが存在しない場合の自動作成
@@ -225,7 +233,9 @@ describe('FR-4: ウォーターマーク管理 統合テスト', () => {
   // @category: edge-case
   // @dependency: WatermarkManager
   // @complexity: medium
-  it.todo('AC-4-3-edge: ウォーターマークファイルの書き込みに失敗した場合、エラーログを出力する（必須・高リスク）')
+  it.todo(
+    'AC-4-3-edge: ウォーターマークファイルの書き込みに失敗した場合、エラーログを出力する（必須・高リスク）',
+  )
 
   // エッジケース: カスタムファイルパス
   // 検証: WATERMARK_FILE_PATH環境変数の反映
@@ -239,7 +249,9 @@ describe('FR-4: ウォーターマーク管理 統合テスト', () => {
   // @category: edge-case
   // @dependency: DifyUsageFetcher, EnvConfig
   // @complexity: low
-  it.todo('AC-4-2-edge: DIFY_INITIAL_FETCH_DAYS環境変数で初回取得日数を変更できる（推奨・中リスク）')
+  it.todo(
+    'AC-4-2-edge: DIFY_INITIAL_FETCH_DAYS環境変数で初回取得日数を変更できる（推奨・中リスク）',
+  )
 })
 
 // ============================================
@@ -279,21 +291,27 @@ describe('FR-5: エラーハンドリング 統合テスト', () => {
   // @category: integration
   // @dependency: DifyUsageFetcher, WatermarkManager
   // @complexity: high
-  it.todo('AC-5-5: ページ取得中にエラーが発生した場合、取得済みデータまでウォーターマークを更新する')
+  it.todo(
+    'AC-5-5: ページ取得中にエラーが発生した場合、取得済みデータまでウォーターマークを更新する',
+  )
 
   // エッジケース: リトライ回数上限到達
   // 検証: 3回リトライ後の挙動
   // @category: edge-case
   // @dependency: DifyApiClient, DifyUsageFetcher
   // @complexity: high
-  it.todo('AC-5-1-edge: 3回リトライ後も失敗する場合、エラーログを出力して処理を中断する（必須・高リスク）')
+  it.todo(
+    'AC-5-1-edge: 3回リトライ後も失敗する場合、エラーログを出力して処理を中断する（必須・高リスク）',
+  )
 
   // エッジケース: ネットワーク切断
   // 検証: ECONNREFUSED, ETIMEDOUT等のエラー処理
   // @category: edge-case
   // @dependency: DifyApiClient
   // @complexity: medium
-  it.todo('AC-5-1-edge: ネットワーク切断（ECONNREFUSED）が発生した場合、リトライする（必須・高リスク）')
+  it.todo(
+    'AC-5-1-edge: ネットワーク切断（ECONNREFUSED）が発生した場合、リトライする（必須・高リスク）',
+  )
 
   // エッジケース: サーバーエラー各種
   // 検証: 500, 502, 503, 504それぞれの処理
@@ -307,14 +325,18 @@ describe('FR-5: エラーハンドリング 統合テスト', () => {
   // @category: edge-case
   // @dependency: DifyApiClient
   // @complexity: medium
-  it.todo('AC-5-3-edge: Retry-Afterヘッダーがない429の場合、指数バックオフでリトライする（推奨・中リスク）')
+  it.todo(
+    'AC-5-3-edge: Retry-Afterヘッダーがない429の場合、指数バックオフでリトライする（推奨・中リスク）',
+  )
 
   // エッジケース: 無効なRetry-After値
   // 検証: 数値以外のRetry-After値の処理
   // @category: edge-case
   // @dependency: DifyApiClient
   // @complexity: medium
-  it.todo('AC-5-3-edge: 無効なRetry-After値の場合、デフォルトの指数バックオフを使用する（推奨・中リスク）')
+  it.todo(
+    'AC-5-3-edge: 無効なRetry-After値の場合、デフォルトの指数バックオフを使用する（推奨・中リスク）',
+  )
 
   // エッジケース: カスタムリトライ設定
   // 検証: DIFY_FETCH_RETRY_COUNT/DIFY_FETCH_RETRY_DELAY_MSの反映
@@ -347,7 +369,9 @@ describe('FR-6: データバリデーション 統合テスト', () => {
   // @category: integration
   // @dependency: DifyUsageFetcher, ResponseValidator, Logger
   // @complexity: high
-  it.todo('AC-6-3: バリデーションエラーが発生した場合、エラーログを記録して該当レコードをスキップする')
+  it.todo(
+    'AC-6-3: バリデーションエラーが発生した場合、エラーログを記録して該当レコードをスキップする',
+  )
 
   // AC-6-4解釈: [遍在型] トークン数が0以上の整数であることを検証
   // 検証: zodスキーマでnumber().int().min(0)の検証
@@ -361,14 +385,18 @@ describe('FR-6: データバリデーション 統合テスト', () => {
   // @category: edge-case
   // @dependency: ResponseValidator
   // @complexity: medium
-  it.todo('AC-6-2-edge: date/app_id/provider/model/total_tokens各フィールド欠落時にエラーを検出する（必須・高リスク）')
+  it.todo(
+    'AC-6-2-edge: date/app_id/provider/model/total_tokens各フィールド欠落時にエラーを検出する（必須・高リスク）',
+  )
 
   // エッジケース: 不正な日付形式
   // 検証: YYYY-MM-DD以外の形式
   // @category: edge-case
   // @dependency: ResponseValidator
   // @complexity: medium
-  it.todo('AC-6-2-edge: 日付形式がYYYY-MM-DD以外の場合、バリデーションエラーになる（必須・高リスク）')
+  it.todo(
+    'AC-6-2-edge: 日付形式がYYYY-MM-DD以外の場合、バリデーションエラーになる（必須・高リスク）',
+  )
 
   // エッジケース: 負のトークン数
   // 検証: トークン数が負の値の場合
