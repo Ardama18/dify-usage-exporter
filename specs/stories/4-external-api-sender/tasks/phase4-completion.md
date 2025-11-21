@@ -23,10 +23,10 @@ based_on: specs/stories/4-external-api-sender/plan.md
 ## plan.mdチェックボックス確認
 
 ### フェーズ完了条件
-- [ ] retryCount ≥ 10時にdata/failed/へ移動
-- [ ] 移動時にINotifier.sendErrorNotification()が呼ばれる
-- [ ] ConsoleNotifierでログ出力される
-- [ ] 統合テストがすべてパス
+- [x] retryCount ≥ 10時にdata/failed/へ移動
+- [x] 移動時にINotifier.sendErrorNotification()が呼ばれる
+- [x] ConsoleNotifierでログ出力される
+- [x] 統合テストがすべてパス
 
 ## 次フェーズへの引き継ぎ
 - **成果物**:

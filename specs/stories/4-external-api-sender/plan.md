@@ -234,14 +234,14 @@ figma_cache: none
 **目的**: INotifier連携、data/failed/移動時の通知送信
 
 #### Task 4-1: INotifierインターフェース定義とモック実装
-- [ ] INotifierインターフェース定義（src/interfaces/notifier.ts）
-- [ ] ConsoleNotifier実装（モック、ログ出力のみ）（src/notifier/console-notifier.ts）
-- [ ] 単体テスト作成（src/notifier/__tests__/console-notifier.test.ts）
+- [x] INotifierインターフェース定義（src/interfaces/notifier.ts）
+- [x] ConsoleNotifier実装（モック、ログ出力のみ）（src/notifier/console-notifier.ts）
+- [x] 単体テスト作成（src/notifier/__tests__/console-notifier.test.ts）
 
 **完了条件:**
-- [ ] 実装完了: INotifierインターフェース定義とConsoleNotifier実装
-- [ ] 品質完了: 単体テストがパス（src/notifier/__tests__/console-notifier.test.ts）
-- [ ] 統合完了: ConsoleNotifierでログ出力される
+- [x] 実装完了: INotifierインターフェース定義とConsoleNotifier実装
+- [x] 品質完了: 単体テストがパス（src/notifier/__tests__/console-notifier.test.ts）
+- [x] 統合完了: ConsoleNotifierでログ出力される
 
 **成果物:**
 - src/interfaces/notifier.ts
@@ -249,14 +249,14 @@ figma_cache: none
 - src/notifier/__tests__/console-notifier.test.ts
 
 #### Task 4-2: data/failed/移動時の通知送信実装
-- [ ] ExternalApiSender.resendSpooled()にINotifier呼び出しを追加
-- [ ] data/failed/移動時の通知送信実装
-- [ ] 統合テスト拡張（通知送信確認）（src/sender/__tests__/integration/sender-e2e.int.test.ts）
+- [x] ExternalApiSender.resendSpooled()にINotifier呼び出しを追加
+- [x] data/failed/移動時の通知送信実装
+- [x] 統合テスト拡張（通知送信確認）（src/sender/__tests__/integration/sender-e2e.int.test.ts）
 
 **完了条件:**
-- [ ] 実装完了: data/failed/移動時に通知が送信される
-- [ ] 品質完了: 統合テストがパス（通知送信確認）
-- [ ] 統合完了: INotifier呼び出しが正しく動作する
+- [x] 実装完了: data/failed/移動時に通知が送信される
+- [x] 品質完了: 統合テストがパス（通知送信確認）
+- [x] 統合完了: INotifier呼び出しが正しく動作する
 
 **成果物:**
 - src/sender/external-api-sender.ts（拡張）
