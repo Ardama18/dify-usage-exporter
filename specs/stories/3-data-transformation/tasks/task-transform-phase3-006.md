@@ -29,30 +29,30 @@ provider/model正規化処理を実装する。小文字変換と空白除去を
 
 ## 対象ファイル
 
-- [ ] src/transformer/data-transformer.ts（新規作成、正規化部分）
-- [ ] test/unit/transformer/data-transformer.test.ts（新規作成、正規化部分）
+- [x] src/transformer/data-transformer.ts（新規作成、正規化部分）
+- [x] test/unit/transformer/data-transformer.test.ts（新規作成、正規化部分）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
 
-- [ ] 依存成果物の確認:
+- [x] 依存成果物の確認:
   - src/utils/date-utils.ts
   - src/transformer/idempotency-key.ts
-- [ ] テストファイル `test/unit/transformer/data-transformer.test.ts` を作成
-- [ ] 以下のテストケースを記述（正規化部分のみ）:
+- [x] テストファイル `test/unit/transformer/data-transformer.test.ts` を作成
+- [x] 以下のテストケースを記述（正規化部分のみ）:
   - 大文字を小文字に変換
   - 前後の空白を除去
   - 特殊文字（タブ、改行）の処理
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   npm run test:unit -- test/unit/transformer/data-transformer.test.ts
   ```
 
 ### 2. Green Phase
 
-- [ ] `src/transformer/data-transformer.ts` を作成
-- [ ] normalizeProvider、normalizeModel関数を実装:
+- [x] `src/transformer/data-transformer.ts` を作成
+- [x] normalizeProvider、normalizeModel関数を実装:
   ```typescript
   export function normalizeProvider(provider: string): string {
     return provider.trim().toLowerCase()
@@ -62,15 +62,15 @@ provider/model正規化処理を実装する。小文字変換と空白除去を
     return model.trim().toLowerCase()
   }
   ```
-- [ ] テスト実行して通ることを確認
+- [x] テスト実行して通ることを確認
   ```bash
   npm run test:unit -- test/unit/transformer/data-transformer.test.ts
   ```
 
 ### 3. Refactor Phase
 
-- [ ] 必要に応じてコード改善
-- [ ] テストが引き続き通ることを確認
+- [x] 必要に応じてコード改善
+- [x] テストが引き続き通ることを確認
 
 ## テストケース詳細
 
@@ -131,16 +131,16 @@ describe('normalizeModel', () => {
 
 ## 完了条件
 
-- [ ] 追加したテストが全てパス
-- [ ] TypeScript strict mode: エラー0件
+- [x] 追加したテストが全てパス
+- [x] TypeScript strict mode: エラー0件
   ```bash
   npx tsc --noEmit
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
   npm run check
   ```
-- [ ] 動作確認完了（L2: 単体テスト実行）
+- [x] 動作確認完了（L2: 単体テスト実行）
   ```bash
   npm run test:unit -- test/unit/transformer/data-transformer.test.ts
   ```
