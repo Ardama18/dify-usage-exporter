@@ -86,14 +86,14 @@ graph TD
 
 **AC対応**: AC4（zodバリデーション）
 
-- [ ] `src/types/external-api.ts`にexternalApiRecordSchemaとExternalApiRecord型を定義
-- [ ] 単体テスト作成（`test/unit/types/external-api.test.ts`）
+- [x] `src/types/external-api.ts`にexternalApiRecordSchemaとExternalApiRecord型を定義
+- [x] 単体テスト作成（`test/unit/types/external-api.test.ts`）
   - 正常なレコードのバリデーション成功
   - 日付形式不正（YYYY/MM/DD）でエラー
   - 負のトークン数でエラー
   - 空文字列app_idでエラー
   - オプションフィールド（app_name, user_id）の欠損許容
-- [ ] テスト実行・パス確認
+- [x] テスト実行・パス確認
 
 **完了条件**: 型定義がエクスポート可能、単体テスト全パス
 
@@ -101,9 +101,9 @@ graph TD
 
 **AC対応**: AC5（エラーハンドリング）
 
-- [ ] `src/interfaces/transformer.ts`にITransformer、TransformResult、TransformError型を定義
-- [ ] 型のエクスポート確認
-- [ ] `npm run build`で型チェック成功
+- [x] `src/interfaces/transformer.ts`にITransformer、TransformResult、TransformError型を定義
+- [x] 型のエクスポート確認
+- [x] `npm run build`で型チェック成功
 
 **完了条件**: インターフェースがエクスポート可能、ビルド成功
 
@@ -111,20 +111,20 @@ graph TD
 
 **AC対応**: AC1-2（transformed_at付与）
 
-- [ ] date-fnsパッケージ追加（`npm install date-fns`）
-- [ ] `src/utils/date-utils.ts`にgetCurrentISOTimestamp、formatDateToISOを実装
-- [ ] 単体テスト作成（`test/unit/utils/date-utils.test.ts`）
+- [x] date-fnsパッケージ追加（`npm install date-fns`）
+- [x] `src/utils/date-utils.ts`にgetCurrentISOTimestamp、formatDateToISOを実装
+- [x] 単体テスト作成（`test/unit/utils/date-utils.test.ts`）
   - getCurrentISOTimestampがISO 8601形式を返す
   - formatDateToISOが正しい形式に変換
-- [ ] テスト実行・パス確認
+- [x] テスト実行・パス確認
 
 **完了条件**: 日時ユーティリティが動作、単体テスト全パス
 
 ### Phase 1 動作確認
 
-1. [ ] `npm run build`が成功すること
-2. [ ] `npm run check`がエラーなしで完了すること
-3. [ ] 型定義ファイルがエクスポートできること
+1. [x] `npm run build`が成功すること
+2. [x] `npm run check`がエラーなしで完了すること
+3. [x] 型定義ファイルがエクスポートできること
 
 ---
 
@@ -322,8 +322,8 @@ graph TD
 
 ## 進捗サマリ
 
-- Phase 1: 0/3 タスク完了
+- Phase 1: 3/3 タスク完了 ✅
 - Phase 2: 0/2 タスク完了
 - Phase 3: 0/3 タスク完了
 - Phase 4: 0/3 タスク完了
-- **全体**: 0/11 タスク完了
+- **全体**: 3/11 タスク完了
