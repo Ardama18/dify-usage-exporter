@@ -26,31 +26,31 @@ based_on: specs/stories/3-data-transformation/plan.md
 
 ## 対象ファイル
 
-- [ ] test/integration/data-transformation.int.test.ts（追加）
+- [x] test/integration/data-transformation.int.test.ts（追加）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
 
-- [ ] task-008の成果物（統合テスト）が存在することを確認
-- [ ] 統合テストファイルにパフォーマンステストセクションを追加:
+- [x] task-008の成果物（統合テスト）が存在することを確認
+- [x] 統合テストファイルにパフォーマンステストセクションを追加:
   - 10,000レコード生成
   - 変換実行・時間計測
   - 5秒以内の完了確認
-- [ ] テスト実行して確認
+- [x] テスト実行して確認
 
 ### 2. Green Phase
 
-- [ ] パフォーマンステストを実装
-- [ ] テスト実行して通ることを確認
+- [x] パフォーマンステストを実装
+- [x] テスト実行して通ることを確認
   ```bash
   npm run test:integration -- test/integration/data-transformation.int.test.ts
   ```
 
 ### 3. Refactor Phase
 
-- [ ] 必要に応じてテスト改善
-- [ ] テストが引き続き通ることを確認
+- [x] 必要に応じてテスト改善
+- [x] テストが引き続き通ることを確認
 
 ## テストケース詳細
 
@@ -160,17 +160,17 @@ describe('AC6: パフォーマンス', () => {
 
 ## 完了条件
 
-- [ ] パフォーマンステストが全てパス
-- [ ] 10,000レコードを5秒以内に変換
-- [ ] TypeScript strict mode: エラー0件
+- [x] パフォーマンステストが全てパス
+- [x] 10,000レコードを5秒以内に変換（実測: 65ms）
+- [x] TypeScript strict mode: エラー0件
   ```bash
   npx tsc --noEmit
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
   npm run check
   ```
-- [ ] 動作確認完了（L2: 統合テスト実行）
+- [x] 動作確認完了（L2: 統合テスト実行）
   ```bash
   npm run test:integration -- test/integration/data-transformation.int.test.ts
   ```
