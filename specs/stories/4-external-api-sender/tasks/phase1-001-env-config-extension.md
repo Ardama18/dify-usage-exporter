@@ -25,60 +25,60 @@ based_on: specs/stories/4-external-api-sender/plan.md
 env-config.tsを拡張し、EXTERNAL_API_*環境変数を追加。HTTPS必須チェック、必須環境変数バリデーション、単体テストを実装する。
 
 ## 対象ファイル
-- [ ] src/config/env-config.ts（拡張）
-- [ ] src/config/__tests__/env-config.test.ts（拡張）
+- [x] src/config/env-config.ts（拡張）
+- [x] src/config/__tests__/env-config.test.ts（拡張）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
-- [ ] 既存env-config.tsの確認
+- [x] 既存env-config.tsの確認
   ```bash
   cat backend/src/config/env-config.ts
   ```
-- [ ] 失敗するテストを作成
+- [x] 失敗するテストを作成
   - EXTERNAL_API_ENDPOINT必須チェック
   - EXTERNAL_API_TOKEN必須チェック
   - HTTPS必須チェック（http://で開始するURLを拒否）
   - デフォルト値のテスト（EXTERNAL_API_TIMEOUT_MS, MAX_RETRIES等）
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   cd backend && npm run test:unit -- src/config/__tests__/env-config.test.ts
   ```
 
 ### 2. Green Phase
-- [ ] EnvConfig型拡張
+- [x] EnvConfig型拡張
   - EXTERNAL_API_ENDPOINT: string
   - EXTERNAL_API_TOKEN: string
   - EXTERNAL_API_TIMEOUT_MS: number
   - MAX_RETRIES: number
   - MAX_SPOOL_RETRIES: number
   - BATCH_SIZE: number
-- [ ] loadEnvConfig()拡張
+- [x] loadEnvConfig()拡張
   - 必須環境変数チェック（EXTERNAL_API_ENDPOINT, EXTERNAL_API_TOKEN）
   - HTTPS必須チェック（startsWith('https://')）
   - デフォルト値設定（TIMEOUT: 30000, MAX_RETRIES: 3, MAX_SPOOL_RETRIES: 10, BATCH_SIZE: 100）
-- [ ] 追加したテストのみ実行して通ることを確認
+- [x] 追加したテストのみ実行して通ることを確認
 
 ### 3. Refactor Phase
-- [ ] コード整理（変数名の一貫性、可読性向上）
-- [ ] エラーメッセージの明確化
-- [ ] 追加したテストが引き続き通ることを確認
+- [x] コード整理（変数名の一貫性、可読性向上）
+- [x] エラーメッセージの明確化
+- [x] 追加したテストが引き続き通ることを確認
 
 ## 完了条件
-- [ ] 追加したテストが全てパス
-- [ ] TypeScript strict mode: エラー0件
+- [x] 追加したテストが全てパス
+- [x] TypeScript strict mode: エラー0件
   ```bash
   cd backend && npm run build
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
   cd backend && npm run check
   ```
-- [ ] 動作確認完了（L1: 単体テスト実行）
+- [x] 動作確認完了（L1: 単体テスト実行）
   ```bash
   cd backend && npm run test:unit -- src/config/__tests__/env-config.test.ts
   ```
-- [ ] 成果物作成完了
+- [x] 成果物作成完了
   - src/config/env-config.ts（拡張）
 
 ## 実装サンプル
