@@ -30,29 +30,29 @@ ITransformerインターフェースを実装するDataTransformerを関数フ�
 
 ## 対象ファイル
 
-- [ ] src/transformer/data-transformer.ts（追加）
-- [ ] test/unit/transformer/data-transformer.test.ts（追加）
+- [x] src/transformer/data-transformer.ts（追加）
+- [x] test/unit/transformer/data-transformer.test.ts（追加）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
 
-- [ ] task-006の成果物（正規化関数）が存在することを確認
-- [ ] 既存のテストファイルに変換部分のテストケースを追加:
+- [x] task-006の成果物（正規化関数）が存在することを確認
+- [x] 既存のテストファイルに変換部分のテストケースを追加:
   - 単一レコードの正常変換
   - transformed_at付与確認
   - 冪等キー生成確認
   - バリデーションエラーのエラー配列記録
   - successCount + errorCount = 入力数の保証
   - 例外スローなしの確認
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   npm run test:unit -- test/unit/transformer/data-transformer.test.ts
   ```
 
 ### 2. Green Phase
 
-- [ ] `src/transformer/data-transformer.ts` にTransformerDeps、createDataTransformerを追加:
+- [x] `src/transformer/data-transformer.ts` にTransformerDeps、createDataTransformerを追加:
   ```typescript
   import type { Logger } from '../logger/winston-logger.js'
   import type { DifyUsageRecord } from '../types/dify-usage.js'
@@ -140,15 +140,15 @@ ITransformerインターフェースを実装するDataTransformerを関数フ�
     }
   }
   ```
-- [ ] テスト実行して通ることを確認
+- [x] テスト実行して通ることを確認
   ```bash
   npm run test:unit -- test/unit/transformer/data-transformer.test.ts
   ```
 
 ### 3. Refactor Phase
 
-- [ ] 必要に応じてコード改善
-- [ ] テストが引き続き通ることを確認
+- [x] 必要に応じてコード改善
+- [x] テストが引き続き通ることを確認
 
 ## テストケース詳細
 
@@ -362,16 +362,16 @@ describe('createDataTransformer', () => {
 
 ## 完了条件
 
-- [ ] 追加したテストが全てパス
-- [ ] TypeScript strict mode: エラー0件
+- [x] 追加したテストが全てパス
+- [x] TypeScript strict mode: エラー0件
   ```bash
   npx tsc --noEmit
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
   npm run check
   ```
-- [ ] 動作確認完了（L2: 単体テスト実行）
+- [x] 動作確認完了（L2: 単体テスト実行）
   ```bash
   npm run test:unit -- test/unit/transformer/data-transformer.test.ts
   ```
