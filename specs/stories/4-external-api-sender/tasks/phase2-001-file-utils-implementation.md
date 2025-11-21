@@ -25,47 +25,47 @@ based_on: specs/stories/4-external-api-sender/plan.md
 パーミッション600設定関数、アトミックファイル書き込み関数を実装する。
 
 ## 対象ファイル
-- [ ] src/utils/file-utils.ts（新規作成）
-- [ ] src/utils/__tests__/file-utils.test.ts（新規作成）
+- [x] src/utils/file-utils.ts（新規作成）
+- [x] test/unit/utils/file-utils.test.ts（新規作成）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
-- [ ] 失敗するテストを作成
+- [x] 失敗するテストを作成
   - writeFileAtomic()のテスト（一時ファイル作成→リネーム）
   - setPermission600()のテスト（パーミッション確認）
   - エラーケース（ディレクトリ作成失敗、書き込み失敗）
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
-  cd backend && npm run test:unit -- src/utils/__tests__/file-utils.test.ts
+  npm test -- test/unit/utils/file-utils.test.ts
   ```
 
 ### 2. Green Phase
-- [ ] ファイル操作ユーティリティ実装
+- [x] ファイル操作ユーティリティ実装
   - writeFileAtomic(): 一時ファイルへ書き込み→リネーム
   - setPermission600(): fs.chmod()でパーミッション設定
   - ensureDirectory(): ディレクトリ作成（recursive）
-- [ ] 追加したテストのみ実行して通ることを確認
+- [x] 追加したテストのみ実行して通ることを確認
 
 ### 3. Refactor Phase
-- [ ] コード整理（関数の分離、エラーハンドリング）
-- [ ] 追加したテストが引き続き通ることを確認
+- [x] コード整理（関数の分離、エラーハンドリング）
+- [x] 追加したテストが引き続き通ることを確認
 
 ## 完了条件
-- [ ] 追加したテストが全てパス
-- [ ] TypeScript strict mode: エラー0件
+- [x] 追加したテストが全てパス
+- [x] TypeScript strict mode: エラー0件
   ```bash
-  cd backend && npm run build
+  npm run build
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
-  cd backend && npm run check
+  npm run check
   ```
-- [ ] 動作確認完了（L1: 単体テスト実行）
+- [x] 動作確認完了（L1: 単体テスト実行）
   ```bash
-  cd backend && npm run test:unit -- src/utils/__tests__/file-utils.test.ts
+  npm test -- test/unit/utils/file-utils.test.ts
   ```
-- [ ] 成果物作成完了
+- [x] 成果物作成完了
   - src/utils/file-utils.ts
 
 ## 実装サンプル
