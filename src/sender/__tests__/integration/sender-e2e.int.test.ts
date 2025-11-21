@@ -11,6 +11,7 @@ import type { INotifier } from '../../../interfaces/notifier.js'
 import { createLogger, type Logger } from '../../../logger/winston-logger.js'
 import type { EnvConfig } from '../../../types/env.js'
 import type { ExternalApiRecord } from '../../../types/external-api.js'
+import type { ExecutionMetrics } from '../../../types/metrics.js'
 import { ExternalApiSender } from '../../external-api-sender.js'
 import { HttpClient } from '../../http-client.js'
 import { SpoolManager } from '../../spool-manager.js'
@@ -24,6 +25,7 @@ describe('ExternalApiSender E2E Integration Tests', () => {
   let logger: Logger
   let config: EnvConfig
   let mockNotifier: INotifier
+  let mockMetrics: ExecutionMetrics
 
   const testRecords: ExternalApiRecord[] = [
     {
@@ -78,12 +80,30 @@ describe('ExternalApiSender E2E Integration Tests', () => {
       sendErrorNotification: vi.fn().mockResolvedValue(undefined),
     }
 
+    // モックメトリクス作成
+    mockMetrics = {
+      fetchedRecords: 0,
+      transformedRecords: 0,
+      sendSuccess: 0,
+      sendFailed: 0,
+      spoolSaved: 0,
+      spoolResendSuccess: 0,
+      failedMoved: 0,
+    }
+
     // 依存オブジェクト作成
     const httpClient = new HttpClient(logger, config)
     const spoolManager = new SpoolManager(logger)
 
     // Sender作成
-    sender = new ExternalApiSender(httpClient, spoolManager, mockNotifier, logger, config)
+    sender = new ExternalApiSender(
+      httpClient,
+      spoolManager,
+      mockNotifier,
+      logger,
+      config,
+      mockMetrics,
+    )
   })
 
   afterEach(async () => {

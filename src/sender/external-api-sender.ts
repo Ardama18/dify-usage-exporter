@@ -12,6 +12,7 @@ import type { ISender } from '../interfaces/sender.js'
 import type { Logger } from '../logger/winston-logger.js'
 import type { EnvConfig } from '../types/env.js'
 import type { ExternalApiRecord } from '../types/external-api.js'
+import type { ExecutionMetrics } from '../types/metrics.js'
 import type { SpoolFile } from '../types/spool.js'
 import type { HttpClient } from './http-client.js'
 import type { SpoolManager } from './spool-manager.js'
@@ -28,6 +29,7 @@ export class ExternalApiSender implements ISender {
     private readonly notifier: INotifier,
     private readonly logger: Logger,
     private readonly config: EnvConfig,
+    private readonly metrics: ExecutionMetrics,
   ) {}
 
   /**
@@ -72,18 +74,21 @@ export class ExternalApiSender implements ISender {
 
       // 2. 200/201レスポンス: 成功
       if (response.status === 200 || response.status === 201) {
+        this.metrics.sendSuccess += records.length
         this.logger.info('Send success', { recordCount: records.length })
         return
       }
 
       // 3. 409レスポンス: 重複検出、成功扱い
       if (response.status === 409) {
+        this.metrics.sendSuccess += records.length
         this.logger.warn('Duplicate data detected', { batchKey })
         return
       }
     } catch (error) {
       // 4. 409エラー: 重複検出、成功扱い
       if (error instanceof AxiosError && error.response?.status === 409) {
+        this.metrics.sendSuccess += records.length
         this.logger.warn('Duplicate data detected', { batchKey })
         return
       }
@@ -111,6 +116,7 @@ export class ExternalApiSender implements ISender {
 
         // 2. 成功: スプールファイル削除
         await this.spoolManager.deleteSpoolFile(spoolFile.batchIdempotencyKey)
+        this.metrics.spoolResendSuccess += 1
         this.logger.info('Spool resend success', { batchKey: spoolFile.batchIdempotencyKey })
       } catch (error) {
         // 3. 失敗: retryCountインクリメント
@@ -141,6 +147,8 @@ export class ExternalApiSender implements ISender {
       lastError: errorMessage,
     })
 
+    this.metrics.sendFailed += records.length
+    this.metrics.spoolSaved += 1
     this.logger.warn('Spooled due to max retries', { recordCount: records.length })
   }
 
@@ -164,6 +172,7 @@ export class ExternalApiSender implements ISender {
     if (updatedSpoolFile.retryCount >= this.config.MAX_SPOOL_RETRIES) {
       // data/failed/へ移動
       await this.spoolManager.moveToFailed(updatedSpoolFile)
+      this.metrics.failedMoved += 1
       this.logger.error('Moved to failed', { batchKey: updatedSpoolFile.batchIdempotencyKey })
 
       // エラー通知送信

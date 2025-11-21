@@ -23,16 +23,16 @@ based_on: specs/stories/4-external-api-sender/plan.md
 ExecutionMetrics型拡張（sendSuccess, sendFailed, spoolSaved, spoolResendSuccess, failedMoved）、ExternalApiSenderにメトリクス記録機能追加。
 
 ## 対象ファイル
-- [ ] src/types/metrics.ts（拡張）
-- [ ] src/sender/external-api-sender.ts（拡張）
+- [x] src/types/metrics.ts（拡張）
+- [x] src/sender/external-api-sender.ts（拡張）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 ### 1-3. メトリクス型拡張と記録機能追加
-- [ ] ExecutionMetrics型拡張
-- [ ] ExternalApiSenderにメトリクス記録機能追加
-- [ ] 単体テスト作成
+- [x] ExecutionMetrics型拡張
+- [x] ExternalApiSenderにメトリクス記録機能追加
+- [x] 単体テスト作成
 
 ## 完了条件
-- [ ] TypeScriptコンパイルエラーなし
-- [ ] Story 5でメトリクス集計に使用可能
-- [ ] 成果物作成完了
+- [x] TypeScriptコンパイルエラーなし
+- [x] Story 5でメトリクス集計に使用可能
+- [x] 成果物作成完了

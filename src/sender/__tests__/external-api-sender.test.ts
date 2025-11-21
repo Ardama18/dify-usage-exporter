@@ -4,6 +4,7 @@ import type { INotifier } from '../../interfaces/notifier.js'
 import type { Logger } from '../../logger/winston-logger.js'
 import type { EnvConfig } from '../../types/env.js'
 import type { ExternalApiRecord } from '../../types/external-api.js'
+import type { ExecutionMetrics } from '../../types/metrics.js'
 import { ExternalApiSender } from '../external-api-sender.js'
 import type { HttpClient } from '../http-client.js'
 import type { SpoolManager } from '../spool-manager.js'
@@ -15,6 +16,7 @@ describe('ExternalApiSender', () => {
   let mockNotifier: INotifier
   let mockLogger: Logger
   let mockConfig: EnvConfig
+  let mockMetrics: ExecutionMetrics
 
   beforeEach(() => {
     // モックHttpClient
@@ -52,12 +54,24 @@ describe('ExternalApiSender', () => {
       EXTERNAL_API_TIMEOUT_MS: 30000,
     } as EnvConfig
 
+    // モックメトリクス
+    mockMetrics = {
+      fetchedRecords: 0,
+      transformedRecords: 0,
+      sendSuccess: 0,
+      sendFailed: 0,
+      spoolSaved: 0,
+      spoolResendSuccess: 0,
+      failedMoved: 0,
+    }
+
     sender = new ExternalApiSender(
       mockHttpClient,
       mockSpoolManager,
       mockNotifier,
       mockLogger,
       mockConfig,
+      mockMetrics,
     )
   })
 
