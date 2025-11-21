@@ -21,22 +21,22 @@ based_on: specs/stories/2-dify-usage-fetcher/plan.md
 E2Eテスト（44件）を実装し、実際の動作フローを検証する。初回実行、差分取得、エラー復旧、Docker環境での動作を確認する。
 
 ## 対象ファイル
-- [ ] `test/e2e/dify-usage-fetcher.e2e.test.ts` - E2Eテスト
+- [x] `test/e2e/dify-usage-fetcher.e2e.test.ts` - E2Eテスト
 
 ## 実装手順
 
 ### 1. E2Eテスト環境準備
-- [ ] モックサーバーの設定確認
-- [ ] テスト用環境変数の設定
+- [x] モックサーバーの設定確認
+- [x] テスト用環境変数の設定
   ```bash
   export DIFY_API_BASE_URL="http://localhost:3001/mock"
   export DIFY_API_TOKEN="test-token"
   export WATERMARK_FILE_PATH="tmp/test-watermark.json"
   ```
-- [ ] テストデータの準備
+- [x] テストデータの準備
 
 ### 2. E2Eテスト実装
-- [ ] `test/e2e/dify-usage-fetcher.e2e.test.ts` を作成
+- [x] `test/e2e/dify-usage-fetcher.e2e.test.ts` を作成
   ```typescript
   describe('DifyUsageFetcher E2Eテスト', () => {
     describe('初回実行シナリオ', () => {
@@ -118,31 +118,31 @@ E2Eテスト（44件）を実装し、実際の動作フローを検証する。
   ```
 
 ### 3. テスト実行・検証
-- [ ] E2Eテスト実行
+- [x] E2Eテスト実行
   ```bash
   npm test -- test/e2e/dify-usage-fetcher.e2e.test.ts
   ```
-- [ ] テスト件数が44件であることを確認
-- [ ] 全テストがパスすることを確認
+- [x] テスト件数が44件であることを確認
+- [x] 全テストがパスすることを確認
 
 ### 4. Docker環境テスト
-- [ ] Dockerイメージビルド
+- [x] Dockerイメージビルド
   ```bash
   docker build -t dify-usage-exporter:test .
   ```
-- [ ] Docker環境でのテスト実行
+- [x] Docker環境でのテスト実行
   ```bash
   docker run --rm dify-usage-exporter:test npm test -- test/e2e/
   ```
 
 ## 完了条件
-- [ ] 全44件のE2Eテストがパス
+- [x] 全44件のE2Eテストがパス
   ```bash
   npm test -- test/e2e/dify-usage-fetcher.e2e.test.ts
   ```
-- [ ] Docker環境での動作確認完了
-- [ ] TypeScript strict mode: エラー0件
-- [ ] Biome lint: エラー0件
+- [x] Docker環境での動作確認完了
+- [x] TypeScript strict mode: エラー0件
+- [x] Biome lint: エラー0件
 
 ## テスト件数内訳
 
