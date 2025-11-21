@@ -26,29 +26,29 @@ based_on: specs/stories/3-data-transformation/plan.md
 
 ## 対象ファイル
 
-- [ ] src/transformer/idempotency-key.ts（追加）
-- [ ] test/unit/transformer/idempotency-key.test.ts（追加）
+- [x] src/transformer/idempotency-key.ts（追加）
+- [x] test/unit/transformer/idempotency-key.test.ts（追加）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
 
-- [ ] task-004の成果物（src/transformer/idempotency-key.ts）が存在することを確認
-- [ ] 既存のテストファイルにバッチキー部分のテストケースを追加:
+- [x] task-004の成果物（src/transformer/idempotency-key.ts）が存在することを確認
+- [x] 既存のテストファイルにバッチキー部分のテストケースを追加:
   - 空配列で空文字列を返却
   - ソートによる順序非依存性検証
   - SHA256形式（64文字16進数）の確認
   - 単一レコードでも正常動作
   - 大量レコード（1000件）でも正常動作
   - 重複レコード含むバッチでの決定性
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   npm run test:unit -- test/unit/transformer/idempotency-key.test.ts
   ```
 
 ### 2. Green Phase
 
-- [ ] `src/transformer/idempotency-key.ts` にgenerateBatchIdempotencyKeyを追加:
+- [x] `src/transformer/idempotency-key.ts` にgenerateBatchIdempotencyKeyを追加:
   ```typescript
   import crypto from 'crypto'
 
@@ -64,15 +64,15 @@ based_on: specs/stories/3-data-transformation/plan.md
     return crypto.createHash('sha256').update(concatenated).digest('hex')
   }
   ```
-- [ ] テスト実行して通ることを確認
+- [x] テスト実行して通ることを確認
   ```bash
   npm run test:unit -- test/unit/transformer/idempotency-key.test.ts
   ```
 
 ### 3. Refactor Phase
 
-- [ ] 必要に応じてコード改善
-- [ ] テストが引き続き通ることを確認
+- [x] 必要に応じてコード改善
+- [x] テストが引き続き通ることを確認
 
 ## テストケース詳細
 
@@ -149,16 +149,16 @@ describe('generateBatchIdempotencyKey', () => {
 
 ## 完了条件
 
-- [ ] 追加したテストが全てパス
-- [ ] TypeScript strict mode: エラー0件
+- [x] 追加したテストが全てパス
+- [x] TypeScript strict mode: エラー0件
   ```bash
   npx tsc --noEmit
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
   npm run check
   ```
-- [ ] 動作確認完了（L2: 単体テスト実行）
+- [x] 動作確認完了（L2: 単体テスト実行）
   ```bash
   npm run test:unit -- test/unit/transformer/idempotency-key.test.ts
   ```

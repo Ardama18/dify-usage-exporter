@@ -1,3 +1,5 @@
+import crypto from 'node:crypto'
+
 /**
  * レコード単位の冪等キー生成パラメータ
  */
@@ -17,4 +19,23 @@ export interface RecordKeyParams {
  */
 export function generateRecordIdempotencyKey(params: RecordKeyParams): string {
   return `${params.date}_${params.app_id}_${params.provider}_${params.model}`
+}
+
+/**
+ * バッチ単位の冪等キーを生成する
+ * ソートして順序に依存しない決定的なキー生成
+ *
+ * @param recordKeys レコードキーの配列
+ * @returns SHA256ハッシュ（64文字16進数）、空配列の場合は空文字列
+ */
+export function generateBatchIdempotencyKey(recordKeys: string[]): string {
+  if (recordKeys.length === 0) {
+    return ''
+  }
+
+  // ソートして順序に依存しない決定的なキー生成
+  const sorted = [...recordKeys].sort()
+  const concatenated = sorted.join(',')
+
+  return crypto.createHash('sha256').update(concatenated).digest('hex')
 }

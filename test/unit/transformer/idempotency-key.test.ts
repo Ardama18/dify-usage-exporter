@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  generateBatchIdempotencyKey,
   generateRecordIdempotencyKey,
   type RecordKeyParams,
 } from '../../../src/transformer/idempotency-key.js'
@@ -64,6 +65,70 @@ describe('generateRecordIdempotencyKey', () => {
       const result = generateRecordIdempotencyKey(params)
 
       expect(result).toBe('2025-01-01_app-456_anthropic_claude-3')
+    })
+  })
+})
+
+describe('generateBatchIdempotencyKey', () => {
+  describe('正常系', () => {
+    it('should return empty string for empty array', () => {
+      const result = generateBatchIdempotencyKey([])
+
+      expect(result).toBe('')
+    })
+
+    it('should generate SHA256 hash (64 hex characters)', () => {
+      const keys = ['key1', 'key2', 'key3']
+
+      const result = generateBatchIdempotencyKey(keys)
+
+      expect(result).toMatch(/^[a-f0-9]{64}$/)
+    })
+
+    it('should return same hash for same keys regardless of order', () => {
+      const keys1 = ['key1', 'key2', 'key3']
+      const keys2 = ['key3', 'key1', 'key2']
+
+      const result1 = generateBatchIdempotencyKey(keys1)
+      const result2 = generateBatchIdempotencyKey(keys2)
+
+      expect(result1).toBe(result2)
+    })
+
+    it('should handle single record', () => {
+      const keys = ['single-key']
+
+      const result = generateBatchIdempotencyKey(keys)
+
+      expect(result).toMatch(/^[a-f0-9]{64}$/)
+    })
+
+    it('should handle large number of records (1000)', () => {
+      const keys = Array.from({ length: 1000 }, (_, i) => `key-${i}`)
+
+      const result = generateBatchIdempotencyKey(keys)
+
+      expect(result).toMatch(/^[a-f0-9]{64}$/)
+    })
+
+    it('should return deterministic result for duplicate keys', () => {
+      const keys1 = ['key1', 'key1', 'key2']
+      const keys2 = ['key1', 'key1', 'key2']
+
+      const result1 = generateBatchIdempotencyKey(keys1)
+      const result2 = generateBatchIdempotencyKey(keys2)
+
+      expect(result1).toBe(result2)
+    })
+
+    it('should return different hash for different keys', () => {
+      const keys1 = ['key1', 'key2']
+      const keys2 = ['key1', 'key3']
+
+      const result1 = generateBatchIdempotencyKey(keys1)
+      const result2 = generateBatchIdempotencyKey(keys2)
+
+      expect(result1).not.toBe(result2)
     })
   })
 })
