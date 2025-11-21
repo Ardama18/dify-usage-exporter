@@ -21,17 +21,17 @@ based_on: specs/stories/2-dify-usage-fetcher/plan.md
 全ての統合テスト（59件）の実装を完了し、実行確認を行う。これまでの各タスクで部分的に実装した統合テストを統合し、不足分を補完する。
 
 ## 対象ファイル
-- [ ] `test/integration/dify-usage-fetcher.int.test.ts` - 統合テスト完全版
+- [x] `test/integration/dify-usage-fetcher.int.test.ts` - 統合テスト完全版
 
 ## 実装手順
 
 ### 1. 既存テストの確認
-- [ ] Task 005で実装したFR-4テストを確認
-- [ ] Task 006で実装したFR-1, FR-2, FR-5テストを確認
-- [ ] Task 007で実装したFR-3, FR-6, NFテストを確認
+- [x] Task 005で実装したFR-4テストを確認
+- [x] Task 006で実装したFR-1, FR-2, FR-5テストを確認
+- [x] Task 007で実装したFR-3, FR-6, NFテストを確認
 
 ### 2. テスト構造の整理
-- [ ] `test/integration/dify-usage-fetcher.int.test.ts` のテスト構造を確認
+- [x] `test/integration/dify-usage-fetcher.int.test.ts` のテスト構造を確認
   ```typescript
   describe('DifyUsageFetcher 統合テスト', () => {
     describe('FR-1: Dify API認証', () => {
@@ -62,35 +62,35 @@ based_on: specs/stories/2-dify-usage-fetcher/plan.md
   ```
 
 ### 3. 不足テストの補完
-- [ ] 各FRのテストケースが計画通りか確認
-- [ ] エッジケースのテストが実装されているか確認
-- [ ] 非機能要件のテストを実装
+- [x] 各FRのテストケースが計画通りか確認
+- [x] エッジケースのテストが実装されているか確認
+- [x] 非機能要件のテストを実装
   - パフォーマンステスト（10,000件/30秒）
   - メモリ使用量テスト（100MB以内）
   - 重複取得率テスト（0%）
   - セキュリティテスト（トークン非出力）
-- [ ] コンポーネント連携テストを実装
+- [x] コンポーネント連携テストを実装
 
 ### 4. テスト実行・検証
-- [ ] 全統合テスト実行
+- [x] 全統合テスト実行
   ```bash
   npm test -- test/integration/dify-usage-fetcher.int.test.ts
   ```
-- [ ] テスト件数が59件であることを確認
-- [ ] 全テストがパスすることを確認
-- [ ] カバレッジ確認
+- [x] テスト件数が59件であることを確認
+- [x] 全テストがパスすることを確認
+- [x] カバレッジ確認
 
 ## 完了条件
-- [ ] 全59件の統合テストがパス
+- [x] 全59件の統合テストがパス
   ```bash
   npm test -- test/integration/dify-usage-fetcher.int.test.ts
   ```
-- [ ] テストカバレッジ70%以上
+- [x] テストカバレッジ70%以上
   ```bash
   npm run test:coverage:fresh
   ```
-- [ ] TypeScript strict mode: エラー0件
-- [ ] Biome lint: エラー0件
+- [x] TypeScript strict mode: エラー0件
+- [x] Biome lint: エラー0件
 
 ## テスト件数内訳
 
