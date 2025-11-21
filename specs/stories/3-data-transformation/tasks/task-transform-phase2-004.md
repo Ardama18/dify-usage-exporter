@@ -26,35 +26,35 @@ based_on: specs/stories/3-data-transformation/plan.md
 
 ## 対象ファイル
 
-- [ ] src/transformer/idempotency-key.ts
-- [ ] test/unit/transformer/idempotency-key.test.ts
+- [x] src/transformer/idempotency-key.ts
+- [x] test/unit/transformer/idempotency-key.test.ts
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
 
-- [ ] transformerディレクトリを作成
+- [x] transformerディレクトリを作成
   ```bash
   mkdir -p src/transformer
   ```
-- [ ] テストディレクトリを作成
+- [x] テストディレクトリを作成
   ```bash
   mkdir -p test/unit/transformer
   ```
-- [ ] テストファイル `test/unit/transformer/idempotency-key.test.ts` を作成
-- [ ] 以下のテストケースを記述（レコードキー部分のみ）:
+- [x] テストファイル `test/unit/transformer/idempotency-key.test.ts` を作成
+- [x] 以下のテストケースを記述（レコードキー部分のみ）:
   - 正常パラメータで`{date}_{app_id}_{provider}_{model}`形式生成
   - 同一入力に対して同一キー生成（冪等性）
   - 異なる入力に対して異なるキー生成（一意性）
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   npm run test:unit -- test/unit/transformer/idempotency-key.test.ts
   ```
 
 ### 2. Green Phase
 
-- [ ] `src/transformer/idempotency-key.ts` を作成
-- [ ] RecordKeyParams型とgenerateRecordIdempotencyKey関数を実装:
+- [x] `src/transformer/idempotency-key.ts` を作成
+- [x] RecordKeyParams型とgenerateRecordIdempotencyKey関数を実装:
   ```typescript
   export interface RecordKeyParams {
     date: string
@@ -67,15 +67,15 @@ based_on: specs/stories/3-data-transformation/plan.md
     return `${params.date}_${params.app_id}_${params.provider}_${params.model}`
   }
   ```
-- [ ] テスト実行して通ることを確認
+- [x] テスト実行して通ることを確認
   ```bash
   npm run test:unit -- test/unit/transformer/idempotency-key.test.ts
   ```
 
 ### 3. Refactor Phase
 
-- [ ] 必要に応じてコード改善
-- [ ] テストが引き続き通ることを確認
+- [x] 必要に応じてコード改善
+- [x] テストが引き続き通ることを確認
 
 ## テストケース詳細
 
@@ -153,16 +153,16 @@ describe('generateRecordIdempotencyKey', () => {
 
 ## 完了条件
 
-- [ ] 追加したテストが全てパス
-- [ ] TypeScript strict mode: エラー0件
+- [x] 追加したテストが全てパス
+- [x] TypeScript strict mode: エラー0件
   ```bash
   npx tsc --noEmit
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
   npm run check
   ```
-- [ ] 動作確認完了（L2: 単体テスト実行）
+- [x] 動作確認完了（L2: 単体テスト実行）
   ```bash
   npm run test:unit -- test/unit/transformer/idempotency-key.test.ts
   ```
