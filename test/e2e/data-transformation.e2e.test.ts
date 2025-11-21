@@ -99,7 +99,9 @@ describe('E2E-4: 統合ポイント間データ整合性テスト', () => {
   // @category: e2e
   // @dependency: full-system
   // @complexity: high
-  it.todo('E2E: TransformResultがSenderの期待形式（ExternalApiRecord[] + batchIdempotencyKey）と一致する')
+  it.todo(
+    'E2E: TransformResultがSenderの期待形式（ExternalApiRecord[] + batchIdempotencyKey）と一致する',
+  )
 
   // E2E-edge-2解釈: 複数バッチの連続処理（推奨・高リスク）
   // 検証: 複数バッチを連続で処理しても、各バッチの冪等キーが独立して生成されること

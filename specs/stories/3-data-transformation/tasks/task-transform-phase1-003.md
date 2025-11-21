@@ -26,30 +26,30 @@ date-fnsを使用した日時ユーティリティ関数を実装し、単体テ
 
 ## 対象ファイル
 
-- [ ] src/utils/date-utils.ts
-- [ ] test/unit/utils/date-utils.test.ts
+- [x] src/utils/date-utils.ts
+- [x] test/unit/utils/date-utils.test.ts
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
 
-- [ ] date-fnsパッケージをインストール
+- [x] date-fnsパッケージをインストール
   ```bash
   npm install date-fns
   ```
-- [ ] テストファイル `test/unit/utils/date-utils.test.ts` を作成
-- [ ] 以下のテストケースを記述:
+- [x] テストファイル `test/unit/utils/date-utils.test.ts` を作成
+- [x] 以下のテストケースを記述:
   - getCurrentISOTimestampがISO 8601形式を返す
   - formatDateToISOが正しい形式に変換
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   npm run test:unit -- test/unit/utils/date-utils.test.ts
   ```
 
 ### 2. Green Phase
 
-- [ ] `src/utils/date-utils.ts` を作成
-- [ ] 以下の関数を実装:
+- [x] `src/utils/date-utils.ts` を作成
+- [x] 以下の関数を実装:
   ```typescript
   import { formatISO } from 'date-fns'
 
@@ -61,15 +61,15 @@ date-fnsを使用した日時ユーティリティ関数を実装し、単体テ
     return formatISO(date, { representation: 'complete' })
   }
   ```
-- [ ] テスト実行して通ることを確認
+- [x] テスト実行して通ることを確認
   ```bash
   npm run test:unit -- test/unit/utils/date-utils.test.ts
   ```
 
 ### 3. Refactor Phase
 
-- [ ] 必要に応じてコード改善
-- [ ] テストが引き続き通ることを確認
+- [x] 必要に応じてコード改善
+- [x] テストが引き続き通ることを確認
 
 ## テストケース詳細
 
@@ -142,17 +142,17 @@ describe('date-utils', () => {
 
 ## 完了条件
 
-- [ ] date-fnsパッケージがインストール済み
-- [ ] 追加したテストが全てパス
-- [ ] TypeScript strict mode: エラー0件
+- [x] date-fnsパッケージがインストール済み
+- [x] 追加したテストが全てパス
+- [x] TypeScript strict mode: エラー0件
   ```bash
   npx tsc --noEmit
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
   npm run check
   ```
-- [ ] 動作確認完了（L2: 単体テスト実行）
+- [x] 動作確認完了（L2: 単体テスト実行）
   ```bash
   npm run test:unit -- test/unit/utils/date-utils.test.ts
   ```

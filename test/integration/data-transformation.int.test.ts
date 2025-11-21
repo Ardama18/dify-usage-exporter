@@ -75,7 +75,9 @@ describe('AC2: レコード単位冪等キー生成 統合テスト', () => {
   // @category: integration
   // @dependency: IdempotencyKeyGenerator, DataTransformer
   // @complexity: medium
-  it.todo('AC2-1: 各ExternalApiRecordに{date}_{app_id}_{provider}_{model}形式の冪等キーが付与される')
+  it.todo(
+    'AC2-1: 各ExternalApiRecordに{date}_{app_id}_{provider}_{model}形式の冪等キーが付与される',
+  )
 
   // AC2-2解釈: [遍在型] 正規化後のprovider/modelを冪等キーに使用
   // 検証: 冪等キー内のprovider/modelが小文字・空白除去後の値であること
@@ -162,7 +164,9 @@ describe('AC4: zodによるバリデーション 統合テスト', () => {
   // @category: integration
   // @dependency: DataTransformer
   // @complexity: medium
-  it.todo('AC4-2: バリデーション失敗レコードはerrors配列に記録され、成功レコードのみがrecordsに含まれる')
+  it.todo(
+    'AC4-2: バリデーション失敗レコードはerrors配列に記録され、成功レコードのみがrecordsに含まれる',
+  )
 
   // AC4-edge-1解釈: 日付形式不正（必須・高リスク）
   // 検証: 不正な日付形式（YYYY/MM/DD等）がバリデーションエラーになること
@@ -223,7 +227,9 @@ describe('AC5: エラーハンドリング 統合テスト', () => {
   // @category: edge-case
   // @dependency: DataTransformer
   // @complexity: low
-  it.todo('AC5-edge: TransformErrorに完全なエラー情報（recordIdentifier, message, details）が含まれる')
+  it.todo(
+    'AC5-edge: TransformErrorに完全なエラー情報（recordIdentifier, message, details）が含まれる',
+  )
 
   // AC5-edge-3解釈: 混合成功・失敗（推奨・中リスク）
   // 検証: 成功と失敗が混在する入力で、それぞれが正しく分類されること
