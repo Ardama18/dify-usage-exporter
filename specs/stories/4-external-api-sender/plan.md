@@ -66,35 +66,35 @@ figma_cache: none
 **目的**: axios + axios-retryによるHTTPクライアント実装、リトライポリシー設定
 
 #### Task 1-1: 環境変数定義と拡張
-- [ ] env-config.ts拡張（EXTERNAL_API_*環境変数追加）
-- [ ] HTTPS必須チェック実装
-- [ ] 必須環境変数バリデーション実装
-- [ ] 単体テスト作成（src/config/__tests__/env-config.test.ts）
+- [x] env-config.ts拡張（EXTERNAL_API_*環境変数追加）
+- [x] HTTPS必須チェック実装
+- [x] 必須環境変数バリデーション実装
+- [x] 単体テスト作成（src/config/__tests__/env-config.test.ts）
 
 **完了条件:**
-- [ ] 実装完了: 環境変数が正しく読み込まれる
-- [ ] 品質完了: 単体テストがパス、必須チェックが動作
-- [ ] 統合完了: 既存のenv-configと整合性確認
+- [x] 実装完了: 環境変数が正しく読み込まれる
+- [x] 品質完了: 単体テストがパス、必須チェックが動作
+- [x] 統合完了: 既存のenv-configと整合性確認
 
 **成果物:**
 - src/config/env-config.ts（拡張）
 - src/config/__tests__/env-config.test.ts
 
 #### Task 1-2: HttpClientクラス実装と単体テスト作成
-- [ ] HttpClientクラス実装（src/sender/http-client.ts）
+- [x] HttpClientクラス実装（src/sender/http-client.ts）
   - axiosインスタンス作成（baseURL、timeout、認証ヘッダー設定）
   - axios-retry設定（指数バックオフ、リトライ条件）
   - リクエスト/レスポンスインターセプター（ログ出力、トークンマスク）
-- [ ] 単体テスト作成（src/sender/__tests__/http-client.test.ts）
+- [x] 単体テスト作成（src/sender/__tests__/http-client.test.ts）
   - リトライ動作確認（nockでモックAPI）
   - タイムアウト確認
   - トークンマスク確認
   - リトライ条件判定確認（5xx、429、ネットワークエラー）
 
 **完了条件:**
-- [ ] 実装完了: HttpClientクラスが動作する
-- [ ] 品質完了: 単体テストがパス（src/sender/__tests__/http-client.test.ts）
-- [ ] 統合完了: モックAPIでリトライ動作確認
+- [x] 実装完了: HttpClientクラスが動作する
+- [x] 品質完了: 単体テストがパス（src/sender/__tests__/http-client.test.ts）
+- [x] 統合完了: モックAPIでリトライ動作確認
 
 **成果物:**
 - src/sender/http-client.ts
@@ -108,16 +108,16 @@ figma_cache: none
 5. 単体テスト実行: `npm test src/sender/__tests__/http-client.test.ts`
 
 #### Task 1-3: RetryPolicyユーティリティ実装
-- [ ] リトライ条件判定関数実装（src/sender/retry-policy.ts）
+- [x] リトライ条件判定関数実装（src/sender/retry-policy.ts）
   - isRetryableError()
   - isNonRetryableError()
   - is409Conflict()
-- [ ] 単体テスト作成（src/sender/__tests__/retry-policy.test.ts）
+- [x] 単体テスト作成（src/sender/__tests__/retry-policy.test.ts）
 
 **完了条件:**
-- [ ] 実装完了: リトライ条件判定が正しく動作する
-- [ ] 品質完了: 単体テストがパス（src/sender/__tests__/retry-policy.test.ts）
-- [ ] 統合完了: HttpClientとの統合確認
+- [x] 実装完了: リトライ条件判定が正しく動作する
+- [x] 品質完了: 単体テストがパス（src/sender/__tests__/retry-policy.test.ts）
+- [x] 統合完了: HttpClientとの統合確認
 
 **成果物:**
 - src/sender/retry-policy.ts
