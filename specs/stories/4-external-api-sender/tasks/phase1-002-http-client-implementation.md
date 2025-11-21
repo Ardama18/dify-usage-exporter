@@ -27,55 +27,55 @@ based_on: specs/stories/4-external-api-sender/plan.md
 axiosインスタンス作成、axios-retry設定（指数バックオフ、リトライ条件）、リクエスト/レスポンスインターセプター（ログ出力、トークンマスク）を実装する。
 
 ## 対象ファイル
-- [ ] src/sender/http-client.ts（新規作成）
-- [ ] src/sender/__tests__/http-client.test.ts（新規作成）
+- [x] src/sender/http-client.ts（新規作成）
+- [x] src/sender/__tests__/http-client.test.ts（新規作成）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
-- [ ] 依存成果物の確認
+- [x] 依存成果物の確認
   - src/config/env-config.ts（EXTERNAL_API_*環境変数）
   - src/types/external-api.ts（ExternalApiRecord型）
-- [ ] 失敗するテストを作成
+- [x] 失敗するテストを作成
   - axios POST送信のテスト（モックAPI使用）
   - リトライ動作のテスト（1回目500エラー、2回目200レスポンス）
   - タイムアウトのテスト
   - トークンマスクのテスト（ログ出力確認）
   - リトライ条件判定のテスト（5xx, 429, ネットワークエラー）
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   cd backend && npm run test:unit -- src/sender/__tests__/http-client.test.ts
   ```
 
 ### 2. Green Phase
-- [ ] HttpClientクラス実装
+- [x] HttpClientクラス実装
   - axiosインスタンス作成（baseURL、timeout、認証ヘッダー）
   - axios-retry設定（指数バックオフ、リトライ条件）
   - リクエストインターセプター（ログ出力、トークンマスク）
   - レスポンスインターセプター（ログ出力、エラーハンドリング）
   - post()メソッド実装
-- [ ] 追加したテストのみ実行して通ることを確認
+- [x] 追加したテストのみ実行して通ることを確認
 
 ### 3. Refactor Phase
-- [ ] コード整理（インターセプター関数の分離）
-- [ ] エラーメッセージの明確化
-- [ ] 追加したテストが引き続き通ることを確認
+- [x] コード整理（インターセプター関数の分離）
+- [x] エラーメッセージの明確化
+- [x] 追加したテストが引き続き通ることを確認
 
 ## 完了条件
-- [ ] 追加したテストが全てパス
-- [ ] TypeScript strict mode: エラー0件
+- [x] 追加したテストが全てパス
+- [x] TypeScript strict mode: エラー0件
   ```bash
   cd backend && npm run build
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
   cd backend && npm run check
   ```
-- [ ] 動作確認完了（L1: 単体テスト実行）
+- [x] 動作確認完了（L1: 単体テスト実行）
   ```bash
   cd backend && npm run test:unit -- src/sender/__tests__/http-client.test.ts
   ```
-- [ ] 成果物作成完了
+- [x] 成果物作成完了
   - src/sender/http-client.ts
 
 ## 実装サンプル
