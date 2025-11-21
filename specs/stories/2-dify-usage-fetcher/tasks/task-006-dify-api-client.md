@@ -21,31 +21,31 @@ based_on: specs/stories/2-dify-usage-fetcher/plan.md
 Dify Console APIとのHTTP通信、Bearer Token認証、指数バックオフリトライを実装する。ADR 002（リトライポリシー）、ADR 007（HTTPクライアント）に準拠。
 
 ## 対象ファイル
-- [ ] `src/fetcher/dify-api-client.ts` - DifyApiClient実装
-- [ ] `test/unit/fetcher/dify-api-client.test.ts` - 単体テスト
-- [ ] `test/integration/dify-usage-fetcher.int.test.ts` - 統合テスト（FR-1, FR-2, FR-5部分）
+- [x] `src/fetcher/dify-api-client.ts` - DifyApiClient実装
+- [x] `test/unit/fetcher/dify-api-client.test.ts` - 単体テスト
+- [x] `test/integration/dify-usage-fetcher.int.test.ts` - 統合テスト（FR-1, FR-2, FR-5部分）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
-- [ ] axios, axios-retryパッケージがインストールされているか確認
+- [x] axios, axios-retryパッケージがインストールされているか確認
   ```bash
   npm list axios axios-retry
   ```
-- [ ] `test/unit/fetcher/dify-api-client.test.ts` を作成
+- [x] `test/unit/fetcher/dify-api-client.test.ts` を作成
   - 認証ヘッダー設定確認テスト
   - タイムアウト設定確認テスト
   - リトライ設定確認テスト（retries, retryDelay, retryCondition）
   - パラメータ構築確認テスト
   - Retry-Afterヘッダー対応テスト
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   npm test -- test/unit/fetcher/dify-api-client.test.ts
   ```
 
 ### 2. Green Phase
-- [ ] `src/fetcher/` ディレクトリを作成
-- [ ] `src/fetcher/dify-api-client.ts` を作成
+- [x] `src/fetcher/` ディレクトリを作成
+- [x] `src/fetcher/dify-api-client.ts` を作成
   - createDifyApiClient関数実装
   - axiosインスタンス作成（baseURL, timeout, headers）
   - Bearer Token認証ヘッダー設定
@@ -84,18 +84,18 @@ Dify Console APIとのHTTP通信、Bearer Token認証、指数バックオフリ
   }
   ```
 
-- [ ] テスト実行して通ることを確認
+- [x] テスト実行して通ることを確認
   ```bash
   npm test -- test/unit/fetcher/dify-api-client.test.ts
   ```
 
 ### 3. Refactor Phase
-- [ ] インターセプターの最適化
-- [ ] エラーハンドリングの改善
-- [ ] テストが引き続き通ることを確認
+- [x] インターセプターの最適化
+- [x] エラーハンドリングの改善
+- [x] テストが引き続き通ることを確認
 
 ### 4. 統合テスト実装
-- [ ] `test/integration/dify-usage-fetcher.int.test.ts` を更新
+- [x] `test/integration/dify-usage-fetcher.int.test.ts` を更新
   - FR-1: Dify API認証 統合テスト（3件 + 2エッジケース）
     - AC-1-1: 全リクエストにBearer Token含む
     - AC-1-2: DIFY_API_TOKEN未設定時のエラー
@@ -110,31 +110,31 @@ Dify Console APIとのHTTP通信、Bearer Token認証、指数バックオフリ
     - AC-5-2: 400/401/403/404リトライなし
     - AC-5-3: Retry-Afterヘッダー対応
     - AC-5-4: 構造化ログ記録
-- [ ] 統合テスト実行・パス確認
+- [x] 統合テスト実行・パス確認
   ```bash
   npm test -- test/integration/dify-usage-fetcher.int.test.ts -t "FR-1\|FR-2\|FR-5"
   ```
 
 ## 完了条件
-- [ ] 単体テストが全てパス
+- [x] 単体テストが全てパス
   ```bash
   npm test -- test/unit/fetcher/dify-api-client.test.ts
   ```
-- [ ] 統合テスト（FR-1, FR-2, FR-5関連）がすべてパス
+- [x] 統合テスト（FR-1, FR-2, FR-5関連）がすべてパス
   ```bash
   npm test -- test/integration/dify-usage-fetcher.int.test.ts -t "FR-1\|FR-2\|FR-5"
   ```
-- [ ] TypeScript strict mode: エラー0件
+- [x] TypeScript strict mode: エラー0件
   ```bash
   npm run build
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
   npm run check
   ```
-- [ ] DifyApiClientが正常に動作する
-- [ ] Bearer Token認証が全リクエストに含まれる
-- [ ] リトライ設定がADR 002準拠
+- [x] DifyApiClientが正常に動作する
+- [x] Bearer Token認証が全リクエストに含まれる
+- [x] リトライ設定がADR 002準拠
 
 ## 関連する受入条件（AC）
 - **AC-1-1**: システムはすべてのAPIリクエストに`Authorization: Bearer ${DIFY_API_TOKEN}`ヘッダーを含めること

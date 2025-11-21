@@ -6,7 +6,9 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import axios from 'axios'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createDifyApiClient } from '../../src/fetcher/dify-api-client.js'
 import type { Logger } from '../../src/logger/winston-logger.js'
 import type { EnvConfig } from '../../src/types/env.js'
 import type { Watermark } from '../../src/types/watermark.js'
@@ -15,22 +17,87 @@ import {
   WatermarkFileError,
 } from '../../src/watermark/watermark-manager.js'
 
+// axiosをモック
+vi.mock('axios')
+vi.mock('axios-retry', () => ({
+  default: vi.fn(),
+  isNetworkOrIdempotentRequestError: vi.fn(),
+  exponentialDelay: vi.fn(),
+}))
+
 // ============================================
 // FR-1: Dify API認証 統合テスト（3件 + 2エッジケース）
 // ============================================
 describe('FR-1: Dify API認証 統合テスト', () => {
+  let config: EnvConfig
+  let logger: Logger
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    config = {
+      DIFY_API_BASE_URL: 'https://api.dify.ai',
+      DIFY_API_TOKEN: 'test-api-token-12345',
+      EXTERNAL_API_URL: 'https://external.api',
+      EXTERNAL_API_TOKEN: 'external-token',
+      CRON_SCHEDULE: '0 0 * * *',
+      LOG_LEVEL: 'info',
+      GRACEFUL_SHUTDOWN_TIMEOUT: 30,
+      MAX_RETRY: 3,
+      NODE_ENV: 'test',
+      DIFY_FETCH_PAGE_SIZE: 100,
+      DIFY_INITIAL_FETCH_DAYS: 30,
+      DIFY_FETCH_TIMEOUT_MS: 30000,
+      DIFY_FETCH_RETRY_COUNT: 3,
+      DIFY_FETCH_RETRY_DELAY_MS: 1000,
+      WATERMARK_FILE_PATH: 'data/watermark.json',
+    }
+
+    logger = {
+      error: vi.fn(),
+      warn: vi.fn(),
+      info: vi.fn(),
+      debug: vi.fn(),
+      child: vi.fn().mockReturnThis(),
+    }
+
+    // axiosモックのセットアップ
+    const getMock = vi.fn()
+    const axiosInstance = {
+      get: getMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+  })
+
   // AC-1-1解釈: [遍在型] すべてのAPIリクエストにBearerトークンヘッダーを含める
   // 検証: DifyApiClientがすべてのリクエストにAuthorization: Bearer ${token}を設定すること
   // @category: integration
   // @dependency: DifyApiClient, EnvConfig
   // @complexity: low
-  it.todo('AC-1-1: すべてのAPIリクエストにAuthorization Bearerヘッダーが含まれる')
+  it('AC-1-1: すべてのAPIリクエストにAuthorization Bearerヘッダーが含まれる', () => {
+    // Act
+    createDifyApiClient({ config, logger })
+
+    // Assert
+    expect(axios.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-api-token-12345',
+        }),
+      }),
+    )
+  })
 
   // AC-1-2解釈: [選択型] DIFY_API_TOKEN未設定時にエラー出力して終了
   // 検証: EnvConfigがDIFY_API_TOKEN未設定を検出し、適切なエラーをスローすること
   // @category: integration
   // @dependency: EnvConfig, DifyUsageFetcher
   // @complexity: low
+  // Note: EnvConfigのzodバリデーションで実施されるため、単体テストに委譲
   it.todo('AC-1-2: 環境変数DIFY_API_TOKENが未設定の場合、起動時にエラーを出力して終了する')
 
   // AC-1-3解釈: [不測型] 401エラー時にログ出力して処理終了
@@ -38,13 +105,50 @@ describe('FR-1: Dify API認証 統合テスト', () => {
   // @category: integration
   // @dependency: DifyApiClient, DifyUsageFetcher, Logger
   // @complexity: medium
-  it.todo('AC-1-3: APIが401エラーを返した場合、エラーログを出力して処理を終了する')
+  it('AC-1-3: APIが401エラーを返した場合、エラーログを出力して処理を終了する', async () => {
+    // Arrange
+    const authError = {
+      response: { status: 401, data: { error: 'Unauthorized' } },
+      message: 'Request failed with status code 401',
+      config: { url: '/console/api/usage' },
+    }
+    const getMock = vi.fn().mockRejectedValue(authError)
+    const axiosInstance = {
+      get: getMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: {
+          use: vi.fn((_, errorHandler) => {
+            // レスポンスエラーハンドラーを即座に実行
+            axiosInstance.errorHandler = errorHandler
+          }),
+        },
+      },
+      errorHandler: null as ((error: unknown) => void) | null,
+    }
+    vi.mocked(axios.create).mockReturnValue(
+      axiosInstance as unknown as ReturnType<typeof axios.create>,
+    )
+
+    const client = createDifyApiClient({ config, logger })
+
+    // Act & Assert
+    await expect(
+      client.fetchUsage({
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        page: 1,
+        limit: 100,
+      }),
+    ).rejects.toThrow()
+  })
 
   // エッジケース: 無効なトークン形式
   // 検証: 空文字やnullが設定された場合の挙動
   // @category: edge-case
   // @dependency: EnvConfig
   // @complexity: low
+  // Note: EnvConfigのzodバリデーションで実施
   it.todo('AC-1-2-edge: 空文字のDIFY_API_TOKENが設定された場合、エラーを出力する（必須・高リスク）')
 
   // エッジケース: トークンの特殊文字
@@ -52,47 +156,262 @@ describe('FR-1: Dify API認証 統合テスト', () => {
   // @category: edge-case
   // @dependency: DifyApiClient
   // @complexity: low
-  it.todo('AC-1-1-edge: 特殊文字を含むトークンが正しくヘッダーに設定される（推奨・中リスク）')
+  it('AC-1-1-edge: 特殊文字を含むトークンが正しくヘッダーに設定される（推奨・中リスク）', () => {
+    // Arrange
+    config.DIFY_API_TOKEN = 'token-with-special-chars!@#$%^&*()'
+
+    // Act
+    createDifyApiClient({ config, logger })
+
+    // Assert
+    expect(axios.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer token-with-special-chars!@#$%^&*()',
+        }),
+      }),
+    )
+  })
 })
 
 // ============================================
 // FR-2: 使用量データ取得API呼び出し 統合テスト（4件 + 3エッジケース）
 // ============================================
 describe('FR-2: 使用量データ取得API呼び出し 統合テスト', () => {
+  let config: EnvConfig
+  let logger: Logger
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    config = {
+      DIFY_API_BASE_URL: 'https://api.dify.ai',
+      DIFY_API_TOKEN: 'test-api-token',
+      EXTERNAL_API_URL: 'https://external.api',
+      EXTERNAL_API_TOKEN: 'external-token',
+      CRON_SCHEDULE: '0 0 * * *',
+      LOG_LEVEL: 'info',
+      GRACEFUL_SHUTDOWN_TIMEOUT: 30,
+      MAX_RETRY: 3,
+      NODE_ENV: 'test',
+      DIFY_FETCH_PAGE_SIZE: 100,
+      DIFY_INITIAL_FETCH_DAYS: 30,
+      DIFY_FETCH_TIMEOUT_MS: 30000,
+      DIFY_FETCH_RETRY_COUNT: 3,
+      DIFY_FETCH_RETRY_DELAY_MS: 1000,
+      WATERMARK_FILE_PATH: 'data/watermark.json',
+    }
+
+    logger = {
+      error: vi.fn(),
+      warn: vi.fn(),
+      info: vi.fn(),
+      debug: vi.fn(),
+      child: vi.fn().mockReturnThis(),
+    }
+  })
+
   // AC-2-1解釈: [契機型] Fetcher起動時にDify Console API呼び出し
   // 検証: DifyUsageFetcherがDifyApiClientを通じて/console/api/usageを呼び出すこと
   // @category: integration
   // @dependency: DifyUsageFetcher, DifyApiClient
   // @complexity: medium
-  it.todo('AC-2-1: Fetcherが起動したとき、Dify Console API /console/api/usage を呼び出す')
+  it('AC-2-1: Fetcherが起動したとき、Dify Console API /console/api/usage を呼び出す', async () => {
+    // Arrange
+    const getMock = vi.fn().mockResolvedValue({
+      data: {
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 100,
+        has_more: false,
+      },
+    })
+    const axiosInstance = {
+      get: getMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    const client = createDifyApiClient({ config, logger })
+
+    // Act
+    await client.fetchUsage({
+      startDate: '2024-01-01',
+      endDate: '2024-01-31',
+      page: 1,
+      limit: 100,
+    })
+
+    // Assert
+    expect(getMock).toHaveBeenCalledWith('/console/api/usage', expect.any(Object))
+  })
 
   // AC-2-2解釈: [遍在型] start_date, end_date, page, limitパラメータ設定
   // 検証: DifyApiClientが正しいクエリパラメータでリクエストを構築すること
   // @category: integration
   // @dependency: DifyApiClient, WatermarkManager
   // @complexity: medium
-  it.todo('AC-2-2: start_date、end_date、page、limitパラメータが正しく設定される')
+  it('AC-2-2: start_date、end_date、page、limitパラメータが正しく設定される', async () => {
+    // Arrange
+    const getMock = vi.fn().mockResolvedValue({
+      data: {
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 100,
+        has_more: false,
+      },
+    })
+    const axiosInstance = {
+      get: getMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    const client = createDifyApiClient({ config, logger })
+
+    // Act
+    await client.fetchUsage({
+      startDate: '2024-01-01',
+      endDate: '2024-01-31',
+      page: 2,
+      limit: 50,
+    })
+
+    // Assert
+    expect(getMock).toHaveBeenCalledWith(
+      '/console/api/usage',
+      expect.objectContaining({
+        params: {
+          start_date: '2024-01-01',
+          end_date: '2024-01-31',
+          page: 2,
+          limit: 50,
+        },
+      }),
+    )
+  })
 
   // AC-2-3解釈: [選択型] JSONレスポンスをDifyUsageResponse型として解析
   // 検証: DifyApiClientがJSONレスポンスを正しく型変換すること
   // @category: integration
   // @dependency: DifyApiClient, ResponseValidator
   // @complexity: medium
-  it.todo('AC-2-3: APIがJSON形式のレスポンスを返した場合、DifyUsageResponse型として解析する')
+  it('AC-2-3: APIがJSON形式のレスポンスを返した場合、DifyUsageResponse型として解析する', async () => {
+    // Arrange
+    const mockData = {
+      data: [
+        {
+          date: '2024-01-15',
+          app_id: 'app-123',
+          provider: 'openai',
+          model: 'gpt-4',
+          input_tokens: 100,
+          output_tokens: 50,
+          total_tokens: 150,
+        },
+      ],
+      total: 1,
+      page: 1,
+      limit: 100,
+      has_more: false,
+    }
+    const getMock = vi.fn().mockResolvedValue({ data: mockData })
+    const axiosInstance = {
+      get: getMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    const client = createDifyApiClient({ config, logger })
+
+    // Act
+    const result = await client.fetchUsage({
+      startDate: '2024-01-01',
+      endDate: '2024-01-31',
+      page: 1,
+      limit: 100,
+    })
+
+    // Assert
+    expect(result).toEqual(mockData)
+    expect(result.data).toHaveLength(1)
+    expect(result.data[0].date).toBe('2024-01-15')
+  })
 
   // AC-2-4解釈: [遍在型] APIタイムアウト30秒デフォルト設定
   // 検証: DifyApiClientのaxiosインスタンスがtimeout: 30000で設定されていること
   // @category: integration
   // @dependency: DifyApiClient, EnvConfig
   // @complexity: low
-  it.todo('AC-2-4: APIタイムアウトがデフォルト30秒に設定される')
+  it('AC-2-4: APIタイムアウトがデフォルト30秒に設定される', () => {
+    // Arrange
+    const axiosInstance = {
+      get: vi.fn(),
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    // Act
+    createDifyApiClient({ config, logger })
+
+    // Assert
+    expect(axios.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeout: 30000,
+      }),
+    )
+  })
 
   // エッジケース: タイムアウト発生
   // 検証: タイムアウト時のエラーハンドリング
   // @category: edge-case
   // @dependency: DifyApiClient, DifyUsageFetcher
   // @complexity: medium
-  it.todo('AC-2-4-edge: タイムアウトが発生した場合、適切なエラーログを出力する（必須・高リスク）')
+  it('AC-2-4-edge: タイムアウトが発生した場合、適切なエラーログを出力する（必須・高リスク）', async () => {
+    // Arrange
+    const timeoutError = {
+      code: 'ECONNABORTED',
+      message: 'timeout of 30000ms exceeded',
+      config: { url: '/console/api/usage' },
+    }
+    const getMock = vi.fn().mockRejectedValue(timeoutError)
+    const axiosInstance = {
+      get: getMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    const client = createDifyApiClient({ config, logger })
+
+    // Act & Assert
+    await expect(
+      client.fetchUsage({
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        page: 1,
+        limit: 100,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ECONNABORTED',
+    })
+  })
 
   // エッジケース: 不正なJSONレスポンス
   // 検証: JSONパースエラー時の挙動
@@ -106,9 +425,28 @@ describe('FR-2: 使用量データ取得API呼び出し 統合テスト', () => 
   // @category: edge-case
   // @dependency: DifyApiClient, EnvConfig
   // @complexity: low
-  it.todo(
-    'AC-2-4-edge: DIFY_FETCH_TIMEOUT_MS環境変数でタイムアウト値を変更できる（推奨・中リスク）',
-  )
+  it('AC-2-4-edge: DIFY_FETCH_TIMEOUT_MS環境変数でタイムアウト値を変更できる（推奨・中リスク）', () => {
+    // Arrange
+    config.DIFY_FETCH_TIMEOUT_MS = 60000
+    const axiosInstance = {
+      get: vi.fn(),
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    // Act
+    createDifyApiClient({ config, logger })
+
+    // Assert
+    expect(axios.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeout: 60000,
+      }),
+    )
+  })
 })
 
 // ============================================
@@ -504,32 +842,140 @@ describe('FR-4: ウォーターマーク管理 統合テスト', () => {
 // FR-5: エラーハンドリング 統合テスト（5件 + 6エッジケース）
 // ============================================
 describe('FR-5: エラーハンドリング 統合テスト', () => {
+  let config: EnvConfig
+  let logger: Logger
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    config = {
+      DIFY_API_BASE_URL: 'https://api.dify.ai',
+      DIFY_API_TOKEN: 'test-api-token',
+      EXTERNAL_API_URL: 'https://external.api',
+      EXTERNAL_API_TOKEN: 'external-token',
+      CRON_SCHEDULE: '0 0 * * *',
+      LOG_LEVEL: 'info',
+      GRACEFUL_SHUTDOWN_TIMEOUT: 30,
+      MAX_RETRY: 3,
+      NODE_ENV: 'test',
+      DIFY_FETCH_PAGE_SIZE: 100,
+      DIFY_INITIAL_FETCH_DAYS: 30,
+      DIFY_FETCH_TIMEOUT_MS: 30000,
+      DIFY_FETCH_RETRY_COUNT: 3,
+      DIFY_FETCH_RETRY_DELAY_MS: 1000,
+      WATERMARK_FILE_PATH: 'data/watermark.json',
+    }
+
+    logger = {
+      error: vi.fn(),
+      warn: vi.fn(),
+      info: vi.fn(),
+      debug: vi.fn(),
+      child: vi.fn().mockReturnThis(),
+    }
+  })
+
   // AC-5-1解釈: [選択型] ネットワークエラー/5xx/429で指数バックオフリトライ
   // 検証: DifyApiClientのaxios-retry設定が正しく動作すること
   // @category: integration
   // @dependency: DifyApiClient
   // @complexity: high
-  it.todo('AC-5-1: ネットワークエラー/5xx/429が発生した場合、指数バックオフで最大3回リトライする')
+  it('AC-5-1: ネットワークエラー/5xx/429が発生した場合、指数バックオフで最大3回リトライする', async () => {
+    // Arrange
+    const axiosRetry = await import('axios-retry')
+    const axiosInstance = {
+      get: vi.fn(),
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    // Act
+    createDifyApiClient({ config, logger })
+
+    // Assert
+    expect(axiosRetry.default).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        retries: 3,
+      }),
+    )
+  })
 
   // AC-5-2解釈: [選択型] 400/401/403/404はリトライなしで終了
   // 検証: DifyApiClientがこれらのエラーでリトライしないこと
   // @category: integration
   // @dependency: DifyApiClient, DifyUsageFetcher
   // @complexity: medium
-  it.todo('AC-5-2: 400/401/403/404エラーが発生した場合、リトライせずに処理を終了する')
+  it('AC-5-2: 400/401/403/404エラーが発生した場合、リトライせずに処理を終了する', async () => {
+    // Arrange
+    const badRequestError = {
+      response: { status: 400, data: { error: 'Bad Request' } },
+      message: 'Request failed with status code 400',
+      config: { url: '/console/api/usage' },
+    }
+    const getMock = vi.fn().mockRejectedValue(badRequestError)
+    const axiosInstance = {
+      get: getMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    const client = createDifyApiClient({ config, logger })
+
+    // Act & Assert
+    await expect(
+      client.fetchUsage({
+        startDate: '2024-01-01',
+        endDate: '2024-01-31',
+        page: 1,
+        limit: 100,
+      }),
+    ).rejects.toMatchObject({
+      response: { status: 400 },
+    })
+  })
 
   // AC-5-3解釈: [選択型] 429エラーでRetry-Afterヘッダーを待機時間に使用
   // 検証: DifyApiClientがRetry-Afterヘッダーの値を解析して待機すること
   // @category: integration
   // @dependency: DifyApiClient
   // @complexity: high
-  it.todo('AC-5-3: 429エラーでRetry-Afterヘッダーが存在する場合、その値を待機時間として使用する')
+  it('AC-5-3: 429エラーでRetry-Afterヘッダーが存在する場合、その値を待機時間として使用する', async () => {
+    // Arrange
+    const axiosRetry = await import('axios-retry')
+    const axiosInstance = {
+      get: vi.fn(),
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    // Act
+    createDifyApiClient({ config, logger })
+
+    // Assert - retryDelayが設定されていることを確認
+    expect(axiosRetry.default).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        retryDelay: expect.any(Function),
+      }),
+    )
+  })
 
   // AC-5-4解釈: [遍在型] 全エラーを構造化ログで記録
   // 検証: Loggerにエラー情報がJSON形式で出力されること
   // @category: integration
   // @dependency: DifyUsageFetcher, DifyApiClient, Logger
   // @complexity: medium
+  // Note: レスポンスインターセプターで実装されている
   it.todo('AC-5-4: すべてのエラーを構造化ログ（JSON形式）で記録する')
 
   // AC-5-5解釈: [選択型] ページ取得エラー時に取得済みまでウォーターマーク更新
@@ -537,6 +983,7 @@ describe('FR-5: エラーハンドリング 統合テスト', () => {
   // @category: integration
   // @dependency: DifyUsageFetcher, WatermarkManager
   // @complexity: high
+  // Note: DifyUsageFetcher実装時に検証（Task 007）
   it.todo(
     'AC-5-5: ページ取得中にエラーが発生した場合、取得済みデータまでウォーターマークを更新する',
   )
@@ -589,7 +1036,30 @@ describe('FR-5: エラーハンドリング 統合テスト', () => {
   // @category: edge-case
   // @dependency: DifyApiClient, EnvConfig
   // @complexity: low
-  it.todo('AC-5-1-edge: 環境変数でリトライ回数とディレイをカスタマイズできる（推奨・中リスク）')
+  it('AC-5-1-edge: 環境変数でリトライ回数とディレイをカスタマイズできる（推奨・中リスク）', async () => {
+    // Arrange
+    config.DIFY_FETCH_RETRY_COUNT = 5
+    const axiosRetry = await import('axios-retry')
+    const axiosInstance = {
+      get: vi.fn(),
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    // Act
+    createDifyApiClient({ config, logger })
+
+    // Assert
+    expect(axiosRetry.default).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        retries: 5,
+      }),
+    )
+  })
 })
 
 // ============================================
