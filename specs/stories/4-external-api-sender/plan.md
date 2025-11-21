@@ -181,29 +181,29 @@ figma_cache: none
 **目的**: ExternalApiSender実装、リトライ→スプール→再送→data/failed/のフロー統合
 
 #### Task 3-1: ExternalApiSenderクラス実装
-- [ ] ExternalApiSenderクラス実装（src/sender/external-api-sender.ts）
+- [x] ExternalApiSenderクラス実装（src/sender/external-api-sender.ts）
   - send(): HTTPクライアント経由で送信
   - resendSpooled(): スプール再送処理
   - handleSendError(): エラーハンドリング（リトライ vs スプール保存判定）
   - calculateBatchKey(): バッチ冪等キー生成（SHA256）
   - isMaxRetriesError(): リトライ上限到達判定
-- [ ] 単体テスト作成（src/sender/__tests__/external-api-sender.test.ts）
+- [x] 単体テスト作成（src/sender/__tests__/external-api-sender.test.ts）
   - 送信成功シナリオ
   - 409 Conflict対応（成功扱い）
   - リトライ上限到達→スプール保存
   - リトライ成功シナリオ
 
 **完了条件:**
-- [ ] 実装完了: ExternalApiSenderクラスが動作する
-- [ ] 品質完了: 単体テストがパス（src/sender/__tests__/external-api-sender.test.ts）
-- [ ] 統合完了: HttpClient、SpoolManagerとの統合確認
+- [x] 実装完了: ExternalApiSenderクラスが動作する
+- [x] 品質完了: 単体テストがパス（src/sender/__tests__/external-api-sender.test.ts）
+- [x] 統合完了: HttpClient、SpoolManagerとの統合確認
 
 **成果物:**
 - src/sender/external-api-sender.ts
 - src/sender/__tests__/external-api-sender.test.ts
 
 #### Task 3-2: 統合テスト作成（E2Eフロー）
-- [ ] 統合テスト作成（src/sender/__tests__/integration/sender-e2e.int.test.ts）
+- [x] 統合テスト作成（src/sender/__tests__/integration/sender-e2e.int.test.ts）
   - Happy Path: 送信成功
   - Exception Pattern 1: ネットワークエラー → リトライ → 成功
   - Exception Pattern 2: リトライ上限 → スプール保存
@@ -211,9 +211,9 @@ figma_cache: none
   - スプール再送フロー: スプール保存 → 再送成功
 
 **完了条件:**
-- [ ] 実装完了: 統合テストがすべて作成されている
-- [ ] 品質完了: 統合テストがパス（src/sender/__tests__/integration/sender-e2e.int.test.ts）
-- [ ] 統合完了: E2Eフロー全体が正しく動作する
+- [x] 実装完了: 統合テストがすべて作成されている
+- [x] 品質完了: 統合テストがパス（src/sender/__tests__/integration/sender-e2e.int.test.ts）
+- [x] 統合完了: E2Eフロー全体が正しく動作する
 
 **成果物:**
 - src/sender/__tests__/integration/sender-e2e.int.test.ts
