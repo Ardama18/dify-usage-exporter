@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs'
-import type { Logger } from 'winston'
+import type { Logger } from '../logger/winston-logger.js'
 import type { SpoolFile } from '../types/spool.js'
 import { spoolFileSchema } from '../types/spool.js'
 import { writeFileAtomic } from '../utils/file-utils.js'

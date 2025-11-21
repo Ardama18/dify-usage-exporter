@@ -1,0 +1,365 @@
+/**
+ * External API Sender統合テスト（E2Eフロー）
+ *
+ * Happy Path、Exception Pattern 1-3、スプール再送フローを検証する。
+ */
+
+import { promises as fs } from 'node:fs'
+import nock from 'nock'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { createLogger, type Logger } from '../../../logger/winston-logger.js'
+import type { EnvConfig } from '../../../types/env.js'
+import type { ExternalApiRecord } from '../../../types/external-api.js'
+import { ExternalApiSender } from '../../external-api-sender.js'
+import { HttpClient } from '../../http-client.js'
+import { SpoolManager } from '../../spool-manager.js'
+
+describe('ExternalApiSender E2E Integration Tests', () => {
+  const SPOOL_DIR = 'data/spool'
+  const FAILED_DIR = 'data/failed'
+  const API_BASE_URL = 'https://api.example.com'
+
+  let sender: ExternalApiSender
+  let logger: Logger
+  let config: EnvConfig
+
+  const testRecords: ExternalApiRecord[] = [
+    {
+      date: '2025-01-21',
+      app_id: 'app-test',
+      provider: 'openai',
+      model: 'gpt-4',
+      input_tokens: 100,
+      output_tokens: 50,
+      total_tokens: 150,
+      idempotency_key: 'test-key-1',
+      transformed_at: '2025-01-21T00:00:00Z',
+    },
+  ]
+
+  beforeEach(async () => {
+    // ディレクトリクリーンアップ
+    await cleanupTestDirectories()
+
+    // ディレクトリ作成
+    await fs.mkdir(SPOOL_DIR, { recursive: true })
+    await fs.mkdir(FAILED_DIR, { recursive: true })
+
+    // Config作成（必須フィールドを含む）
+    config = {
+      DIFY_API_BASE_URL: 'https://api.dify.test',
+      DIFY_API_TOKEN: 'test-dify-token',
+      EXTERNAL_API_URL: API_BASE_URL,
+      EXTERNAL_API_TOKEN: 'test-token',
+      EXTERNAL_API_TIMEOUT_MS: 5000,
+      MAX_RETRIES: 3,
+      MAX_SPOOL_RETRIES: 10,
+      CRON_SCHEDULE: '0 0 * * *',
+      LOG_LEVEL: 'error',
+      GRACEFUL_SHUTDOWN_TIMEOUT: 30,
+      MAX_RETRY: 3,
+      NODE_ENV: 'test',
+      DIFY_FETCH_PAGE_SIZE: 100,
+      DIFY_INITIAL_FETCH_DAYS: 30,
+      DIFY_FETCH_TIMEOUT_MS: 30000,
+      DIFY_FETCH_RETRY_COUNT: 3,
+      DIFY_FETCH_RETRY_DELAY_MS: 1000,
+      WATERMARK_FILE_PATH: 'data/watermark.json',
+      BATCH_SIZE: 100,
+    } as EnvConfig
+
+    // Logger作成（テスト用、コンソール出力抑制）
+    logger = createLogger(config)
+
+    // 依存オブジェクト作成
+    const httpClient = new HttpClient(logger, config)
+    const spoolManager = new SpoolManager(logger)
+
+    // Sender作成
+    sender = new ExternalApiSender(httpClient, spoolManager, logger, config)
+  })
+
+  afterEach(async () => {
+    // nockクリーンアップ
+    nock.cleanAll()
+    nock.enableNetConnect()
+
+    // ディレクトリクリーンアップ
+    await cleanupTestDirectories()
+  })
+
+  /**
+   * テストディレクトリクリーンアップ
+   */
+  async function cleanupTestDirectories(): Promise<void> {
+    try {
+      await fs.rm(SPOOL_DIR, { recursive: true, force: true })
+      await fs.rm(FAILED_DIR, { recursive: true, force: true })
+    } catch {
+      // ディレクトリが存在しない場合は無視
+    }
+  }
+
+  /**
+   * スプールファイル存在確認
+   */
+  async function spoolFilesExist(): Promise<boolean> {
+    try {
+      const files = await fs.readdir(SPOOL_DIR)
+      return files.some((f) => f.startsWith('spool_'))
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * failedファイル存在確認
+   */
+  async function failedFilesExist(): Promise<boolean> {
+    try {
+      const files = await fs.readdir(FAILED_DIR)
+      return files.some((f) => f.startsWith('failed_'))
+    } catch {
+      return false
+    }
+  }
+
+  describe('Happy Path: 送信成功', () => {
+    it('should send records successfully with 200 response', async () => {
+      // Arrange: モックAPI（200レスポンス）
+      nock(API_BASE_URL).post('/usage').reply(200, { success: true })
+
+      // Act: 送信実行
+      await sender.send(testRecords)
+
+      // Assert: スプールファイルが作成されていない
+      const spoolExists = await spoolFilesExist()
+      expect(spoolExists).toBe(false)
+    })
+
+    it('should send records successfully with 201 response', async () => {
+      // Arrange: モックAPI（201レスポンス）
+      nock(API_BASE_URL).post('/usage').reply(201, { created: true })
+
+      // Act: 送信実行
+      await sender.send(testRecords)
+
+      // Assert: スプールファイルが作成されていない
+      const spoolExists = await spoolFilesExist()
+      expect(spoolExists).toBe(false)
+    })
+  })
+
+  describe('Exception Pattern 1: ネットワークエラー → リトライ → 成功', () => {
+    it('should retry on 503 error and succeed', async () => {
+      // Arrange: モックAPI（1回目: 503、2回目: 成功）
+      nock(API_BASE_URL).post('/usage').reply(503, { error: 'Service Unavailable' })
+      nock(API_BASE_URL).post('/usage').reply(200, { success: true })
+
+      // Act: 送信実行
+      await sender.send(testRecords)
+
+      // Assert: スプールファイルが作成されていない（リトライで成功）
+      const spoolExists = await spoolFilesExist()
+      expect(spoolExists).toBe(false)
+    })
+
+    it('should retry on 500 error and succeed', async () => {
+      // Arrange: モックAPI（1回目: 500、2回目: 成功）
+      nock(API_BASE_URL).post('/usage').reply(500, { error: 'Internal Server Error' })
+      nock(API_BASE_URL).post('/usage').reply(200, { success: true })
+
+      // Act: 送信実行
+      await sender.send(testRecords)
+
+      // Assert: スプールファイルが作成されていない（リトライで成功）
+      const spoolExists = await spoolFilesExist()
+      expect(spoolExists).toBe(false)
+    })
+
+    it('should retry on 429 error and succeed', async () => {
+      // Arrange: モックAPI（1回目: 429、2回目: 成功）
+      nock(API_BASE_URL).post('/usage').reply(429, { error: 'Too Many Requests' })
+      nock(API_BASE_URL).post('/usage').reply(200, { success: true })
+
+      // Act: 送信実行
+      await sender.send(testRecords)
+
+      // Assert: スプールファイルが作成されていない（リトライで成功）
+      const spoolExists = await spoolFilesExist()
+      expect(spoolExists).toBe(false)
+    })
+  })
+
+  describe('Exception Pattern 2: リトライ上限 → スプール保存', () => {
+    it('should save to spool after max retries', async () => {
+      // Arrange: モックAPI（4回とも500エラー → リトライ上限）
+      nock(API_BASE_URL)
+        .post('/usage')
+        .times(4) // 初回 + リトライ3回
+        .reply(500, { error: 'Internal Server Error' })
+
+      // Act: 送信実行（スプール保存される）
+      await sender.send(testRecords)
+
+      // Assert: スプールファイルが作成されている
+      const spoolExists = await spoolFilesExist()
+      expect(spoolExists).toBe(true)
+
+      // スプールファイル内容確認
+      const files = await fs.readdir(SPOOL_DIR)
+      const spoolFile = files.find((f) => f.startsWith('spool_'))
+      expect(spoolFile).toBeDefined()
+
+      const content = await fs.readFile(`${SPOOL_DIR}/${spoolFile}`, 'utf-8')
+      const spoolData = JSON.parse(content)
+      expect(spoolData.records).toHaveLength(1)
+      expect(spoolData.retryCount).toBe(0)
+      expect(spoolData.batchIdempotencyKey).toBeDefined()
+    })
+  })
+
+  describe('Exception Pattern 3: 409 Conflict → 成功扱い', () => {
+    it('should treat 409 as success', async () => {
+      // Arrange: モックAPI（409レスポンス）
+      nock(API_BASE_URL).post('/usage').reply(409, { message: 'Duplicate data' })
+
+      // Act: 送信実行
+      await sender.send(testRecords)
+
+      // Assert: スプールファイルが作成されていない（成功扱い）
+      const spoolExists = await spoolFilesExist()
+      expect(spoolExists).toBe(false)
+    })
+  })
+
+  describe('スプール再送フロー: スプール保存 → 再送成功', () => {
+    it('should resend spooled files successfully', async () => {
+      // Step 1: スプール保存（リトライ上限）
+      nock(API_BASE_URL).post('/usage').times(4).reply(500, { error: 'Internal Server Error' })
+
+      await sender.send(testRecords)
+
+      // スプールファイルが作成されていることを確認
+      let spoolExists = await spoolFilesExist()
+      expect(spoolExists).toBe(true)
+
+      // Step 2: 再送実行（成功）
+      nock(API_BASE_URL).post('/usage').reply(200, { success: true })
+
+      await sender.resendSpooled()
+
+      // スプールファイルが削除されていることを確認
+      spoolExists = await spoolFilesExist()
+      expect(spoolExists).toBe(false)
+    })
+
+    it('should increment retryCount on resend failure', async () => {
+      // Step 1: スプール保存
+      nock(API_BASE_URL).post('/usage').times(4).reply(500, { error: 'Internal Server Error' })
+
+      await sender.send(testRecords)
+
+      // Step 2: 再送失敗（retryCountインクリメント）
+      nock(API_BASE_URL).post('/usage').times(4).reply(500, { error: 'Still failing' })
+
+      await sender.resendSpooled()
+
+      // スプールファイルが残っており、retryCountが1になっている
+      const spoolExists = await spoolFilesExist()
+      expect(spoolExists).toBe(true)
+
+      const files = await fs.readdir(SPOOL_DIR)
+      const spoolFile = files.find((f) => f.startsWith('spool_'))
+      expect(spoolFile).toBeDefined()
+
+      const content = await fs.readFile(`${SPOOL_DIR}/${spoolFile}`, 'utf-8')
+      const spoolData = JSON.parse(content)
+      expect(spoolData.retryCount).toBe(1)
+    })
+
+    it('should move to failed after max spool retries', async () => {
+      // Step 1: スプール保存
+      nock(API_BASE_URL).post('/usage').times(4).reply(500, { error: 'Initial failure' })
+
+      await sender.send(testRecords)
+
+      // Step 2: 10回再送失敗を繰り返す
+      for (let i = 0; i < 10; i++) {
+        nock(API_BASE_URL)
+          .post('/usage')
+          .times(4)
+          .reply(500, { error: `Failure ${i + 1}` })
+
+        await sender.resendSpooled()
+      }
+
+      // スプールファイルが削除され、failedファイルが作成されている
+      const spoolExists = await spoolFilesExist()
+      expect(spoolExists).toBe(false)
+
+      const failedExists = await failedFilesExist()
+      expect(failedExists).toBe(true)
+
+      // failedファイル内容確認
+      const files = await fs.readdir(FAILED_DIR)
+      const failedFile = files.find((f) => f.startsWith('failed_'))
+      expect(failedFile).toBeDefined()
+
+      const content = await fs.readFile(`${FAILED_DIR}/${failedFile}`, 'utf-8')
+      const failedData = JSON.parse(content)
+      expect(failedData.retryCount).toBe(10)
+    }, 60000) // タイムアウト60秒
+  })
+
+  describe('エッジケース', () => {
+    it('should handle non-retryable errors (400)', async () => {
+      // Arrange: モックAPI（400エラー、リトライしない）
+      nock(API_BASE_URL).post('/usage').reply(400, { error: 'Bad Request' })
+
+      // Act & Assert: エラーがスローされる
+      await expect(sender.send(testRecords)).rejects.toThrow()
+
+      // スプールファイルが作成されていない
+      const spoolExists = await spoolFilesExist()
+      expect(spoolExists).toBe(false)
+    })
+
+    it('should handle non-retryable errors (401)', async () => {
+      // Arrange: モックAPI（401エラー、リトライしない）
+      nock(API_BASE_URL).post('/usage').reply(401, { error: 'Unauthorized' })
+
+      // Act & Assert: エラーがスローされる
+      await expect(sender.send(testRecords)).rejects.toThrow()
+
+      // スプールファイルが作成されていない
+      const spoolExists = await spoolFilesExist()
+      expect(spoolExists).toBe(false)
+    })
+
+    it('should handle multiple records in batch', async () => {
+      // Arrange: 複数レコード
+      const multipleRecords: ExternalApiRecord[] = [
+        { ...testRecords[0], idempotency_key: 'key-1' },
+        { ...testRecords[0], idempotency_key: 'key-2' },
+        { ...testRecords[0], idempotency_key: 'key-3' },
+      ]
+
+      nock(API_BASE_URL).post('/usage').reply(200, { success: true })
+
+      // Act: 送信実行
+      await sender.send(multipleRecords)
+
+      // Assert: スプールファイルが作成されていない
+      const spoolExists = await spoolFilesExist()
+      expect(spoolExists).toBe(false)
+    })
+
+    it('should handle empty spool directory on resend', async () => {
+      // Arrange: スプールファイルなし
+
+      // Act: 再送実行（エラーにならない）
+      await expect(sender.resendSpooled()).resolves.not.toThrow()
+    })
+  })
+})

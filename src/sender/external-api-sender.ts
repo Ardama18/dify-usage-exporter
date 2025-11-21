@@ -61,22 +61,33 @@ export class ExternalApiSender implements ISender {
   private async sendToExternalApi(records: ExternalApiRecord[]): Promise<void> {
     const batchKey = this.calculateBatchKey(records)
 
-    // 1. 外部APIへ送信
-    const response = await this.httpClient.post('/usage', {
-      batchIdempotencyKey: batchKey,
-      records,
-    })
+    try {
+      // 1. 外部APIへ送信
+      const response = await this.httpClient.post('/usage', {
+        batchIdempotencyKey: batchKey,
+        records,
+      })
 
-    // 2. 200/201レスポンス: 成功
-    if (response.status === 200 || response.status === 201) {
-      this.logger.info('Send success', { recordCount: records.length })
-      return
-    }
+      // 2. 200/201レスポンス: 成功
+      if (response.status === 200 || response.status === 201) {
+        this.logger.info('Send success', { recordCount: records.length })
+        return
+      }
 
-    // 3. 409レスポンス: 重複検出、成功扱い
-    if (response.status === 409) {
-      this.logger.warn('Duplicate data detected', { batchKey })
-      return
+      // 3. 409レスポンス: 重複検出、成功扱い
+      if (response.status === 409) {
+        this.logger.warn('Duplicate data detected', { batchKey })
+        return
+      }
+    } catch (error) {
+      // 4. 409エラー: 重複検出、成功扱い
+      if (error instanceof AxiosError && error.response?.status === 409) {
+        this.logger.warn('Duplicate data detected', { batchKey })
+        return
+      }
+
+      // 5. その他のエラー: 再スロー
+      throw error
     }
   }
 
