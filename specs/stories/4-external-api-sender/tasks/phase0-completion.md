@@ -22,9 +22,9 @@ based_on: specs/stories/4-external-api-sender/plan.md
 ## plan.mdチェックボックス確認
 
 ### Task 0-1完了条件
-- [ ] 実装完了: 型定義ファイルが作成されている
-- [ ] 品質完了: TypeScriptコンパイルエラーなし
-- [ ] 統合完了: Story 3のExternalApiRecord型と整合性確認
+- [x] 実装完了: 型定義ファイルが作成されている
+- [x] 品質完了: TypeScriptコンパイルエラーなし
+- [x] 統合完了: Story 3のExternalApiRecord型と整合性確認
 
 ## 次フェーズへの引き継ぎ
 - **成果物**: src/types/external-api.ts, src/types/spool.ts, src/interfaces/sender.ts

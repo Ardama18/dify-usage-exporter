@@ -39,16 +39,16 @@ figma_cache: none
 **目的**: プロジェクト環境セットアップ、共通型定義、テスト基盤準備
 
 #### Task 0-1: 依存パッケージインストールと型定義
-- [ ] axios, axios-retryのインストール確認
-- [ ] zodのインストール確認
-- [ ] ExternalApiRecord型定義作成（src/types/external-api.ts）
-- [ ] SpoolFile型定義作成（src/types/spool.ts、zodスキーマ含む）
-- [ ] ISenderインターフェース定義作成（src/interfaces/sender.ts）
+- [x] axios, axios-retryのインストール確認
+- [x] zodのインストール確認
+- [x] ExternalApiRecord型定義作成（src/types/external-api.ts）
+- [x] SpoolFile型定義作成（src/types/spool.ts、zodスキーマ含む）
+- [x] ISenderインターフェース定義作成（src/interfaces/sender.ts）
 
 **完了条件:**
-- [ ] 実装完了: 型定義ファイルが作成されている
-- [ ] 品質完了: TypeScriptコンパイルエラーなし
-- [ ] 統合完了: Story 3のExternalApiRecord型と整合性確認
+- [x] 実装完了: 型定義ファイルが作成されている
+- [x] 品質完了: TypeScriptコンパイルエラーなし
+- [x] 統合完了: Story 3のExternalApiRecord型と整合性確認
 
 **成果物:**
 - src/types/external-api.ts
