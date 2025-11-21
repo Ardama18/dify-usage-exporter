@@ -1,0 +1,120 @@
+---
+story_id: "3"
+title: data-transformation
+epic_id: "1"
+type: task
+feature: transform
+task_number: 011
+version: 1.0.0
+created: 2025-11-21
+based_on: specs/stories/3-data-transformation/plan.md
+---
+
+# タスク: 品質チェックと最終確認
+
+メタ情報:
+- 依存: task-transform-phase4-010 -> 成果物: test/e2e/data-transformation.e2e.test.ts
+- 提供: 全受入条件達成確認
+- サイズ: 小規模
+
+## 実装内容
+
+全品質チェックを実行し、Design Docの受入条件を全て達成していることを確認する。
+
+### AC対応
+- 全受入条件達成確認
+
+## 対象ファイル
+
+なし（チェックのみ）
+
+## 実装手順
+
+### 1. 品質チェック実行
+
+- [ ] `npm run check:all` 実行・全パス
+  ```bash
+  npm run check:all
+  ```
+
+- [ ] 全テスト実行・全パス
+  ```bash
+  npm test
+  ```
+
+- [ ] カバレッジ最終確認（70%以上）
+  ```bash
+  npm run test:coverage:fresh
+  ```
+
+### 2. Design Doc受入条件チェックリスト
+
+#### AC1: Dify API形式から外部API形式への変換
+
+- [ ] **AC1-1** (契機型): DifyUsageRecord[]が渡されたとき、システムはExternalApiRecord[]に変換すること
+- [ ] **AC1-2** (遍在型): システムは各ExternalApiRecordにtransformed_at（ISO 8601）を付与すること
+- [ ] **AC1-3** (遍在型): システムはproviderを小文字に正規化し、前後の空白を除去すること
+- [ ] **AC1-4** (遍在型): システムはmodelを小文字に正規化し、前後の空白を除去すること
+
+#### AC2: レコード単位冪等キー生成
+
+- [ ] **AC2-1** (遍在型): システムは各ExternalApiRecordに`{date}_{app_id}_{provider}_{model}`形式の冪等キーを付与すること
+- [ ] **AC2-2** (遍在型): システムは正規化後のprovider/modelを冪等キーに使用すること
+
+#### AC3: バッチ単位冪等キー生成
+
+- [ ] **AC3-1** (契機型): 変換完了時、システムはソート済みレコード冪等キーのSHA256ハッシュを生成すること
+- [ ] **AC3-2** (選択型): もし入力が空配列の場合、システムは空文字列をバッチ冪等キーとして返却すること
+- [ ] **AC3-3** (遍在型): システムは同一レコードセットに対して同一のバッチ冪等キーを生成すること（順序非依存）
+
+#### AC4: zodによるバリデーション
+
+- [ ] **AC4-1** (遍在型): システムは変換後の各ExternalApiRecordをzodスキーマで検証すること
+- [ ] **AC4-2** (不測型): もしバリデーションが失敗した場合、システムは該当レコードをTransformErrorsに記録し、成功レコードのみを返却すること
+
+#### AC5: エラーハンドリング
+
+- [ ] **AC5-1** (不測型): もし変換処理でエラーが発生した場合、システムはエラーをTransformErrorに記録し、処理を継続すること
+- [ ] **AC5-2** (遍在型): システムはsuccessCount + errorCountが入力レコード数と一致することを保証すること
+- [ ] **AC5-3** (遍在型): システムは例外をスローせず、全てのエラーをTransformResultに格納すること
+
+#### AC6: パフォーマンス
+
+- [ ] **AC6-1** (遍在型): システムは10,000レコードを5秒以内に変換すること
+
+### 3. 実装ファイル確認
+
+- [ ] `src/types/external-api.ts` が存在し、正しくエクスポートされていること
+- [ ] `src/interfaces/transformer.ts` が存在し、正しくエクスポートされていること
+- [ ] `src/utils/date-utils.ts` が存在し、正しくエクスポートされていること
+- [ ] `src/transformer/idempotency-key.ts` が存在し、正しくエクスポートされていること
+- [ ] `src/transformer/data-transformer.ts` が存在し、正しくエクスポートされていること
+
+### 4. テストファイル確認
+
+- [ ] `test/unit/types/external-api.test.ts` が存在すること
+- [ ] `test/unit/utils/date-utils.test.ts` が存在すること
+- [ ] `test/unit/transformer/idempotency-key.test.ts` が存在すること
+- [ ] `test/unit/transformer/data-transformer.test.ts` が存在すること
+- [ ] `test/integration/data-transformation.int.test.ts` が存在すること
+- [ ] `test/e2e/data-transformation.e2e.test.ts` が存在すること
+
+### 5. 依存パッケージ確認
+
+- [ ] `date-fns` がpackage.jsonに追加されていること
+
+## 完了条件
+
+- [ ] `npm run check:all` が全パス
+- [ ] `npm test` が全パス
+- [ ] カバレッジ70%以上
+- [ ] 全受入条件（AC1-AC6）が達成されていること
+- [ ] 全実装ファイルが存在すること
+- [ ] 全テストファイルが存在すること
+- [ ] 依存パッケージが正しく追加されていること
+
+## 注意事項
+
+- 影響範囲: なし（チェックのみ）
+- 制約: 全チェックがパスしない場合は原因を特定し、該当タスクを修正すること
+- このタスクはL3（統合確認）レベルの動作確認
