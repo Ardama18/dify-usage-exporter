@@ -18,46 +18,46 @@ based_on: specs/stories/3-data-transformation/plan.md
 
 ## 該当タスク一覧
 
-- [ ] task-transform-phase2-004: レコード冪等キー生成と単体テスト作成
-- [ ] task-transform-phase2-005: バッチ冪等キー生成と単体テスト作成
+- [x] task-transform-phase2-004: レコード冪等キー生成と単体テスト作成
+- [x] task-transform-phase2-005: バッチ冪等キー生成と単体テスト作成
 
 ## フェーズ完了確認
 
 ### 1. 成果物の存在確認
 
-- [ ] `src/transformer/idempotency-key.ts` が存在する
-- [ ] `test/unit/transformer/idempotency-key.test.ts` が存在する
+- [x] `src/transformer/idempotency-key.ts` が存在する
+- [x] `test/unit/transformer/idempotency-key.test.ts` が存在する
 
 ### 2. 品質チェック
 
-- [ ] `npm run build` が成功すること
+- [x] `npm run build` が成功すること
   ```bash
   npm run build
   ```
 
-- [ ] `npm run check` がエラーなしで完了すること
+- [x] `npm run check` がエラーなしで完了すること
   ```bash
   npm run check
   ```
 
 ### 3. テスト実行
 
-- [ ] Phase 2の単体テストが全てパスすること
+- [x] Phase 2の単体テストが全てパスすること
   ```bash
-  npm run test:unit -- test/unit/transformer/idempotency-key.test.ts
+  npm test -- test/unit/transformer/idempotency-key.test.ts
   ```
 
 ### 4. Design Doc E2E確認手順
 
 Design Docで定義されたPhase 2完了時の確認事項:
 
-1. [ ] 単体テストが全てパスすること
-2. [ ] 同一入力に対して同一キーが生成されること
-3. [ ] 異なる順序の入力に対して同一バッチキーが生成されること
+1. [x] 単体テストが全てパスすること
+2. [x] 同一入力に対して同一キーが生成されること
+3. [x] 異なる順序の入力に対して同一バッチキーが生成されること
 
 ### 5. 冪等性検証
 
-- [ ] レコードキーの冪等性確認
+- [x] レコードキーの冪等性確認
   ```typescript
   const params = { date: '2025-01-01', app_id: 'app-123', provider: 'openai', model: 'gpt-4' }
   const key1 = generateRecordIdempotencyKey(params)
@@ -65,7 +65,7 @@ Design Docで定義されたPhase 2完了時の確認事項:
   // key1 === key2
   ```
 
-- [ ] バッチキーの順序非依存性確認
+- [x] バッチキーの順序非依存性確認
   ```typescript
   const keys1 = ['key1', 'key2', 'key3']
   const keys2 = ['key3', 'key1', 'key2']
@@ -89,8 +89,8 @@ Design Docで定義されたPhase 2完了時の確認事項:
 
 ## 完了条件
 
-- [ ] 全タスクが完了していること
-- [ ] 全品質チェックがパスすること
-- [ ] 全成果物が存在すること
-- [ ] Design Doc E2E確認手順が全て完了していること
-- [ ] 冪等性・順序非依存性が検証されていること
+- [x] 全タスクが完了していること
+- [x] 全品質チェックがパスすること
+- [x] 全成果物が存在すること
+- [x] Design Doc E2E確認手順が全て完了していること
+- [x] 冪等性・順序非依存性が検証されていること
