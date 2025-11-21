@@ -43,16 +43,15 @@ So that コスト集計・監査・課金処理を自動化し、手動集計の
 ### 必須要件（MVP）
 
 #### FR-1: Dify API認証
-- **説明**: Dify Console APIへのログイン・認証トークン取得
+- **説明**: Dify Console APIへの認証
 - **詳細**:
-  - エンドポイント: `POST /console/api/login`
-  - リクエストボディ: `{ email, password, remember_me: false }`
-  - レスポンス: `access_token` を取得
+  - 認証方式: 固定Bearer Token方式
+  - 認証ヘッダー: `Authorization: Bearer ${DIFY_API_TOKEN}`
   - 環境変数管理:
-    - `DIFY_CONSOLE_EMAIL`: Difyコンソールのログインメールアドレス
-    - `DIFY_CONSOLE_PASSWORD`: Difyコンソールのログインパスワード
-  - トークンは各実行時に取得（有効期限管理は不要）
-  - **決定事項**: 固定Bearer Token方式（環境変数 `DIFY_API_TOKEN` で管理）を採用
+    - `DIFY_API_TOKEN`: Dify Console APIのBearerトークン
+  - トークンは事前にDifyコンソールで発行し、環境変数に設定
+  - 有効期限管理は不要（長期有効なAPIトークンを使用）
+  - **決定事項**: 固定Bearer Token方式を採用（ADR 009参照）
     - 理由: セキュリティリスクが低く、運用シンプル。email/password方式は保留
 
 #### FR-2: 使用量データ取得API呼び出し

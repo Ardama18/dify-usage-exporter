@@ -121,7 +121,7 @@ graph TD
 ### Task 1-2: 型定義作成（src/types/env.ts）
 
 - [ ] EnvSchema（Zod）の定義
-  - 必須: DIFY_API_URL, DIFY_API_TOKEN, EXTERNAL_API_URL, EXTERNAL_API_TOKEN
+  - 必須: DIFY_API_BASE_URL, DIFY_API_TOKEN, EXTERNAL_API_URL, EXTERNAL_API_TOKEN
   - オプション: CRON_SCHEDULE, LOG_LEVEL, GRACEFUL_SHUTDOWN_TIMEOUT, MAX_RETRY, NODE_ENV
 - [ ] EnvConfig型のエクスポート
 - [ ] 型チェック通過確認

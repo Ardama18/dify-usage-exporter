@@ -23,7 +23,7 @@ describe('環境変数管理 - loadConfig()', () => {
   describe('AC-ENV-1: 起動時の環境変数読み込み', () => {
     it('正常な環境変数セットでloadConfig()が成功する', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -34,7 +34,7 @@ describe('環境変数管理 - loadConfig()', () => {
 
       // Assert
       expect(config).toBeDefined()
-      expect(config.DIFY_API_URL).toBe('https://api.dify.ai')
+      expect(config.DIFY_API_BASE_URL).toBe('https://api.dify.ai')
       expect(config.DIFY_API_TOKEN).toBe('dify-token-123')
       expect(config.EXTERNAL_API_URL).toBe('https://external.api.com')
       expect(config.EXTERNAL_API_TOKEN).toBe('external-token-456')
@@ -42,7 +42,7 @@ describe('環境変数管理 - loadConfig()', () => {
 
     it('返却値がEnvConfig型に準拠する', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -54,7 +54,7 @@ describe('環境変数管理 - loadConfig()', () => {
       const config = loadConfig()
 
       // Assert - 全プロパティが存在することを確認
-      expect(config).toHaveProperty('DIFY_API_URL')
+      expect(config).toHaveProperty('DIFY_API_BASE_URL')
       expect(config).toHaveProperty('DIFY_API_TOKEN')
       expect(config).toHaveProperty('EXTERNAL_API_URL')
       expect(config).toHaveProperty('EXTERNAL_API_TOKEN')
@@ -70,12 +70,12 @@ describe('環境変数管理 - loadConfig()', () => {
 
   // AC-ENV-2: 必須環境変数未設定時のエラー処理（5件）
   describe('AC-ENV-2: 必須環境変数未設定時のエラー処理', () => {
-    it('DIFY_API_URL未設定でexit(1)が呼ばれる', async () => {
+    it('DIFY_API_BASE_URL未設定でexit(1)が呼ばれる', async () => {
       // Arrange
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
-      // DIFY_API_URLは未設定
+      // DIFY_API_BASE_URLは未設定
 
       // Act & Assert
       const { loadConfig } = await import('../../src/config/env-config.js')
@@ -85,7 +85,7 @@ describe('環境変数管理 - loadConfig()', () => {
 
     it('DIFY_API_TOKEN未設定でexit(1)が呼ばれる', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
       // DIFY_API_TOKENは未設定
@@ -98,7 +98,7 @@ describe('環境変数管理 - loadConfig()', () => {
 
     it('EXTERNAL_API_URL未設定でexit(1)が呼ばれる', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
       // EXTERNAL_API_URLは未設定
@@ -111,7 +111,7 @@ describe('環境変数管理 - loadConfig()', () => {
 
     it('EXTERNAL_API_TOKEN未設定でexit(1)が呼ばれる', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       // EXTERNAL_API_TOKENは未設定
@@ -134,9 +134,9 @@ describe('環境変数管理 - loadConfig()', () => {
 
   // AC-ENV-3: 不正値時のZodエラー処理（8件）
   describe('AC-ENV-3: 不正値時のZodエラー処理', () => {
-    it('DIFY_API_URLが不正なURL形式でexit(1)が呼ばれる', async () => {
+    it('DIFY_API_BASE_URLが不正なURL形式でexit(1)が呼ばれる', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'not-a-valid-url'
+      process.env.DIFY_API_BASE_URL = 'not-a-valid-url'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -149,7 +149,7 @@ describe('環境変数管理 - loadConfig()', () => {
 
     it('EXTERNAL_API_URLが不正なURL形式でexit(1)が呼ばれる', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'invalid-url'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -162,7 +162,7 @@ describe('環境変数管理 - loadConfig()', () => {
 
     it('LOG_LEVELが無効な値でexit(1)が呼ばれる', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -176,7 +176,7 @@ describe('環境変数管理 - loadConfig()', () => {
 
     it('GRACEFUL_SHUTDOWN_TIMEOUTが数値でない場合exit(1)が呼ばれる', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -190,7 +190,7 @@ describe('環境変数管理 - loadConfig()', () => {
 
     it('GRACEFUL_SHUTDOWN_TIMEOUTが1未満でexit(1)が呼ばれる', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -204,7 +204,7 @@ describe('環境変数管理 - loadConfig()', () => {
 
     it('GRACEFUL_SHUTDOWN_TIMEOUTが300超過でexit(1)が呼ばれる', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -218,7 +218,7 @@ describe('環境変数管理 - loadConfig()', () => {
 
     it('MAX_RETRYが1未満でexit(1)が呼ばれる', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -232,7 +232,7 @@ describe('環境変数管理 - loadConfig()', () => {
 
     it('MAX_RETRYが10超過でexit(1)が呼ばれる', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -249,7 +249,7 @@ describe('環境変数管理 - loadConfig()', () => {
   describe('AC-ENV-4: オプション環境変数のデフォルト値', () => {
     beforeEach(() => {
       // 全テストで必須環境変数を設定
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -308,7 +308,7 @@ describe('環境変数管理 - loadConfig()', () => {
   describe('AC-ENV-5: loadConfig()経由の設定取得', () => {
     it('process.envを直接参照せずloadConfig()経由で取得する', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -328,7 +328,7 @@ describe('環境変数管理 - loadConfig()', () => {
 
     it('複数回呼び出しても同一設定を返却する', async () => {
       // Arrange
-      process.env.DIFY_API_URL = 'https://api.dify.ai'
+      process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
       process.env.DIFY_API_TOKEN = 'dify-token-123'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -340,7 +340,7 @@ describe('環境変数管理 - loadConfig()', () => {
 
       // Assert
       expect(config1).toEqual(config2)
-      expect(config1.DIFY_API_URL).toBe(config2.DIFY_API_URL)
+      expect(config1.DIFY_API_BASE_URL).toBe(config2.DIFY_API_BASE_URL)
       expect(config1.CRON_SCHEDULE).toBe(config2.CRON_SCHEDULE)
     })
   })
@@ -368,7 +368,7 @@ describe('ログ出力基盤 - createLogger()', () => {
     vi.resetModules()
     process.env = { ...originalEnv }
     // 必須環境変数を設定
-    process.env.DIFY_API_URL = 'https://api.dify.ai'
+    process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
     process.env.DIFY_API_TOKEN = 'dify-token-123'
     process.env.EXTERNAL_API_URL = 'https://external.api.com'
     process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -714,7 +714,7 @@ describe('ログ出力基盤 - createLogger()', () => {
 
       // Act - 意図的にトークンを含めない（呼び出し側の責務）
       logger.info('設定値', {
-        difyApiUrl: config.DIFY_API_URL,
+        difyApiUrl: config.DIFY_API_BASE_URL,
         // DIFY_API_TOKENは渡さない
       })
 
@@ -813,7 +813,7 @@ describe('定期実行スケジューラ - createScheduler()', () => {
     vi.resetModules()
     process.env = { ...originalEnv }
     // 必須環境変数を設定
-    process.env.DIFY_API_URL = 'https://api.dify.ai'
+    process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
     process.env.DIFY_API_TOKEN = 'dify-token-123'
     process.env.EXTERNAL_API_URL = 'https://external.api.com'
     process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -1573,7 +1573,7 @@ describe('Graceful Shutdown - setupGracefulShutdown()', () => {
     vi.resetModules()
     process.env = { ...originalEnv }
     // 必須環境変数を設定
-    process.env.DIFY_API_URL = 'https://api.dify.ai'
+    process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
     process.env.DIFY_API_TOKEN = 'dify-token-123'
     process.env.EXTERNAL_API_URL = 'https://external.api.com'
     process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -2287,7 +2287,7 @@ describe('エントリーポイント - main()', () => {
     vi.resetModules()
     process.env = { ...originalEnv }
     // 必須環境変数を設定
-    process.env.DIFY_API_URL = 'https://api.dify.ai'
+    process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
     process.env.DIFY_API_TOKEN = 'dify-token-123'
     process.env.EXTERNAL_API_URL = 'https://external.api.com'
     process.env.EXTERNAL_API_TOKEN = 'external-token-456'
@@ -2305,7 +2305,7 @@ describe('エントリーポイント - main()', () => {
     it('loadConfig()が呼ばれる', async () => {
       // Arrange
       const mockLoadConfig = vi.fn().mockReturnValue({
-        DIFY_API_URL: 'https://api.dify.ai',
+        DIFY_API_BASE_URL: 'https://api.dify.ai',
         DIFY_API_TOKEN: 'dify-token-123',
         EXTERNAL_API_URL: 'https://external.api.com',
         EXTERNAL_API_TOKEN: 'external-token-456',
@@ -2358,7 +2358,7 @@ describe('エントリーポイント - main()', () => {
     it('createLogger()が呼ばれる', async () => {
       // Arrange
       const mockConfig = {
-        DIFY_API_URL: 'https://api.dify.ai',
+        DIFY_API_BASE_URL: 'https://api.dify.ai',
         DIFY_API_TOKEN: 'dify-token-123',
         EXTERNAL_API_URL: 'https://external.api.com',
         EXTERNAL_API_TOKEN: 'external-token-456',
@@ -2413,7 +2413,7 @@ describe('エントリーポイント - main()', () => {
     it('createScheduler()が呼ばれる', async () => {
       // Arrange
       const mockConfig = {
-        DIFY_API_URL: 'https://api.dify.ai',
+        DIFY_API_BASE_URL: 'https://api.dify.ai',
         DIFY_API_TOKEN: 'dify-token-123',
         EXTERNAL_API_URL: 'https://external.api.com',
         EXTERNAL_API_TOKEN: 'external-token-456',
@@ -2470,7 +2470,7 @@ describe('エントリーポイント - main()', () => {
     it('setupGracefulShutdown()が呼ばれる', async () => {
       // Arrange
       const mockConfig = {
-        DIFY_API_URL: 'https://api.dify.ai',
+        DIFY_API_BASE_URL: 'https://api.dify.ai',
         DIFY_API_TOKEN: 'dify-token-123',
         EXTERNAL_API_URL: 'https://external.api.com',
         EXTERNAL_API_TOKEN: 'external-token-456',

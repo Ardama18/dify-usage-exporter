@@ -79,14 +79,14 @@ dotenvとZodを使用した環境変数管理モジュールを実装する。�
 - 返却値がEnvConfig型に準拠
 
 ### AC-ENV-2: 必須環境変数未設定時のエラー処理（5件）
-- DIFY_API_URL未設定でexit(1)
+- DIFY_API_BASE_URL未設定でexit(1)
 - DIFY_API_TOKEN未設定でexit(1)
 - EXTERNAL_API_URL未設定でexit(1)
 - EXTERNAL_API_TOKEN未設定でexit(1)
 - 複数の必須環境変数未設定でエラーメッセージ出力
 
 ### AC-ENV-3: 不正値時のZodエラー処理（8件）
-- DIFY_API_URLが不正なURL形式
+- DIFY_API_BASE_URLが不正なURL形式
 - EXTERNAL_API_URLが不正なURL形式
 - LOG_LEVELが無効な値
 - GRACEFUL_SHUTDOWN_TIMEOUTが数値でない

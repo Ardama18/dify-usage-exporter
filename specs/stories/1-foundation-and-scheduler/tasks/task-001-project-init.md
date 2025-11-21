@@ -112,7 +112,7 @@ TypeScript/Node.js実行環境の初期構築を行う。npm init、依存ライ
 - [x] .env.example 作成
   ```bash
   # 必須環境変数
-  DIFY_API_URL=https://api.dify.ai
+  DIFY_API_BASE_URL=https://api.dify.ai
   DIFY_API_TOKEN=your-dify-api-token
   EXTERNAL_API_URL=https://external-api.example.com
   EXTERNAL_API_TOKEN=your-external-api-token

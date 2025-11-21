@@ -35,7 +35,7 @@ export async function main(): Promise<void> {
     cronSchedule: config.CRON_SCHEDULE,
     gracefulShutdownTimeout: config.GRACEFUL_SHUTDOWN_TIMEOUT,
     maxRetry: config.MAX_RETRY,
-    difyApiUrl: config.DIFY_API_URL,
+    difyApiUrl: config.DIFY_API_BASE_URL,
     externalApiUrl: config.EXTERNAL_API_URL,
     // トークンは出力しない
   })

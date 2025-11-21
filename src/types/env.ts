@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export const envSchema = z.object({
   // 必須環境変数
-  DIFY_API_URL: z.string().url(),
+  DIFY_API_BASE_URL: z.string().url(),
   DIFY_API_TOKEN: z.string().min(1),
   EXTERNAL_API_URL: z.string().url(),
   EXTERNAL_API_TOKEN: z.string().min(1),

@@ -11,7 +11,7 @@ const DOCKER_IMAGE_NAME = 'dify-usage-exporter-test'
 // 基本的な環境変数セット
 function getValidEnv(): Record<string, string> {
   return {
-    DIFY_API_URL: 'https://api.dify.ai',
+    DIFY_API_BASE_URL: 'https://api.dify.ai',
     DIFY_API_TOKEN: 'test-dify-token',
     EXTERNAL_API_URL: 'https://external.api.com',
     EXTERNAL_API_TOKEN: 'test-external-token',
@@ -829,7 +829,7 @@ describe('異常系 E2Eテスト', () => {
   // 1. 必須環境変数不足
   it('必須環境変数が不足している場合exit 1で終了する', async () => {
     const env = {
-      // DIFY_API_URLが不足
+      // DIFY_API_BASE_URLが不足
       DIFY_API_TOKEN: 'test-token',
       EXTERNAL_API_URL: 'https://external.api.com',
       EXTERNAL_API_TOKEN: 'test-external-token',

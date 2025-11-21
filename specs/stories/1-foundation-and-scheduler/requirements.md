@@ -69,7 +69,7 @@ So that 本番環境で設定ミスによる障害を未然に防げる
 - **起動時検証**: 必須環境変数の存在チェック、型チェック（zodスキーマ使用）
 - **検証失敗時**: エラーメッセージをログ出力し、exit code 1で終了
 - **必須環境変数**:
-  - `DIFY_API_URL`: Dify APIのベースURL（例: https://dify.example.com）
+  - `DIFY_API_BASE_URL`: Dify APIのベースURL（例: https://dify.example.com）
   - `DIFY_API_TOKEN`: Dify API認証トークン
   - `EXTERNAL_API_URL`: 外部APIのベースURL（例: https://api.example.com）
   - `EXTERNAL_API_TOKEN`: 外部API認証トークン
@@ -286,7 +286,7 @@ dify-usage-exporter/
 ### 環境変数設定例（.env.example）
 ```bash
 # Dify API Settings
-DIFY_API_URL=https://dify.example.com
+DIFY_API_BASE_URL=https://dify.example.com
 DIFY_API_TOKEN=your-dify-api-token
 
 # External API Settings

@@ -43,7 +43,7 @@ based_on: specs/stories/1-foundation-and-scheduler/plan.md
 
   export const envSchema = z.object({
     // 必須環境変数
-    DIFY_API_URL: z.string().url(),
+    DIFY_API_BASE_URL: z.string().url(),
     DIFY_API_TOKEN: z.string().min(1),
     EXTERNAL_API_URL: z.string().url(),
     EXTERNAL_API_TOKEN: z.string().min(1),
@@ -82,7 +82,7 @@ based_on: specs/stories/1-foundation-and-scheduler/plan.md
 - **影響範囲**: env-config.ts、後続全モジュールが依存
 - **制約**: Design Docのインターフェース定義に完全準拠
 - **型定義詳細**:
-  - 必須: DIFY_API_URL, DIFY_API_TOKEN, EXTERNAL_API_URL, EXTERNAL_API_TOKEN
+  - 必須: DIFY_API_BASE_URL, DIFY_API_TOKEN, EXTERNAL_API_URL, EXTERNAL_API_TOKEN
   - オプション: CRON_SCHEDULE, LOG_LEVEL, GRACEFUL_SHUTDOWN_TIMEOUT, MAX_RETRY, NODE_ENV
   - 数値型は `z.coerce.number()` で文字列からの変換を許可
   - LOG_LEVELは4値のenum（error, warn, info, debug）

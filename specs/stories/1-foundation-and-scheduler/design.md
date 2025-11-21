@@ -194,7 +194,7 @@ import { z } from 'zod'
 
 export const envSchema = z.object({
   // 必須環境変数
-  DIFY_API_URL: z.string().url(),
+  DIFY_API_BASE_URL: z.string().url(),
   DIFY_API_TOKEN: z.string().min(1),
   EXTERNAL_API_URL: z.string().url(),
   EXTERNAL_API_TOKEN: z.string().min(1),
@@ -486,7 +486,7 @@ async function main(): Promise<void> {
     cronSchedule: config.CRON_SCHEDULE,
     gracefulShutdownTimeout: config.GRACEFUL_SHUTDOWN_TIMEOUT,
     maxRetry: config.MAX_RETRY,
-    difyApiUrl: config.DIFY_API_URL,
+    difyApiUrl: config.DIFY_API_BASE_URL,
     externalApiUrl: config.EXTERNAL_API_URL,
     // トークンは出力しない
   })
@@ -600,7 +600,7 @@ CMD ["node", "dist/index.js"]
 ### 環境変数管理
 
 - [ ] **AC-ENV-1** (契機型): アプリケーションが起動したとき、システムは.envファイルから環境変数を読み込むこと
-- [ ] **AC-ENV-2** (選択型): もし必須環境変数（DIFY_API_URL、DIFY_API_TOKEN、EXTERNAL_API_URL、EXTERNAL_API_TOKEN）が未設定の場合、システムはエラーメッセージを出力してexit code 1で終了すること
+- [ ] **AC-ENV-2** (選択型): もし必須環境変数（DIFY_API_BASE_URL、DIFY_API_TOKEN、EXTERNAL_API_URL、EXTERNAL_API_TOKEN）が未設定の場合、システムはエラーメッセージを出力してexit code 1で終了すること
 - [ ] **AC-ENV-3** (選択型): もし環境変数の値が不正（URL形式でない等）の場合、システムはZodのエラーメッセージを出力してexit code 1で終了すること
 - [ ] **AC-ENV-4** (選択型): もしオプション環境変数が未設定の場合、システムはデフォルト値を使用すること（CRON_SCHEDULE: '0 0 * * *'、LOG_LEVEL: 'info'、GRACEFUL_SHUTDOWN_TIMEOUT: 30、MAX_RETRY: 3）
 - [ ] **AC-ENV-5** (遍在型): システムはprocess.envを直接参照せず、env-config.tsのloadConfig()経由で設定を取得すること
