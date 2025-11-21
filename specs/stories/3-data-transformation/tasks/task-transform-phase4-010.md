@@ -26,15 +26,15 @@ based_on: specs/stories/3-data-transformation/plan.md
 
 ## 対象ファイル
 
-- [ ] test/e2e/data-transformation.e2e.test.ts
+- [x] test/e2e/data-transformation.e2e.test.ts
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
 
-- [ ] task-009の成果物（パフォーマンステスト）が完了していることを確認
-- [ ] E2Eテストファイルを確認（既存の場合は追加、なければ新規作成）
-- [ ] 以下のテストケースを記述:
+- [x] task-009の成果物（パフォーマンステスト）が完了していることを確認
+- [x] E2Eテストファイルを確認（既存の場合は追加、なければ新規作成）
+- [x] 以下のテストケースを記述:
   - E2E-1: 全体疎通（3件）
   - E2E-2: 冪等キー整合性（3件）
   - E2E-3: エラーリカバリ（3件）
@@ -44,16 +44,16 @@ based_on: specs/stories/3-data-transformation/plan.md
 
 ### 2. Green Phase
 
-- [ ] E2Eテストを実装
-- [ ] テスト実行して通ることを確認
+- [x] E2Eテストを実装
+- [x] テスト実行して通ることを確認
   ```bash
   npm run test:e2e -- test/e2e/data-transformation.e2e.test.ts
   ```
 
 ### 3. Refactor Phase
 
-- [ ] 必要に応じてテスト改善
-- [ ] テストが引き続き通ることを確認
+- [x] 必要に応じてテスト改善
+- [x] テストが引き続き通ることを確認
 
 ## テストケース詳細
 
@@ -399,16 +399,16 @@ describe('Data Transformation E2E Tests', () => {
 
 ## 完了条件
 
-- [ ] E2Eテスト17件以上が全てパス
-- [ ] TypeScript strict mode: エラー0件
+- [x] E2Eテスト17件以上が全てパス
+- [x] TypeScript strict mode: エラー0件
   ```bash
   npx tsc --noEmit
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
   npm run check
   ```
-- [ ] 動作確認完了（L2: E2Eテスト実行）
+- [x] 動作確認完了（L2: E2Eテスト実行）
   ```bash
   npm run test:e2e -- test/e2e/data-transformation.e2e.test.ts
   ```
