@@ -28,28 +28,28 @@ based_on: specs/stories/4-external-api-sender/plan.md
 ExternalApiSenderクラス実装（send, resendSpooled, handleSendError, calculateBatchKey, isMaxRetriesError）。
 
 ## 対象ファイル
-- [ ] src/sender/external-api-sender.ts（新規作成）
-- [ ] src/sender/__tests__/external-api-sender.test.ts（新規作成）
+- [x] src/sender/external-api-sender.ts（新規作成）
+- [x] src/sender/__tests__/external-api-sender.test.ts（新規作成）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 ### 1. Red Phase
-- [ ] 依存成果物の確認
-- [ ] 失敗するテストを作成（送信成功、409 Conflict、リトライ上限→スプール保存、リトライ成功）
-- [ ] テスト実行して失敗を確認
+- [x] 依存成果物の確認
+- [x] 失敗するテストを作成（送信成功、409 Conflict、リトライ上限→スプール保存、リトライ成功）
+- [x] テスト実行して失敗を確認
 
 ### 2. Green Phase
-- [ ] ExternalApiSenderクラス実装
-- [ ] 追加したテストのみ実行して通ることを確認
+- [x] ExternalApiSenderクラス実装
+- [x] 追加したテストのみ実行して通ることを確認
 
 ### 3. Refactor Phase
-- [ ] コード整理、追加したテストが引き続き通ることを確認
+- [x] コード整理、追加したテストが引き続き通ることを確認
 
 ## 完了条件
-- [ ] 追加したテストが全てパス
-- [ ] TypeScript strict mode: エラー0件
-- [ ] Biome lint: エラー0件
-- [ ] 動作確認完了（L3: E2Eシナリオテスト）
-- [ ] 成果物作成完了: src/sender/external-api-sender.ts
+- [x] 追加したテストが全てパス
+- [x] TypeScript strict mode: エラー0件
+- [x] Biome lint: エラー0件
+- [x] 動作確認完了（L3: E2Eシナリオテスト）
+- [x] 成果物作成完了: src/sender/external-api-sender.ts
 
 ## 注意事項
 - Design Docのデータフローに完全準拠
