@@ -130,37 +130,37 @@ figma_cache: none
 **目的**: data/spool/、data/failed/へのファイル保存・読み込み・削除機能
 
 #### Task 2-1: ファイル操作ユーティリティ実装
-- [ ] ファイル操作ユーティリティ実装（src/utils/file-utils.ts）
+- [x] ファイル操作ユーティリティ実装（src/utils/file-utils.ts）
   - パーミッション600設定関数
   - アトミックファイル書き込み関数
-- [ ] 単体テスト作成（src/utils/__tests__/file-utils.test.ts）
+- [x] 単体テスト作成（src/utils/__tests__/file-utils.test.ts）
 
 **完了条件:**
-- [ ] 実装完了: ファイル操作ユーティリティが動作する
-- [ ] 品質完了: 単体テストがパス（src/utils/__tests__/file-utils.test.ts）
-- [ ] 統合完了: パーミッション600が正しく設定される
+- [x] 実装完了: ファイル操作ユーティリティが動作する
+- [x] 品質完了: 単体テストがパス（src/utils/__tests__/file-utils.test.ts）
+- [x] 統合完了: パーミッション600が正しく設定される
 
 **成果物:**
 - src/utils/file-utils.ts
 - src/utils/__tests__/file-utils.test.ts
 
 #### Task 2-2: SpoolManagerクラス実装と単体テスト作成
-- [ ] SpoolManagerクラス実装（src/sender/spool-manager.ts）
+- [x] SpoolManagerクラス実装（src/sender/spool-manager.ts）
   - saveToSpool(): スプール保存
   - loadFromSpool(): スプール読み込み（firstAttempt昇順ソート）
   - deleteSpoolFile(): スプールファイル削除
   - moveToFailed(): data/failed/へ移動
   - updateSpoolFile(): retryCount更新
-- [ ] 単体テスト作成（src/sender/__tests__/spool-manager.test.ts）
+- [x] 単体テスト作成（src/sender/__tests__/spool-manager.test.ts）
   - ファイル保存・読み込み・削除・移動確認
   - firstAttempt昇順ソート確認
   - 破損ファイルのdata/failed/移動確認
   - パーミッション600確認
 
 **完了条件:**
-- [ ] 実装完了: SpoolManagerクラスが動作する
-- [ ] 品質完了: 単体テストがパス（src/sender/__tests__/spool-manager.test.ts）
-- [ ] 統合完了: スプールファイルがdata/spool/に正しく保存される
+- [x] 実装完了: SpoolManagerクラスが動作する
+- [x] 品質完了: 単体テストがパス（src/sender/__tests__/spool-manager.test.ts）
+- [x] 統合完了: スプールファイルがdata/spool/に正しく保存される
 
 **成果物:**
 - src/sender/spool-manager.ts
