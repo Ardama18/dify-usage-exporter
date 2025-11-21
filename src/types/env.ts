@@ -13,6 +13,14 @@ export const envSchema = z.object({
   GRACEFUL_SHUTDOWN_TIMEOUT: z.coerce.number().min(1).max(300).default(30),
   MAX_RETRY: z.coerce.number().min(1).max(10).default(3),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
+
+  // Dify Fetcher関連（オプション、デフォルト値あり）
+  DIFY_FETCH_PAGE_SIZE: z.coerce.number().min(1).max(1000).default(100),
+  DIFY_INITIAL_FETCH_DAYS: z.coerce.number().min(1).max(365).default(30),
+  DIFY_FETCH_TIMEOUT_MS: z.coerce.number().min(1000).max(120000).default(30000),
+  DIFY_FETCH_RETRY_COUNT: z.coerce.number().min(1).max(10).default(3),
+  DIFY_FETCH_RETRY_DELAY_MS: z.coerce.number().min(100).max(10000).default(1000),
+  WATERMARK_FILE_PATH: z.string().default('data/watermark.json'),
 })
 
 export type EnvConfig = z.infer<typeof envSchema>
