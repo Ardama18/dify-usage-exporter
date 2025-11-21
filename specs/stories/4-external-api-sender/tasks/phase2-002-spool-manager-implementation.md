@@ -27,56 +27,56 @@ based_on: specs/stories/4-external-api-sender/plan.md
 SpoolManagerクラス実装（saveToSpool, loadFromSpool, deleteSpoolFile, moveToFailed, updateSpoolFile）、単体テスト作成。
 
 ## 対象ファイル
-- [ ] src/sender/spool-manager.ts（新規作成）
-- [ ] src/sender/__tests__/spool-manager.test.ts（新規作成）
+- [x] src/sender/spool-manager.ts（新規作成）
+- [x] src/sender/__tests__/spool-manager.test.ts（新規作成）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
-- [ ] 依存成果物の確認
+- [x] 依存成果物の確認
   - src/types/spool.ts（SpoolFile型、SpoolFileSchema）
   - src/utils/file-utils.ts（writeFileAtomic, setPermission600）
-- [ ] 失敗するテストを作成
+- [x] 失敗するテストを作成
   - saveToSpool()のテスト（ファイル保存、パーミッション600確認）
   - listSpoolFiles()のテスト（firstAttempt昇順ソート確認）
   - deleteSpoolFile()のテスト（ファイル削除確認）
   - moveToFailed()のテスト（data/failed/移動確認）
   - updateSpoolFile()のテスト（retryCount更新確認）
   - 破損ファイルのdata/failed/移動テスト
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   cd backend && npm run test:unit -- src/sender/__tests__/spool-manager.test.ts
   ```
 
 ### 2. Green Phase
-- [ ] SpoolManagerクラス実装
+- [x] SpoolManagerクラス実装
   - saveToSpool(): スプールファイル保存（writeFileAtomic使用）
   - listSpoolFiles(): スプールファイル読み込み（firstAttempt昇順ソート、zodバリデーション）
   - deleteSpoolFile(): スプールファイル削除
   - moveToFailed(): data/failed/へ移動
   - updateSpoolFile(): retryCount更新（削除→再保存）
-- [ ] 追加したテストのみ実行して通ることを確認
+- [x] 追加したテストのみ実行して通ることを確認
 
 ### 3. Refactor Phase
-- [ ] コード整理（メソッド分離、エラーハンドリング）
-- [ ] zodバリデーションエラーの詳細ログ
-- [ ] 追加したテストが引き続き通ることを確認
+- [x] コード整理（メソッド分離、エラーハンドリング）
+- [x] zodバリデーションエラーの詳細ログ
+- [x] 追加したテストが引き続き通ることを確認
 
 ## 完了条件
-- [ ] 追加したテストが全てパス
-- [ ] TypeScript strict mode: エラー0件
+- [x] 追加したテストが全てパス
+- [x] TypeScript strict mode: エラー0件
   ```bash
   cd backend && npm run build
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
   cd backend && npm run check
   ```
-- [ ] 動作確認完了（L2: モジュール統合テスト）
+- [x] 動作確認完了（L2: モジュール統合テスト）
   ```bash
   cd backend && npm run test:unit -- src/sender/__tests__/spool-manager.test.ts
   ```
-- [ ] 成果物作成完了
+- [x] 成果物作成完了
   - src/sender/spool-manager.ts
 
 ## 実装サンプル
