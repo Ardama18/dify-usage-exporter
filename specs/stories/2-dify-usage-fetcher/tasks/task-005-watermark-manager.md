@@ -21,14 +21,14 @@ based_on: specs/stories/2-dify-usage-fetcher/plan.md
 ウォーターマークの読み書き、バックアップ、復元機能を実装する。これにより差分取得を実現し、重複取得率0%を保証する。
 
 ## 対象ファイル
-- [ ] `src/watermark/watermark-manager.ts` - WatermarkManager実装
-- [ ] `test/unit/watermark/watermark-manager.test.ts` - 単体テスト
-- [ ] `test/integration/dify-usage-fetcher.int.test.ts` - 統合テスト（FR-4部分）
+- [x] `src/watermark/watermark-manager.ts` - WatermarkManager実装
+- [x] `test/unit/watermark/watermark-manager.test.ts` - 単体テスト
+- [x] `test/integration/dify-usage-fetcher.int.test.ts` - 統合テスト（FR-4部分）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
-- [ ] `test/unit/watermark/watermark-manager.test.ts` を作成
+- [x] `test/unit/watermark/watermark-manager.test.ts` を作成
   - ファイル存在時の正常読み込みテスト
   - ファイル不存在時のnull返却テスト
   - ファイル破損時のバックアップ復元テスト
@@ -36,14 +36,14 @@ based_on: specs/stories/2-dify-usage-fetcher/plan.md
   - 更新時のバックアップ作成テスト
   - パーミッション600の設定確認テスト
   - ディレクトリ自動作成テスト
-- [ ] テスト実行して失敗を確認
+- [x] テスト実行して失敗を確認
   ```bash
   npm test -- test/unit/watermark/watermark-manager.test.ts
   ```
 
 ### 2. Green Phase
-- [ ] `src/watermark/` ディレクトリを作成
-- [ ] `src/watermark/watermark-manager.ts` を作成
+- [x] `src/watermark/` ディレクトリを作成
+- [x] `src/watermark/watermark-manager.ts` を作成
   - createWatermarkManager関数実装
   - load()メソッド実装
     - ファイル読み込み
@@ -84,18 +84,18 @@ based_on: specs/stories/2-dify-usage-fetcher/plan.md
   }
   ```
 
-- [ ] テスト実行して通ることを確認
+- [x] テスト実行して通ることを確認
   ```bash
   npm test -- test/unit/watermark/watermark-manager.test.ts
   ```
 
 ### 3. Refactor Phase
-- [ ] ログ出力の最適化
-- [ ] エラーメッセージの改善
-- [ ] テストが引き続き通ることを確認
+- [x] ログ出力の最適化
+- [x] エラーメッセージの改善
+- [x] テストが引き続き通ることを確認
 
 ### 4. 統合テスト実装
-- [ ] `test/integration/dify-usage-fetcher.int.test.ts` を作成/更新
+- [x] `test/integration/dify-usage-fetcher.int.test.ts` を作成/更新
   - FR-4: ウォーターマーク管理 統合テスト
   - AC-4-1: Fetcher起動時にウォーターマークファイル読み込み
   - AC-4-2: ファイル不存在時に過去30日間を取得期間に設定
@@ -104,31 +104,31 @@ based_on: specs/stories/2-dify-usage-fetcher/plan.md
   - AC-4-5: ファイル破損時にバックアップから復元
   - AC-4-6: ファイルパーミッション600設定
   - エッジケース: バックアップも破損、ディレクトリ不存在、書き込み権限なし、カスタムファイルパス、初回取得日数カスタマイズ
-- [ ] 統合テスト実行・パス確認
+- [x] 統合テスト実行・パス確認
   ```bash
   npm test -- test/integration/dify-usage-fetcher.int.test.ts -t "FR-4"
   ```
 
 ## 完了条件
-- [ ] 単体テストが全てパス
+- [x] 単体テストが全てパス
   ```bash
   npm test -- test/unit/watermark/watermark-manager.test.ts
   ```
-- [ ] 統合テスト（FR-4関連）がすべてパス
+- [x] 統合テスト（FR-4関連）がすべてパス
   ```bash
   npm test -- test/integration/dify-usage-fetcher.int.test.ts -t "FR-4"
   ```
-- [ ] TypeScript strict mode: エラー0件
+- [x] TypeScript strict mode: エラー0件
   ```bash
   npm run build
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
   npm run check
   ```
-- [ ] WatermarkManagerが正常に動作する
-- [ ] バックアップ・復元機能が動作する
-- [ ] パーミッション600が設定される
+- [x] WatermarkManagerが正常に動作する
+- [x] バックアップ・復元機能が動作する
+- [x] パーミッション600が設定される
 
 ## 関連する受入条件（AC）
 - **AC-4-1**: Fetcher起動時、システムはウォーターマークファイル（data/watermark.json）を読み込むこと

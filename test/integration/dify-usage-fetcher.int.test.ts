@@ -3,7 +3,17 @@
 // テスト種別: Integration Test
 // 実装タイミング: 機能実装と同時
 
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Logger } from '../../src/logger/winston-logger.js'
+import type { EnvConfig } from '../../src/types/env.js'
+import type { Watermark } from '../../src/types/watermark.js'
+import {
+  createWatermarkManager,
+  WatermarkFileError,
+} from '../../src/watermark/watermark-manager.js'
 
 // ============================================
 // FR-1: Dify API認証 統合テスト（3件 + 2エッジケース）
@@ -170,79 +180,315 @@ describe('FR-3: ページング処理 統合テスト', () => {
 // FR-4: ウォーターマーク管理 統合テスト（6件 + 5エッジケース）
 // ============================================
 describe('FR-4: ウォーターマーク管理 統合テスト', () => {
+  let testDir: string
+  let config: EnvConfig
+  let logger: Logger
+
+  beforeEach(async () => {
+    // テスト用一時ディレクトリを作成
+    testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'watermark-int-test-'))
+
+    // モックconfigの作成
+    config = {
+      DIFY_API_BASE_URL: 'https://api.dify.ai',
+      DIFY_API_TOKEN: 'test-token',
+      EXTERNAL_API_URL: 'https://external.api',
+      EXTERNAL_API_TOKEN: 'external-token',
+      CRON_SCHEDULE: '0 0 * * *',
+      LOG_LEVEL: 'info',
+      GRACEFUL_SHUTDOWN_TIMEOUT: 30,
+      MAX_RETRY: 3,
+      NODE_ENV: 'test',
+      DIFY_FETCH_PAGE_SIZE: 100,
+      DIFY_INITIAL_FETCH_DAYS: 30,
+      DIFY_FETCH_TIMEOUT_MS: 30000,
+      DIFY_FETCH_RETRY_COUNT: 3,
+      DIFY_FETCH_RETRY_DELAY_MS: 1000,
+      WATERMARK_FILE_PATH: path.join(testDir, 'watermark.json'),
+    }
+
+    // モックloggerの作成
+    logger = {
+      error: vi.fn(),
+      warn: vi.fn(),
+      info: vi.fn(),
+      debug: vi.fn(),
+      child: vi.fn().mockReturnThis(),
+    }
+  })
+
+  afterEach(async () => {
+    // テスト後のクリーンアップ
+    try {
+      await fs.rm(testDir, { recursive: true, force: true })
+    } catch {
+      // クリーンアップ失敗は無視
+    }
+  })
+
   // AC-4-1解釈: [契機型] Fetcher起動時にウォーターマークファイル読み込み
   // 検証: WatermarkManagerがdata/watermark.jsonを読み込むこと
   // @category: integration
   // @dependency: DifyUsageFetcher, WatermarkManager
   // @complexity: medium
-  it.todo('AC-4-1: Fetcher起動時にウォーターマークファイル（data/watermark.json）を読み込む')
+  it('AC-4-1: Fetcher起動時にウォーターマークファイル（data/watermark.json）を読み込む', async () => {
+    // Arrange
+    const watermark: Watermark = {
+      last_fetched_date: '2024-01-15T00:00:00.000Z',
+      last_updated_at: '2024-01-15T10:30:00.000Z',
+    }
+    await fs.writeFile(config.WATERMARK_FILE_PATH, JSON.stringify(watermark, null, 2))
+
+    const manager = createWatermarkManager({ config, logger })
+
+    // Act
+    const result = await manager.load()
+
+    // Assert
+    expect(result).toEqual(watermark)
+    expect(logger.info).toHaveBeenCalledWith(
+      'ウォーターマーク読み込み成功',
+      expect.objectContaining({
+        last_fetched_date: '2024-01-15T00:00:00.000Z',
+      }),
+    )
+  })
 
   // AC-4-2解釈: [選択型] ファイル不存在時に過去30日間を取得期間に設定
   // 検証: WatermarkManagerがnullを返し、Fetcherが30日前を計算すること
   // @category: integration
   // @dependency: DifyUsageFetcher, WatermarkManager, EnvConfig
   // @complexity: medium
-  it.todo('AC-4-2: ウォーターマークファイルが存在しない場合、過去30日間を取得期間として設定する')
+  it('AC-4-2: ウォーターマークファイルが存在しない場合、過去30日間を取得期間として設定する', async () => {
+    // Arrange
+    const manager = createWatermarkManager({ config, logger })
+
+    // Act
+    const result = await manager.load()
+
+    // Assert
+    expect(result).toBeNull()
+    expect(logger.info).toHaveBeenCalledWith('ウォーターマークファイル不存在（初回実行）')
+  })
 
   // AC-4-3解釈: [契機型] 全ページ取得完了時にウォーターマーク更新
   // 検証: DifyUsageFetcherがWatermarkManager.updateを呼び出すこと
   // @category: integration
   // @dependency: DifyUsageFetcher, WatermarkManager
   // @complexity: medium
-  it.todo('AC-4-3: 全ページ取得完了時にウォーターマークを更新する')
+  it('AC-4-3: 全ページ取得完了時にウォーターマークを更新する', async () => {
+    // Arrange
+    const manager = createWatermarkManager({ config, logger })
+    const watermark: Watermark = {
+      last_fetched_date: '2024-01-15T00:00:00.000Z',
+      last_updated_at: '2024-01-15T10:30:00.000Z',
+    }
+
+    // Act
+    await manager.update(watermark)
+
+    // Assert
+    const content = await fs.readFile(config.WATERMARK_FILE_PATH, 'utf-8')
+    const savedData = JSON.parse(content)
+    expect(savedData).toEqual(watermark)
+    expect(logger.info).toHaveBeenCalledWith(
+      'ウォーターマーク更新成功',
+      expect.objectContaining({
+        last_fetched_date: '2024-01-15T00:00:00.000Z',
+      }),
+    )
+  })
 
   // AC-4-4解釈: [遍在型] 更新前にバックアップファイル作成
   // 検証: WatermarkManagerがwatermark.json.backupを作成すること
   // @category: integration
   // @dependency: WatermarkManager
   // @complexity: medium
-  it.todo('AC-4-4: ウォーターマーク更新前にバックアップファイル（watermark.json.backup）を作成する')
+  it('AC-4-4: ウォーターマーク更新前にバックアップファイル（watermark.json.backup）を作成する', async () => {
+    // Arrange
+    const oldWatermark: Watermark = {
+      last_fetched_date: '2024-01-14T00:00:00.000Z',
+      last_updated_at: '2024-01-14T10:30:00.000Z',
+    }
+    const newWatermark: Watermark = {
+      last_fetched_date: '2024-01-15T00:00:00.000Z',
+      last_updated_at: '2024-01-15T10:30:00.000Z',
+    }
+
+    // 既存ファイルを作成
+    await fs.writeFile(config.WATERMARK_FILE_PATH, JSON.stringify(oldWatermark, null, 2))
+
+    const manager = createWatermarkManager({ config, logger })
+
+    // Act
+    await manager.update(newWatermark)
+
+    // Assert
+    const backupPath = `${config.WATERMARK_FILE_PATH}.backup`
+    const backupContent = await fs.readFile(backupPath, 'utf-8')
+    const backupData = JSON.parse(backupContent)
+    expect(backupData).toEqual(oldWatermark)
+  })
 
   // AC-4-5解釈: [選択型] ファイル破損時にバックアップから復元
   // 検証: WatermarkManagerがバックアップを読み込み、本ファイルを復元すること
   // @category: integration
   // @dependency: WatermarkManager, Logger
   // @complexity: high
-  it.todo('AC-4-5: ウォーターマークファイルが破損している場合、バックアップから復元を試行する')
+  it('AC-4-5: ウォーターマークファイルが破損している場合、バックアップから復元を試行する', async () => {
+    // Arrange
+    const watermark: Watermark = {
+      last_fetched_date: '2024-01-14T00:00:00.000Z',
+      last_updated_at: '2024-01-14T10:30:00.000Z',
+    }
+
+    // 本ファイルを破損状態で作成
+    await fs.writeFile(config.WATERMARK_FILE_PATH, 'invalid json {{{')
+
+    // バックアップファイルを正常状態で作成
+    await fs.writeFile(`${config.WATERMARK_FILE_PATH}.backup`, JSON.stringify(watermark, null, 2))
+
+    const manager = createWatermarkManager({ config, logger })
+
+    // Act
+    const result = await manager.load()
+
+    // Assert
+    expect(result).toEqual(watermark)
+    expect(logger.warn).toHaveBeenCalledWith(
+      'ウォーターマークファイル破損、バックアップから復元試行',
+      expect.any(Object),
+    )
+    expect(logger.info).toHaveBeenCalledWith(
+      'バックアップから復元成功',
+      expect.objectContaining({
+        last_fetched_date: '2024-01-14T00:00:00.000Z',
+      }),
+    )
+  })
 
   // AC-4-6解釈: [遍在型] ファイルパーミッション600設定
   // 検証: WatermarkManagerがmode: 0o600で書き込むこと
   // @category: integration
   // @dependency: WatermarkManager
   // @complexity: low
-  it.todo('AC-4-6: ウォーターマークファイルのパーミッションを600に設定する')
+  it('AC-4-6: ウォーターマークファイルのパーミッションを600に設定する', async () => {
+    // Arrange
+    const manager = createWatermarkManager({ config, logger })
+    const watermark: Watermark = {
+      last_fetched_date: '2024-01-15T00:00:00.000Z',
+      last_updated_at: '2024-01-15T10:30:00.000Z',
+    }
+
+    // Act
+    await manager.update(watermark)
+
+    // Assert
+    const stats = await fs.stat(config.WATERMARK_FILE_PATH)
+    const mode = stats.mode & 0o777
+    expect(mode).toBe(0o600)
+  })
 
   // エッジケース: バックアップも破損
   // 検証: 本ファイルとバックアップ両方が破損している場合
   // @category: edge-case
   // @dependency: WatermarkManager
   // @complexity: high
-  it.todo(
-    'AC-4-5-edge: バックアップファイルも破損している場合、WatermarkFileErrorをスローする（必須・高リスク）',
-  )
+  it('AC-4-5-edge: バックアップファイルも破損している場合、WatermarkFileErrorをスローする（必須・高リスク）', async () => {
+    // Arrange
+    // 本ファイルを破損状態で作成
+    await fs.writeFile(config.WATERMARK_FILE_PATH, 'invalid json {{{')
+
+    // バックアップファイルも破損状態で作成
+    await fs.writeFile(`${config.WATERMARK_FILE_PATH}.backup`, 'also invalid {{{')
+
+    const manager = createWatermarkManager({ config, logger })
+
+    // Act & Assert
+    await expect(manager.load()).rejects.toThrow(WatermarkFileError)
+    await expect(manager.load()).rejects.toThrow(
+      'ウォーターマークファイルとバックアップの復元に失敗',
+    )
+  })
 
   // エッジケース: ディレクトリ不存在
   // 検証: data/ディレクトリが存在しない場合の自動作成
   // @category: edge-case
   // @dependency: WatermarkManager
   // @complexity: medium
-  it.todo('AC-4-1-edge: data/ディレクトリが存在しない場合、自動作成される（必須・高リスク）')
+  it('AC-4-1-edge: data/ディレクトリが存在しない場合、自動作成される（必須・高リスク）', async () => {
+    // Arrange
+    const nestedDir = path.join(testDir, 'nested', 'dir')
+    config.WATERMARK_FILE_PATH = path.join(nestedDir, 'watermark.json')
+
+    const manager = createWatermarkManager({ config, logger })
+    const watermark: Watermark = {
+      last_fetched_date: '2024-01-15T00:00:00.000Z',
+      last_updated_at: '2024-01-15T10:30:00.000Z',
+    }
+
+    // Act
+    await manager.update(watermark)
+
+    // Assert
+    const content = await fs.readFile(config.WATERMARK_FILE_PATH, 'utf-8')
+    const savedData = JSON.parse(content)
+    expect(savedData).toEqual(watermark)
+  })
 
   // エッジケース: 書き込み権限なし
   // 検証: ファイル書き込み失敗時のエラーハンドリング
   // @category: edge-case
   // @dependency: WatermarkManager
   // @complexity: medium
-  it.todo(
-    'AC-4-3-edge: ウォーターマークファイルの書き込みに失敗した場合、エラーログを出力する（必須・高リスク）',
-  )
+  it('AC-4-3-edge: ウォーターマークファイルの書き込みに失敗した場合、エラーログを出力する（必須・高リスク）', async () => {
+    // Arrange
+    // 読み取り専用ディレクトリを作成
+    const readOnlyDir = path.join(testDir, 'readonly')
+    await fs.mkdir(readOnlyDir)
+    await fs.chmod(readOnlyDir, 0o444)
+
+    config.WATERMARK_FILE_PATH = path.join(readOnlyDir, 'watermark.json')
+
+    const manager = createWatermarkManager({ config, logger })
+    const watermark: Watermark = {
+      last_fetched_date: '2024-01-15T00:00:00.000Z',
+      last_updated_at: '2024-01-15T10:30:00.000Z',
+    }
+
+    // Act & Assert
+    try {
+      await expect(manager.update(watermark)).rejects.toThrow()
+    } finally {
+      // クリーンアップのため権限を戻す
+      await fs.chmod(readOnlyDir, 0o755)
+    }
+  })
 
   // エッジケース: カスタムファイルパス
   // 検証: WATERMARK_FILE_PATH環境変数の反映
   // @category: edge-case
   // @dependency: WatermarkManager, EnvConfig
   // @complexity: low
-  it.todo('AC-4-1-edge: WATERMARK_FILE_PATH環境変数でファイルパスを変更できる（推奨・中リスク）')
+  it('AC-4-1-edge: WATERMARK_FILE_PATH環境変数でファイルパスを変更できる（推奨・中リスク）', async () => {
+    // Arrange
+    const customPath = path.join(testDir, 'custom', 'path', 'watermark.json')
+    config.WATERMARK_FILE_PATH = customPath
+
+    const manager = createWatermarkManager({ config, logger })
+    const watermark: Watermark = {
+      last_fetched_date: '2024-01-15T00:00:00.000Z',
+      last_updated_at: '2024-01-15T10:30:00.000Z',
+    }
+
+    // Act
+    await manager.update(watermark)
+
+    // Assert
+    const content = await fs.readFile(customPath, 'utf-8')
+    const savedData = JSON.parse(content)
+    expect(savedData).toEqual(watermark)
+  })
 
   // エッジケース: 初回取得日数のカスタマイズ
   // 検証: DIFY_INITIAL_FETCH_DAYS環境変数の反映
