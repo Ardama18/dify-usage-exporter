@@ -18,73 +18,79 @@ based_on: specs/stories/3-data-transformation/plan.md
 
 ## 該当タスク一覧
 
-- [ ] task-transform-phase3-006: 正規化処理と単体テスト作成
-- [ ] task-transform-phase3-007: DataTransformer実装と単体テスト作成
-- [ ] task-transform-phase3-008: 統合テスト作成・実行
+- [x] task-transform-phase3-006: 正規化処理と単体テスト作成
+- [x] task-transform-phase3-007: DataTransformer実装と単体テスト作成
+- [x] task-transform-phase3-008: 統合テスト作成・実行
 
 ## フェーズ完了確認
 
 ### 1. 成果物の存在確認
 
-- [ ] `src/transformer/data-transformer.ts` が完成している（正規化関数 + DataTransformer）
-- [ ] `test/unit/transformer/data-transformer.test.ts` が存在する
-- [ ] `test/integration/data-transformation.int.test.ts` が存在する
+- [x] `src/transformer/data-transformer.ts` が完成している（正規化関数 + DataTransformer）
+- [x] `test/unit/transformer/data-transformer.test.ts` が存在する
+- [x] `test/integration/data-transformation.int.test.ts` が存在する
 
 ### 2. 品質チェック
 
-- [ ] `npm run build` が成功すること
+- [x] `npm run build` が成功すること
   ```bash
   npm run build
   ```
 
-- [ ] `npm run check` がエラーなしで完了すること
+- [x] `npm run check` がエラーなしで完了すること
   ```bash
   npm run check
   ```
 
 ### 3. テスト実行
 
-- [ ] Phase 3の単体テストが全てパスすること
+- [x] Phase 3の単体テストが全てパスすること
   ```bash
-  npm run test:unit -- test/unit/transformer/data-transformer.test.ts
+  npx vitest run test/unit/transformer/data-transformer.test.ts
   ```
+  実行結果: 18テスト全てパス
 
-- [ ] 統合テストが全てパスすること
+- [x] 統合テストが全てパスすること
   ```bash
   npm run test:integration -- test/integration/data-transformation.int.test.ts
   ```
+  実行結果: 29テスト全てパス
 
 ### 4. カバレッジ確認
 
-- [ ] カバレッジ70%以上を達成
+- [x] カバレッジ70%以上を達成
   ```bash
-  npm run test:coverage:fresh
+  npm run test:coverage
   ```
+  実行結果: 95.14%（70%を大幅に超過）
 
 ### 5. Design Doc E2E確認手順
 
 Design Docで定義されたPhase 3完了時の確認事項:
 
-1. [ ] `npm test` が全てパスすること
-2. [ ] 変換エラー時に成功レコードのみが返却されること
-3. [ ] TransformResult.batchIdempotencyKeyが正しく生成されること
+1. [x] `npm test` が全てパスすること
+   実行結果: 481テスト全てパス
+2. [x] 変換エラー時に成功レコードのみが返却されること
+   統合テスト AC5-1で確認済み
+3. [x] TransformResult.batchIdempotencyKeyが正しく生成されること
+   統合テスト AC3-1, AC3-2, AC3-3で確認済み
 
 ### 6. AC達成確認
 
-- [ ] AC1-1: DifyUsageRecord[] → ExternalApiRecord[]変換
-- [ ] AC1-2: transformed_at（ISO 8601）付与
-- [ ] AC1-3: provider正規化（小文字・空白除去）
-- [ ] AC1-4: model正規化（小文字・空白除去）
-- [ ] AC2-1: レコード冪等キー形式
-- [ ] AC2-2: 正規化後のprovider/model使用
-- [ ] AC3-1: バッチ冪等キー（SHA256）生成
-- [ ] AC3-2: 空配列で空文字列
-- [ ] AC3-3: 順序非依存の同一キー
-- [ ] AC4-1: zodスキーマ検証
-- [ ] AC4-2: バリデーション失敗時のエラー記録
-- [ ] AC5-1: エラー記録と処理継続
-- [ ] AC5-2: successCount + errorCount = 入力数
-- [ ] AC5-3: 例外スローなし
+- [x] AC1-1: DifyUsageRecord[] → ExternalApiRecord[]変換
+- [x] AC1-2: transformed_at（ISO 8601）付与
+- [x] AC1-3: provider正規化（小文字・空白除去）
+- [x] AC1-4: model正規化（小文字・空白除去）
+- [x] AC2-1: レコード冪等キー形式
+- [x] AC2-2: 正規化後のprovider/model使用
+- [x] AC3-1: バッチ冪等キー（SHA256）生成
+- [x] AC3-2: 空配列で空文字列
+- [x] AC3-3: 順序非依存の同一キー
+- [x] AC4-1: zodスキーマ検証
+- [x] AC4-2: バリデーション失敗時のエラー記録
+- [x] AC5-1: エラー記録と処理継続
+- [x] AC5-2: successCount + errorCount = 入力数
+- [x] AC5-3: 例外スローなし
 
 ## 次フェーズへの引き継ぎ事項
 
@@ -102,9 +108,9 @@ Design Docで定義されたPhase 3完了時の確認事項:
 
 ## 完了条件
 
-- [ ] 全タスクが完了していること
-- [ ] 全品質チェックがパスすること
-- [ ] 全成果物が存在すること
-- [ ] カバレッジ70%以上を達成していること
-- [ ] Design Doc E2E確認手順が全て完了していること
-- [ ] 全ACが達成されていること
+- [x] 全タスクが完了していること
+- [x] 全品質チェックがパスすること
+- [x] 全成果物が存在すること
+- [x] カバレッジ70%以上を達成していること（95.14%達成）
+- [x] Design Doc E2E確認手順が全て完了していること
+- [x] 全ACが達成されていること
