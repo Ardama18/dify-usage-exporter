@@ -26,20 +26,20 @@ ITransformerインターフェース、TransformResult型、TransformError型を
 
 ## 対象ファイル
 
-- [ ] src/interfaces/transformer.ts
+- [x] src/interfaces/transformer.ts
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
 
-- [ ] task-001の成果物（src/types/external-api.ts）が存在することを確認
-- [ ] 型定義のため、テストは型チェックで代替
-- [ ] インポートを試みて失敗を確認（ファイルが存在しないため）
+- [x] task-001の成果物（src/types/external-api.ts）が存在することを確認
+- [x] 型定義のため、テストは型チェックで代替
+- [x] インポートを試みて失敗を確認（ファイルが存在しないため）
 
 ### 2. Green Phase
 
-- [ ] `src/interfaces/transformer.ts` を作成
-- [ ] 以下の型を定義:
+- [x] `src/interfaces/transformer.ts` を作成
+- [x] 以下の型を定義:
   ```typescript
   import type { DifyUsageRecord } from '../types/dify-usage.js'
   import type { ExternalApiRecord } from '../types/external-api.js'
@@ -73,15 +73,15 @@ ITransformerインターフェース、TransformResult型、TransformError型を
     details?: Record<string, unknown>
   }
   ```
-- [ ] 型チェック実行して成功を確認
+- [x] 型チェック実行して成功を確認
   ```bash
   npx tsc --noEmit
   ```
 
 ### 3. Refactor Phase
 
-- [ ] 必要に応じてコード改善（JSDocコメント追加など）
-- [ ] 型チェックが引き続き通ることを確認
+- [x] 必要に応じてコード改善（JSDocコメント追加など）
+- [x] 型チェックが引き続き通ることを確認
 
 ## 型定義の詳細
 
@@ -106,16 +106,16 @@ ITransformerインターフェース、TransformResult型、TransformError型を
 
 ## 完了条件
 
-- [ ] インターフェースがエクスポート可能
-- [ ] TypeScript strict mode: エラー0件
+- [x] インターフェースがエクスポート可能
+- [x] TypeScript strict mode: エラー0件
   ```bash
   npx tsc --noEmit
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
   npm run check
   ```
-- [ ] ビルド成功
+- [x] ビルド成功
   ```bash
   npm run build
   ```
