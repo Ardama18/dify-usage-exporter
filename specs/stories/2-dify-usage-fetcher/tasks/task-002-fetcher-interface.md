@@ -21,17 +21,17 @@ based_on: specs/stories/2-dify-usage-fetcher/plan.md
 IFetcherインターフェースとFetchResult、FetchError型を定義する。これにより、Fetcherの統一された契約を確立し、将来の拡張やテストを容易にする。
 
 ## 対象ファイル
-- [ ] `src/interfaces/fetcher.ts` - Fetcherインターフェース定義
+- [x] `src/interfaces/fetcher.ts` - Fetcherインターフェース定義
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
-- [ ] 依存成果物の確認（src/types/dify-usage.ts）
-- [ ] 型定義の設計確認
+- [x] 依存成果物の確認（src/types/dify-usage.ts）
+- [x] 型定義の設計確認
 
 ### 2. Green Phase
-- [ ] `src/interfaces/` ディレクトリを作成
-- [ ] `src/interfaces/fetcher.ts` を作成
+- [x] `src/interfaces/` ディレクトリを作成
+- [x] `src/interfaces/fetcher.ts` を作成
   ```typescript
   import type { DifyUsageRecord } from '../types/dify-usage.js'
 
@@ -61,26 +61,26 @@ IFetcherインターフェースとFetchResult、FetchError型を定義する。
   }
   ```
 
-- [ ] 型の整合性確認（DifyUsageRecordとの連携）
+- [x] 型の整合性確認（DifyUsageRecordとの連携）
   ```bash
   npm run build
   ```
 
 ### 3. Refactor Phase
-- [ ] JSDocコメントの充実
-- [ ] 型定義の整理
+- [x] JSDocコメントの充実
+- [x] 型定義の整理
 
 ## 完了条件
-- [ ] TypeScript strict mode: エラー0件
+- [x] TypeScript strict mode: エラー0件
   ```bash
   npm run build
   ```
-- [ ] Biome lint: エラー0件
+- [x] Biome lint: エラー0件
   ```bash
   npm run check
   ```
-- [ ] インターフェースがDesign Docの設計と一致
-- [ ] 型エクスポートが正しく動作
+- [x] インターフェースがDesign Docの設計と一致
+- [x] 型エクスポートが正しく動作
 
 ## 関連する受入条件（AC）
 - **AC-2-1**: Fetcherが起動したとき、システムはDify Console API `/console/api/usage` を呼び出すこと（インターフェース定義）
