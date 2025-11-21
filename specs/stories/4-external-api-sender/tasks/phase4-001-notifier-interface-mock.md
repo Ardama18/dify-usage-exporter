@@ -25,17 +25,17 @@ based_on: specs/stories/4-external-api-sender/plan.md
 INotifierインターフェース定義、ConsoleNotifier実装（モック、ログ出力のみ）。
 
 ## 対象ファイル
-- [ ] src/interfaces/notifier.ts（新規作成）
-- [ ] src/notifier/console-notifier.ts（新規作成）
-- [ ] src/notifier/__tests__/console-notifier.test.ts（新規作成）
+- [x] src/interfaces/notifier.ts（新規作成）
+- [x] src/notifier/console-notifier.ts（新規作成）
+- [x] src/notifier/__tests__/console-notifier.test.ts（新規作成）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 ### 1-3. インターフェース定義とモック実装
-- [ ] INotifierインターフェース定義（sendErrorNotification）
-- [ ] ConsoleNotifier実装（ログ出力のみ）
-- [ ] 単体テスト作成
+- [x] INotifierインターフェース定義（sendErrorNotification）
+- [x] ConsoleNotifier実装（ログ出力のみ）
+- [x] 単体テスト作成
 
 ## 完了条件
-- [ ] 追加したテストが全てパス
-- [ ] ConsoleNotifierでログ出力される
-- [ ] 成果物作成完了
+- [x] 追加したテストが全てパス
+- [x] ConsoleNotifierでログ出力される
+- [x] 成果物作成完了
