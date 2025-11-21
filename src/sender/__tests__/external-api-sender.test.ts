@@ -1,5 +1,6 @@
 import { AxiosError } from 'axios'
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
+import type { INotifier } from '../../interfaces/notifier.js'
 import type { Logger } from '../../logger/winston-logger.js'
 import type { EnvConfig } from '../../types/env.js'
 import type { ExternalApiRecord } from '../../types/external-api.js'
@@ -11,6 +12,7 @@ describe('ExternalApiSender', () => {
   let sender: ExternalApiSender
   let mockHttpClient: HttpClient
   let mockSpoolManager: SpoolManager
+  let mockNotifier: INotifier
   let mockLogger: Logger
   let mockConfig: EnvConfig
 
@@ -29,6 +31,11 @@ describe('ExternalApiSender', () => {
       moveToFailed: vi.fn(),
     } as unknown as SpoolManager
 
+    // モックNotifier
+    mockNotifier = {
+      sendErrorNotification: vi.fn(),
+    } as unknown as INotifier
+
     // モックLogger
     mockLogger = {
       info: vi.fn(),
@@ -45,7 +52,13 @@ describe('ExternalApiSender', () => {
       EXTERNAL_API_TIMEOUT_MS: 30000,
     } as EnvConfig
 
-    sender = new ExternalApiSender(mockHttpClient, mockSpoolManager, mockLogger, mockConfig)
+    sender = new ExternalApiSender(
+      mockHttpClient,
+      mockSpoolManager,
+      mockNotifier,
+      mockLogger,
+      mockConfig,
+    )
   })
 
   describe('send()', () => {
@@ -263,6 +276,62 @@ describe('ExternalApiSender', () => {
       expect(mockLogger.error).toHaveBeenCalledWith('Moved to failed', {
         batchKey: 'batch-1',
       })
+      expect(mockNotifier.sendErrorNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Spool retry limit exceeded',
+          filePath: expect.stringContaining('data/failed/failed_'),
+          lastError: 'Still failing',
+          firstAttempt: '2025-01-01T00:00:00Z',
+          retryCount: 10,
+        }),
+      )
+    })
+
+    it('should log error if notification fails', async () => {
+      // Arrange
+      const spoolFiles = [
+        {
+          batchIdempotencyKey: 'batch-1',
+          records: [
+            {
+              date: '2025-01-01',
+              app_id: 'app-1',
+              provider: 'openai',
+              model: 'gpt-4',
+              input_tokens: 100,
+              output_tokens: 50,
+              total_tokens: 150,
+              idempotency_key: 'key-1',
+              transformed_at: '2025-01-01T00:00:00Z',
+            },
+          ],
+          firstAttempt: '2025-01-01T00:00:00Z',
+          retryCount: 9,
+          lastError: 'Network error',
+        },
+      ]
+      ;(mockSpoolManager.listSpoolFiles as Mock).mockResolvedValue(spoolFiles)
+      const axiosError = new AxiosError('Still failing')
+      axiosError.config = { 'axios-retry': { retryCount: 3 } } as never
+      ;(mockHttpClient.post as Mock).mockRejectedValue(axiosError)
+      ;(mockNotifier.sendErrorNotification as Mock).mockRejectedValue(
+        new Error('Notification service unavailable'),
+      )
+
+      // Act
+      await sender.resendSpooled()
+
+      // Assert
+      expect(mockNotifier.sendErrorNotification).toHaveBeenCalled()
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'Failed to send error notification',
+        expect.objectContaining({
+          error: 'Notification service unavailable',
+          batchKey: 'batch-1',
+        }),
+      )
+      // data/failed/への移動は継続されている
+      expect(mockSpoolManager.moveToFailed).toHaveBeenCalled()
     })
   })
 

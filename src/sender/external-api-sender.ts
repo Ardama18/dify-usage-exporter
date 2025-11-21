@@ -7,6 +7,7 @@
 
 import { createHash } from 'node:crypto'
 import { AxiosError } from 'axios'
+import type { INotifier } from '../interfaces/notifier.js'
 import type { ISender } from '../interfaces/sender.js'
 import type { Logger } from '../logger/winston-logger.js'
 import type { EnvConfig } from '../types/env.js'
@@ -24,6 +25,7 @@ export class ExternalApiSender implements ISender {
   constructor(
     private readonly httpClient: HttpClient,
     private readonly spoolManager: SpoolManager,
+    private readonly notifier: INotifier,
     private readonly logger: Logger,
     private readonly config: EnvConfig,
   ) {}
@@ -163,6 +165,26 @@ export class ExternalApiSender implements ISender {
       // data/failed/へ移動
       await this.spoolManager.moveToFailed(updatedSpoolFile)
       this.logger.error('Moved to failed', { batchKey: updatedSpoolFile.batchIdempotencyKey })
+
+      // エラー通知送信
+      try {
+        await this.notifier.sendErrorNotification({
+          title: 'Spool retry limit exceeded',
+          filePath: `data/failed/failed_${new Date().toISOString().replace(/[:.]/g, '')}_${updatedSpoolFile.batchIdempotencyKey}.json`,
+          lastError: updatedSpoolFile.lastError,
+          firstAttempt: updatedSpoolFile.firstAttempt,
+          retryCount: updatedSpoolFile.retryCount,
+        })
+      } catch (notificationError) {
+        // 通知失敗時もエラーを握りつぶさず、ログに記録
+        this.logger.error('Failed to send error notification', {
+          error:
+            notificationError instanceof Error
+              ? notificationError.message
+              : String(notificationError),
+          batchKey: updatedSpoolFile.batchIdempotencyKey,
+        })
+      }
     } else {
       // retryCount更新
       await this.spoolManager.updateSpoolFile(updatedSpoolFile)

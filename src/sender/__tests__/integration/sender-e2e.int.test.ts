@@ -6,7 +6,8 @@
 
 import { promises as fs } from 'node:fs'
 import nock from 'nock'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { INotifier } from '../../../interfaces/notifier.js'
 import { createLogger, type Logger } from '../../../logger/winston-logger.js'
 import type { EnvConfig } from '../../../types/env.js'
 import type { ExternalApiRecord } from '../../../types/external-api.js'
@@ -22,6 +23,7 @@ describe('ExternalApiSender E2E Integration Tests', () => {
   let sender: ExternalApiSender
   let logger: Logger
   let config: EnvConfig
+  let mockNotifier: INotifier
 
   const testRecords: ExternalApiRecord[] = [
     {
@@ -71,12 +73,17 @@ describe('ExternalApiSender E2E Integration Tests', () => {
     // Logger作成（テスト用、コンソール出力抑制）
     logger = createLogger(config)
 
+    // モックNotifier作成
+    mockNotifier = {
+      sendErrorNotification: vi.fn().mockResolvedValue(undefined),
+    }
+
     // 依存オブジェクト作成
     const httpClient = new HttpClient(logger, config)
     const spoolManager = new SpoolManager(logger)
 
     // Sender作成
-    sender = new ExternalApiSender(httpClient, spoolManager, logger, config)
+    sender = new ExternalApiSender(httpClient, spoolManager, mockNotifier, logger, config)
   })
 
   afterEach(async () => {
@@ -309,6 +316,63 @@ describe('ExternalApiSender E2E Integration Tests', () => {
       const content = await fs.readFile(`${FAILED_DIR}/${failedFile}`, 'utf-8')
       const failedData = JSON.parse(content)
       expect(failedData.retryCount).toBe(10)
+    }, 60000) // タイムアウト60秒
+
+    it('should send notification when moved to failed', async () => {
+      // Step 1: スプール保存
+      nock(API_BASE_URL).post('/usage').times(4).reply(500, { error: 'Initial failure' })
+
+      await sender.send(testRecords)
+
+      // Step 2: 10回再送失敗を繰り返す
+      for (let i = 0; i < 10; i++) {
+        nock(API_BASE_URL)
+          .post('/usage')
+          .times(4)
+          .reply(500, { error: `Failure ${i + 1}` })
+
+        await sender.resendSpooled()
+      }
+
+      // 通知が送信されたことを確認
+      expect(mockNotifier.sendErrorNotification).toHaveBeenCalledTimes(1)
+
+      // 通知内容を確認
+      const notificationCall = vi.mocked(mockNotifier.sendErrorNotification).mock.calls[0][0]
+      expect(notificationCall.title).toBe('Spool retry limit exceeded')
+      expect(notificationCall.filePath).toContain('data/failed/failed_')
+      expect(notificationCall.lastError).toContain('Request failed with status code 500')
+      expect(notificationCall.firstAttempt).toBeDefined()
+      expect(notificationCall.retryCount).toBe(10)
+    }, 60000) // タイムアウト60秒
+
+    it('should continue processing even if notification fails', async () => {
+      // モックNotifierを通知失敗に変更
+      vi.mocked(mockNotifier.sendErrorNotification).mockRejectedValue(
+        new Error('Notification service unavailable'),
+      )
+
+      // Step 1: スプール保存
+      nock(API_BASE_URL).post('/usage').times(4).reply(500, { error: 'Initial failure' })
+
+      await sender.send(testRecords)
+
+      // Step 2: 10回再送失敗を繰り返す
+      for (let i = 0; i < 10; i++) {
+        nock(API_BASE_URL)
+          .post('/usage')
+          .times(4)
+          .reply(500, { error: `Failure ${i + 1}` })
+
+        await sender.resendSpooled()
+      }
+
+      // 通知送信は試行されている
+      expect(mockNotifier.sendErrorNotification).toHaveBeenCalledTimes(1)
+
+      // 通知失敗でも処理は継続され、failedファイルは作成されている
+      const failedExists = await failedFilesExist()
+      expect(failedExists).toBe(true)
     }, 60000) // タイムアウト60秒
   })
 
