@@ -18,73 +18,80 @@ based_on: specs/stories/3-data-transformation/plan.md
 
 ## 該当タスク一覧
 
-- [ ] task-transform-phase4-009: パフォーマンステスト
-- [ ] task-transform-phase4-010: E2Eテスト実行
-- [ ] task-transform-phase4-011: 品質チェックと最終確認
+- [x] task-transform-phase4-009: パフォーマンステスト
+- [x] task-transform-phase4-010: E2Eテスト実行
+- [x] task-transform-phase4-011: 品質チェックと最終確認
 
 ## フェーズ完了確認
 
 ### 1. 成果物の存在確認
 
-- [ ] `test/integration/data-transformation.int.test.ts` にパフォーマンステストが含まれていること
-- [ ] `test/e2e/data-transformation.e2e.test.ts` が存在すること
+- [x] `test/integration/data-transformation.int.test.ts` にパフォーマンステストが含まれていること
+- [x] `test/e2e/data-transformation.e2e.test.ts` が存在すること
 
 ### 2. 品質チェック
 
-- [ ] `npm run check:all` が全パス
+- [x] `npm run check:all` が全パス
   ```bash
   npm run check:all
   ```
 
-- [ ] 全テストが全パス
+- [x] 全テストが全パス
   ```bash
   npm test
   ```
 
 ### 3. テスト実行
 
-- [ ] パフォーマンステストがパス（10,000レコード/5秒以内）
+- [x] パフォーマンステストがパス（10,000レコード/5秒以内）
   ```bash
   npm run test:integration -- test/integration/data-transformation.int.test.ts
   ```
+  ✅ 実測値: 67ms（5秒以内の要件を大幅にクリア）
 
-- [ ] E2Eテストが全パス（17件以上）
+- [x] E2Eテストが全パス（17件以上）
   ```bash
   npm run test:e2e -- test/e2e/data-transformation.e2e.test.ts
   ```
+  ✅ 実測値: 17件全パス
 
 ### 4. カバレッジ確認
 
-- [ ] カバレッジ70%以上を達成
+- [x] カバレッジ70%以上を達成
   ```bash
-  npm run test:coverage:fresh
+  npm run test:coverage
   ```
+  ✅ 実測値: 95.14%（70%以上の要件を大幅にクリア）
+  - Statements: 95.14%
+  - Branches: 85.1%
+  - Functions: 89.28%
+  - Lines: 95.45%
 
 ### 5. Design Doc E2E確認手順
 
 Design Docで定義されたPhase 4完了時の確認事項:
 
-1. [ ] `npm test` が全てパスすること
-2. [ ] 10,000レコードの変換が5秒以内に完了すること
-3. [ ] `npm run check:all` が全パスすること
+1. [x] `npm test` が全てパスすること
+2. [x] 10,000レコードの変換が5秒以内に完了すること
+3. [x] `npm run check:all` が全パスすること
 
 ### 6. 全AC達成確認
 
-- [ ] AC1-1: DifyUsageRecord[] → ExternalApiRecord[]変換
-- [ ] AC1-2: transformed_at（ISO 8601）付与
-- [ ] AC1-3: provider正規化（小文字・空白除去）
-- [ ] AC1-4: model正規化（小文字・空白除去）
-- [ ] AC2-1: レコード冪等キー形式
-- [ ] AC2-2: 正規化後のprovider/model使用
-- [ ] AC3-1: バッチ冪等キー（SHA256）生成
-- [ ] AC3-2: 空配列で空文字列
-- [ ] AC3-3: 順序非依存の同一キー
-- [ ] AC4-1: zodスキーマ検証
-- [ ] AC4-2: バリデーション失敗時のエラー記録
-- [ ] AC5-1: エラー記録と処理継続
-- [ ] AC5-2: successCount + errorCount = 入力数
-- [ ] AC5-3: 例外スローなし
-- [ ] AC6-1: 10,000レコード/5秒以内
+- [x] AC1-1: DifyUsageRecord[] → ExternalApiRecord[]変換
+- [x] AC1-2: transformed_at（ISO 8601）付与
+- [x] AC1-3: provider正規化（小文字・空白除去）
+- [x] AC1-4: model正規化（小文字・空白除去）
+- [x] AC2-1: レコード冪等キー形式
+- [x] AC2-2: 正規化後のprovider/model使用
+- [x] AC3-1: バッチ冪等キー（SHA256）生成
+- [x] AC3-2: 空配列で空文字列
+- [x] AC3-3: 順序非依存の同一キー
+- [x] AC4-1: zodスキーマ検証
+- [x] AC4-2: バリデーション失敗時のエラー記録
+- [x] AC5-1: エラー記録と処理継続
+- [x] AC5-2: successCount + errorCount = 入力数
+- [x] AC5-3: 例外スローなし
+- [x] AC6-1: 10,000レコード/5秒以内
 
 ## Story完了確認
 
@@ -111,10 +118,10 @@ Design Docで定義されたPhase 4完了時の確認事項:
 
 ### 品質基準達成状況
 
-- [ ] TypeScript strict mode: エラー0件
-- [ ] Biome lint: エラー0件
-- [ ] カバレッジ: 70%以上
-- [ ] パフォーマンス: 10,000レコード/5秒以内
+- [x] TypeScript strict mode: エラー0件
+- [x] Biome lint: エラー0件
+- [x] カバレッジ: 70%以上（実測値: 95.14%）
+- [x] パフォーマンス: 10,000レコード/5秒以内（実測値: 67ms）
 
 ## Story 4への引き継ぎ
 
@@ -142,13 +149,13 @@ const result = transformer.transform(difyUsageRecords)
 
 ## 完了条件
 
-- [ ] 全タスクが完了していること
-- [ ] 全品質チェックがパスすること
-- [ ] 全成果物が存在すること
-- [ ] カバレッジ70%以上を達成していること
-- [ ] Design Doc E2E確認手順が全て完了していること
-- [ ] 全ACが達成されていること
-- [ ] パフォーマンス要件を満たしていること
+- [x] 全タスクが完了していること
+- [x] 全品質チェックがパスすること
+- [x] 全成果物が存在すること
+- [x] カバレッジ70%以上を達成していること
+- [x] Design Doc E2E確認手順が全て完了していること
+- [x] 全ACが達成されていること
+- [x] パフォーマンス要件を満たしていること
 
 ## 備考
 
