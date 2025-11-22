@@ -199,14 +199,14 @@ kill -SIGTERM <PID>
 
 ### Task 2-1: MetricsCollector実装と単体テスト作成
 
-- [ ] `src/monitoring/metrics-collector.ts` 新規作成
-- [ ] MetricsCollector インターフェース実装
-- [ ] startCollection() / stopCollection() メソッド実装
-- [ ] executionId生成（exec-${timestamp}-${hex}形式）
-- [ ] 全record*メソッド実装（7種類）
-- [ ] getMetrics() / getExecutionDuration() / getExecutionId() 実装
-- [ ] 単体テスト作成完了（`src/monitoring/__tests__/metrics-collector.test.ts`）
-- [ ] テスト実行・パス確認
+- [x] `src/monitoring/metrics-collector.ts` 新規作成
+- [x] MetricsCollector インターフェース実装
+- [x] startCollection() / stopCollection() メソッド実装
+- [x] executionId生成（exec-${timestamp}-${hex}形式）
+- [x] 全record*メソッド実装（7種類）
+- [x] getMetrics() / getExecutionDuration() / getExecutionId() 実装
+- [x] 単体テスト作成完了（`src/monitoring/__tests__/metrics-collector.test.ts`）
+- [x] テスト実行・パス確認
 
 **完了条件**:
 - AC-MC-1, AC-MC-3, AC-MC-4 対応
@@ -214,14 +214,14 @@ kill -SIGTERM <PID>
 
 ### Task 2-2: MetricsReporter実装と単体テスト作成
 
-- [ ] `src/monitoring/metrics-reporter.ts` 新規作成
-- [ ] MetricsReporter インターフェース実装
-- [ ] createMetricsReporter ファクトリ関数実装
-- [ ] report() メソッド実装
-- [ ] recordsPerSecond計算（ゼロ除算対策含む）
-- [ ] JSON Lines形式のログ出力
-- [ ] 単体テスト作成完了（`src/monitoring/__tests__/metrics-reporter.test.ts`）
-- [ ] テスト実行・パス確認
+- [x] `src/monitoring/metrics-reporter.ts` 新規作成
+- [x] MetricsReporter インターフェース実装
+- [x] createMetricsReporter ファクトリ関数実装
+- [x] report() メソッド実装
+- [x] recordsPerSecond計算（ゼロ除算対策含む）
+- [x] JSON Lines形式のログ出力
+- [x] 単体テスト作成完了（`src/monitoring/__tests__/metrics-reporter.test.ts`）
+- [x] テスト実行・パス確認
 
 **完了条件**:
 - AC-MC-2, AC-MC-5, AC-LOG-1, AC-LOG-2 対応
@@ -229,12 +229,12 @@ kill -SIGTERM <PID>
 
 ### Task 2-3: index.ts メトリクス統合
 
-- [ ] `src/index.ts` の onTick コールバック拡張
-- [ ] MetricsCollector初期化
-- [ ] MetricsReporter初期化
-- [ ] startCollection() → 各record*() → stopCollection() → report() フロー実装
-- [ ] 既存fetch/transform/send処理との統合
-- [ ] 既存テストの更新と実行確認
+- [x] `src/index.ts` の onTick コールバック拡張
+- [x] MetricsCollector初期化
+- [x] MetricsReporter初期化
+- [x] startCollection() → 各record*() → stopCollection() → report() フロー実装
+- [x] 既存fetch/transform/send処理との統合
+- [x] 既存テストの更新と実行確認
 
 **完了条件**:
 - 統合ポイント3（Scheduler onTick）の統合完了
@@ -242,12 +242,12 @@ kill -SIGTERM <PID>
 
 ### Task 2-4: メトリクス統合テスト作成・実行
 
-- [ ] `src/monitoring/__tests__/integration/metrics.int.test.ts` の全テスト実装
-- [ ] MetricsCollector全機能検証
-- [ ] MetricsReporter全機能検証
-- [ ] Collector + Reporter 連携検証（34テストケース）
-- [ ] AC-PERF-2（オーバーヘッド1%以下）対応
-- [ ] 全統合テスト実行・パス確認
+- [x] `src/monitoring/__tests__/integration/metrics.int.test.ts` の全テスト実装
+- [x] MetricsCollector全機能検証
+- [x] MetricsReporter全機能検証
+- [x] Collector + Reporter 連携検証（34テストケース）
+- [x] AC-PERF-2（オーバーヘッド1%以下）対応
+- [x] 全統合テスト実行・パス確認
 
 **完了条件**:
 - 統合テスト 34件全てパス
