@@ -434,4 +434,172 @@ describe('ExternalApiSender', () => {
       expect(firstKey).not.toBe(secondKey)
     })
   })
+
+  describe('resendFailedFile()', () => {
+    const testRecords: ExternalApiRecord[] = [
+      {
+        date: '2025-01-01',
+        app_id: 'app-1',
+        provider: 'openai',
+        model: 'gpt-4',
+        input_tokens: 100,
+        output_tokens: 50,
+        total_tokens: 150,
+        idempotency_key: 'key-1',
+        transformed_at: '2025-01-01T00:00:00Z',
+      },
+    ]
+
+    it('should resend records successfully (200 response)', async () => {
+      // Arrange
+      const mockResponse = { status: 200, data: { success: true } }
+      ;(mockHttpClient.post as Mock).mockResolvedValue(mockResponse)
+
+      // Act
+      await sender.resendFailedFile(testRecords)
+
+      // Assert
+      expect(mockHttpClient.post).toHaveBeenCalledWith(
+        '/usage',
+        expect.objectContaining({
+          records: testRecords,
+          batchIdempotencyKey: expect.any(String),
+        }),
+      )
+      expect(mockLogger.info).toHaveBeenCalledWith('CLI resend success', {
+        recordCount: 1,
+      })
+      // send()との違い: スプール保存が呼ばれない
+      expect(mockSpoolManager.saveToSpool).not.toHaveBeenCalled()
+    })
+
+    it('should resend records successfully (201 response)', async () => {
+      // Arrange
+      const mockResponse = { status: 201, data: { success: true } }
+      ;(mockHttpClient.post as Mock).mockResolvedValue(mockResponse)
+
+      // Act
+      await sender.resendFailedFile(testRecords)
+
+      // Assert
+      expect(mockHttpClient.post).toHaveBeenCalled()
+      expect(mockLogger.info).toHaveBeenCalledWith('CLI resend success', {
+        recordCount: 1,
+      })
+    })
+
+    it('should handle 409 Conflict as success (duplicate detected)', async () => {
+      // Arrange
+      const mockResponse = { status: 409, data: { message: 'duplicate' } }
+      ;(mockHttpClient.post as Mock).mockResolvedValue(mockResponse)
+
+      // Act
+      await sender.resendFailedFile(testRecords)
+
+      // Assert
+      expect(mockHttpClient.post).toHaveBeenCalled()
+      expect(mockLogger.warn).toHaveBeenCalledWith('CLI resend: duplicate detected', {
+        batchKey: expect.any(String),
+      })
+      // 成功扱いなので例外をスローしない
+      // スプール保存も呼ばれない
+      expect(mockSpoolManager.saveToSpool).not.toHaveBeenCalled()
+    })
+
+    it('should handle 409 error response as success', async () => {
+      // Arrange
+      const axiosError = new AxiosError('Conflict')
+      axiosError.response = { status: 409 } as never
+      ;(mockHttpClient.post as Mock).mockRejectedValue(axiosError)
+
+      // Act
+      await sender.resendFailedFile(testRecords)
+
+      // Assert
+      expect(mockLogger.warn).toHaveBeenCalledWith('CLI resend: duplicate detected', {
+        batchKey: expect.any(String),
+      })
+    })
+
+    it('should throw error on 500 response', async () => {
+      // Arrange
+      const axiosError = new AxiosError('Internal Server Error')
+      axiosError.response = { status: 500 } as never
+      ;(mockHttpClient.post as Mock).mockRejectedValue(axiosError)
+
+      // Act & Assert
+      await expect(sender.resendFailedFile(testRecords)).rejects.toThrow('Internal Server Error')
+      // send()との違い: スプール保存が呼ばれない
+      expect(mockSpoolManager.saveToSpool).not.toHaveBeenCalled()
+    })
+
+    it('should throw error on network error', async () => {
+      // Arrange
+      const networkError = new AxiosError('Network Error')
+      ;(mockHttpClient.post as Mock).mockRejectedValue(networkError)
+
+      // Act & Assert
+      await expect(sender.resendFailedFile(testRecords)).rejects.toThrow('Network Error')
+      // send()との違い: スプール保存が呼ばれない
+      expect(mockSpoolManager.saveToSpool).not.toHaveBeenCalled()
+    })
+
+    it('should not update metrics on success (unlike send())', async () => {
+      // Arrange
+      const mockResponse = { status: 200, data: { success: true } }
+      ;(mockHttpClient.post as Mock).mockResolvedValue(mockResponse)
+
+      // Act
+      await sender.resendFailedFile(testRecords)
+
+      // Assert
+      // resendFailedFile()はメトリクスを更新しない
+      expect(mockMetrics.sendSuccess).toBe(0)
+    })
+
+    it('should calculate batch key from records', async () => {
+      // Arrange
+      const multiRecords: ExternalApiRecord[] = [
+        {
+          date: '2025-01-01',
+          app_id: 'app-1',
+          provider: 'openai',
+          model: 'gpt-4',
+          input_tokens: 100,
+          output_tokens: 50,
+          total_tokens: 150,
+          idempotency_key: 'key-1',
+          transformed_at: '2025-01-01T00:00:00Z',
+        },
+        {
+          date: '2025-01-02',
+          app_id: 'app-2',
+          provider: 'anthropic',
+          model: 'claude-3',
+          input_tokens: 200,
+          output_tokens: 100,
+          total_tokens: 300,
+          idempotency_key: 'key-2',
+          transformed_at: '2025-01-02T00:00:00Z',
+        },
+      ]
+      const mockResponse = { status: 200, data: { success: true } }
+      ;(mockHttpClient.post as Mock).mockResolvedValue(mockResponse)
+
+      // Act
+      await sender.resendFailedFile(multiRecords)
+
+      // Assert
+      expect(mockHttpClient.post).toHaveBeenCalledWith(
+        '/usage',
+        expect.objectContaining({
+          batchIdempotencyKey: expect.any(String),
+          records: multiRecords,
+        }),
+      )
+      expect(mockLogger.info).toHaveBeenCalledWith('CLI resend success', {
+        recordCount: 2,
+      })
+    })
+  })
 })

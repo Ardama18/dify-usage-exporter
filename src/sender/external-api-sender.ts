@@ -99,6 +99,45 @@ export class ExternalApiSender implements ISender {
   }
 
   /**
+   * CLI手動再送用メソッド
+   *
+   * data/failed/内のファイルを外部APIへ送信する。
+   * 自動リトライ後のスプール保存ロジックを含まない純粋な送信処理。
+   *
+   * @param records - 送信するレコード配列
+   * @throws {Error} - 送信失敗時（リトライは行わない、またはaxios-retryのみ）
+   */
+  async resendFailedFile(records: ExternalApiRecord[]): Promise<void> {
+    const batchKey = this.calculateBatchKey(records)
+
+    try {
+      const response = await this.httpClient.post('/usage', {
+        batchIdempotencyKey: batchKey,
+        records,
+      })
+
+      if (response.status === 200 || response.status === 201) {
+        this.logger.info('CLI resend success', { recordCount: records.length })
+        return
+      }
+
+      if (response.status === 409) {
+        this.logger.warn('CLI resend: duplicate detected', { batchKey })
+        return
+      }
+    } catch (error) {
+      // 409エラー: 重複検出、成功扱い
+      if (error instanceof AxiosError && error.response?.status === 409) {
+        this.logger.warn('CLI resend: duplicate detected', { batchKey })
+        return
+      }
+
+      // その他のエラー: 再スロー
+      throw error
+    }
+  }
+
+  /**
    * スプールファイルを再送
    *
    * data/spool/ディレクトリ内のファイルをfirstAttempt昇順で読み込み、
