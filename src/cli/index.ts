@@ -6,19 +6,17 @@
 
 import { Command } from 'commander'
 import { bootstrapCli } from './bootstrap.js'
+import { createListCommand } from './commands/list.js'
 
 async function main(): Promise<void> {
   const deps = bootstrapCli()
   const program = new Command()
   program.name('dify-usage-exporter').description('Dify usage data exporter CLI').version('1.0.0')
 
-  // コマンド登録は後続タスクで追加
+  // コマンド登録
+  program.addCommand(createListCommand(deps))
   // program.addCommand(createResendCommand(deps))
   // program.addCommand(createWatermarkCommand(deps))
-  // program.addCommand(createListCommand(deps))
-
-  // 依存関係を変数として保持（lintエラー回避、後続タスクで使用）
-  void deps
 
   await program.parseAsync()
 }

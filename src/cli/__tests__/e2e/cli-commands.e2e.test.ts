@@ -104,7 +104,9 @@ describe('CLI E2Eテスト', () => {
     // @category: e2e
     // @dependency: full-system
     // @complexity: high
-    it.todo('E2E: npm run cli -- watermark reset --date <ISO8601> でウォーターマークがリセットされる')
+    it.todo(
+      'E2E: npm run cli -- watermark reset --date <ISO8601> でウォーターマークがリセットされる',
+    )
 
     // 検証: 確認プロンプトの動作
     // @category: e2e
