@@ -133,4 +133,98 @@ export class SpoolManager {
 
     this.logger.info('Moved to failed', { filePath })
   }
+
+  /**
+   * 失敗ファイル一覧を取得
+   *
+   * @returns firstAttempt昇順でソートされた失敗ファイル配列
+   */
+  async listFailedFiles(): Promise<SpoolFile[]> {
+    try {
+      await fs.access(this.failedDir)
+    } catch {
+      // ディレクトリが存在しない場合は空配列を返す
+      return []
+    }
+
+    const files = await fs.readdir(this.failedDir)
+    const failedFiles: SpoolFile[] = []
+
+    for (const file of files) {
+      if (!file.startsWith('failed_')) continue
+
+      const filePath = `${this.failedDir}/${file}`
+      try {
+        const content = await fs.readFile(filePath, 'utf-8')
+        const data: unknown = JSON.parse(content)
+
+        // zodバリデーション
+        const parseResult = spoolFileSchema.safeParse(data)
+        if (!parseResult.success) {
+          this.logger.error('Invalid failed file schema', {
+            filePath,
+            error: parseResult.error.format(),
+          })
+          continue
+        }
+
+        failedFiles.push(parseResult.data)
+      } catch (error) {
+        this.logger.error('Failed to read failed file', { filePath, error })
+      }
+    }
+
+    // firstAttempt昇順でソート（古いデータ優先）
+    return failedFiles.sort(
+      (a, b) => new Date(a.firstAttempt).getTime() - new Date(b.firstAttempt).getTime(),
+    )
+  }
+
+  /**
+   * 指定した失敗ファイルを削除
+   *
+   * @param filename - 削除するファイル名
+   */
+  async deleteFailedFile(filename: string): Promise<void> {
+    const filePath = `${this.failedDir}/${filename}`
+    await fs.unlink(filePath)
+    this.logger.info('Failed file deleted', { filePath })
+  }
+
+  /**
+   * 指定したファイル名から失敗ファイルを取得
+   *
+   * @param filename - 取得するファイル名
+   * @returns SpoolFile、存在しないかエラーの場合はnull
+   */
+  async getFailedFile(filename: string): Promise<SpoolFile | null> {
+    const filePath = `${this.failedDir}/${filename}`
+
+    try {
+      await fs.access(filePath)
+    } catch {
+      // ファイルが存在しない場合はnull
+      return null
+    }
+
+    try {
+      const content = await fs.readFile(filePath, 'utf-8')
+      const data: unknown = JSON.parse(content)
+
+      // zodバリデーション
+      const parseResult = spoolFileSchema.safeParse(data)
+      if (!parseResult.success) {
+        this.logger.error('Invalid failed file schema', {
+          filePath,
+          error: parseResult.error.format(),
+        })
+        return null
+      }
+
+      return parseResult.data
+    } catch (error) {
+      this.logger.error('Failed to read failed file', { filePath, error })
+      return null
+    }
+  }
 }

@@ -197,4 +197,213 @@ describe('SpoolManager', { concurrent: false }, () => {
       expect(failedFiles[0]).toMatch(/^failed_.*_failed-test\.json$/)
     })
   })
+
+  describe('listFailedFiles', () => {
+    it('should return empty array when failed directory is empty', async () => {
+      const failedFiles = await spoolManager.listFailedFiles()
+      expect(failedFiles).toHaveLength(0)
+    })
+
+    it('should return empty array when failed directory does not exist', async () => {
+      // ディレクトリを削除
+      await fs.rm(testFailedDir, { recursive: true, force: true })
+
+      const failedFiles = await spoolManager.listFailedFiles()
+      expect(failedFiles).toHaveLength(0)
+    })
+
+    it('should list failed files sorted by firstAttempt', async () => {
+      const spoolFile1: SpoolFile = {
+        batchIdempotencyKey: 'failed-1',
+        records: [],
+        firstAttempt: '2025-01-21T10:00:00Z',
+        retryCount: 10,
+        lastError: 'Error 1',
+      }
+
+      const spoolFile2: SpoolFile = {
+        batchIdempotencyKey: 'failed-2',
+        records: [],
+        firstAttempt: '2025-01-21T09:00:00Z',
+        retryCount: 10,
+        lastError: 'Error 2',
+      }
+
+      // failed ディレクトリに直接ファイルを作成
+      await fs.writeFile(
+        `${testFailedDir}/failed_20250121T100000Z_failed-1.json`,
+        JSON.stringify(spoolFile1),
+        { mode: 0o600 },
+      )
+      await fs.writeFile(
+        `${testFailedDir}/failed_20250121T090000Z_failed-2.json`,
+        JSON.stringify(spoolFile2),
+        { mode: 0o600 },
+      )
+
+      const failedFiles = await spoolManager.listFailedFiles()
+
+      expect(failedFiles).toHaveLength(2)
+      expect(failedFiles[0].batchIdempotencyKey).toBe('failed-2') // 古い方が先
+      expect(failedFiles[1].batchIdempotencyKey).toBe('failed-1')
+    })
+
+    it('should skip invalid JSON files', async () => {
+      // 無効なJSONファイル
+      await fs.writeFile(`${testFailedDir}/failed_invalid.json`, 'invalid json', { mode: 0o600 })
+
+      // 有効なファイル
+      const validFile: SpoolFile = {
+        batchIdempotencyKey: 'valid',
+        records: [],
+        firstAttempt: '2025-01-21T10:00:00Z',
+        retryCount: 10,
+        lastError: 'Error',
+      }
+      await fs.writeFile(`${testFailedDir}/failed_valid.json`, JSON.stringify(validFile), {
+        mode: 0o600,
+      })
+
+      const failedFiles = await spoolManager.listFailedFiles()
+
+      expect(failedFiles).toHaveLength(1)
+      expect(failedFiles[0].batchIdempotencyKey).toBe('valid')
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'Failed to read failed file',
+        expect.objectContaining({
+          filePath: `${testFailedDir}/failed_invalid.json`,
+        }),
+      )
+    })
+
+    it('should skip files that fail zod validation', async () => {
+      // zodバリデーション失敗ファイル
+      const invalidSchema = {
+        batchIdempotencyKey: 'invalid-schema',
+        records: 'not-an-array', // 配列ではない
+        firstAttempt: '2025-01-21T10:00:00Z',
+        retryCount: 10,
+        lastError: 'Error',
+      }
+      await fs.writeFile(
+        `${testFailedDir}/failed_invalid-schema.json`,
+        JSON.stringify(invalidSchema),
+        { mode: 0o600 },
+      )
+
+      const failedFiles = await spoolManager.listFailedFiles()
+
+      expect(failedFiles).toHaveLength(0)
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'Invalid failed file schema',
+        expect.objectContaining({
+          filePath: `${testFailedDir}/failed_invalid-schema.json`,
+        }),
+      )
+    })
+  })
+
+  describe('deleteFailedFile', () => {
+    it('should delete failed file by filename', async () => {
+      const spoolFile: SpoolFile = {
+        batchIdempotencyKey: 'delete-failed-test',
+        records: [],
+        firstAttempt: new Date().toISOString(),
+        retryCount: 10,
+        lastError: 'Error',
+      }
+
+      const filename = 'failed_20250121T100000Z_delete-failed-test.json'
+      await fs.writeFile(`${testFailedDir}/${filename}`, JSON.stringify(spoolFile), { mode: 0o600 })
+
+      await spoolManager.deleteFailedFile(filename)
+
+      const files = await fs.readdir(testFailedDir)
+      expect(files).toHaveLength(0)
+      expect(mockLogger.info).toHaveBeenCalledWith('Failed file deleted', {
+        filePath: `${testFailedDir}/${filename}`,
+      })
+    })
+
+    it('should throw error when file does not exist', async () => {
+      await expect(spoolManager.deleteFailedFile('nonexistent.json')).rejects.toThrow('ENOENT')
+    })
+  })
+
+  describe('getFailedFile', () => {
+    it('should get failed file by filename', async () => {
+      const spoolFile: SpoolFile = {
+        batchIdempotencyKey: 'get-failed-test',
+        records: [
+          {
+            date: '2025-01-21',
+            app_id: 'app-1',
+            provider: 'openai',
+            model: 'gpt-4',
+            total_tokens: 100,
+            input_tokens: 80,
+            output_tokens: 20,
+            idempotency_key: 'key-1',
+            transformed_at: new Date().toISOString(),
+          },
+        ],
+        firstAttempt: '2025-01-21T10:00:00Z',
+        retryCount: 10,
+        lastError: 'Error',
+      }
+
+      const filename = 'failed_20250121T100000Z_get-failed-test.json'
+      await fs.writeFile(`${testFailedDir}/${filename}`, JSON.stringify(spoolFile), { mode: 0o600 })
+
+      const result = await spoolManager.getFailedFile(filename)
+
+      expect(result).not.toBeNull()
+      expect(result?.batchIdempotencyKey).toBe('get-failed-test')
+      expect(result?.records).toHaveLength(1)
+    })
+
+    it('should return null when file does not exist', async () => {
+      const result = await spoolManager.getFailedFile('nonexistent.json')
+      expect(result).toBeNull()
+    })
+
+    it('should return null for invalid JSON', async () => {
+      const filename = 'failed_invalid.json'
+      await fs.writeFile(`${testFailedDir}/${filename}`, 'invalid json', { mode: 0o600 })
+
+      const result = await spoolManager.getFailedFile(filename)
+
+      expect(result).toBeNull()
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'Failed to read failed file',
+        expect.objectContaining({
+          filePath: `${testFailedDir}/${filename}`,
+        }),
+      )
+    })
+
+    it('should return null for invalid schema', async () => {
+      const invalidSchema = {
+        batchIdempotencyKey: 'invalid',
+        records: 'not-an-array',
+        firstAttempt: '2025-01-21T10:00:00Z',
+        retryCount: 10,
+        lastError: 'Error',
+      }
+      const filename = 'failed_invalid-schema.json'
+      await fs.writeFile(`${testFailedDir}/${filename}`, JSON.stringify(invalidSchema), {
+        mode: 0o600,
+      })
+
+      const result = await spoolManager.getFailedFile(filename)
+
+      expect(result).toBeNull()
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        'Invalid failed file schema',
+        expect.objectContaining({
+          filePath: `${testFailedDir}/${filename}`,
+        }),
+      )
+    })
+  })
 })
