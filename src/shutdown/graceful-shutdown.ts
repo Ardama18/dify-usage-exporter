@@ -5,6 +5,9 @@ export interface GracefulShutdownOptions {
   timeoutMs: number
   scheduler: Scheduler
   logger: Logger
+  healthCheckServer?: {
+    stop: () => Promise<void>
+  }
 }
 
 function sleep(ms: number): Promise<void> {
@@ -12,15 +15,32 @@ function sleep(ms: number): Promise<void> {
 }
 
 export function setupGracefulShutdown(options: GracefulShutdownOptions): void {
-  const { timeoutMs, scheduler, logger } = options
+  const { timeoutMs, scheduler, logger, healthCheckServer } = options
 
   const shutdown = async (signal: string) => {
     logger.info('シャットダウンシグナル受信', { signal })
 
-    // スケジューラを停止
+    // シャットダウン順序:
+    // 1. HealthCheckServerを停止（新規リクエストの受付を停止）
+    // 2. スケジューラを停止（新規タスクの開始を停止）
+    // 3. 実行中のタスクが完了するまで待機
+
+    // 1. HealthCheckServerを停止（最初に実行）
+    if (healthCheckServer) {
+      try {
+        await healthCheckServer.stop()
+      } catch (error) {
+        logger.error('HealthCheckServer停止エラー', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+        // エラーでも処理を継続
+      }
+    }
+
+    // 2. スケジューラを停止
     scheduler.stop()
 
-    // 実行中のタスクが完了するまで待機
+    // 3. 実行中のタスクが完了するまで待機
     const startTime = Date.now()
     while (scheduler.isRunning()) {
       if (Date.now() - startTime > timeoutMs) {
