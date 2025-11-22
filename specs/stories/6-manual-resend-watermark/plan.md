@@ -234,21 +234,21 @@ npm run cli -- resend --all
 ### Task 3-1: promptユーティリティ実装
 
 **完了条件**:
-- [ ] prompt.ts実装完了（src/cli/utils/prompt.ts）
+- [x] prompt.ts実装完了（src/cli/utils/prompt.ts）
   - confirmPrompt()関数実装
   - Node.js readline/promisesを使用
   - y入力でtrue、それ以外でfalse
-- [ ] 単体テスト作成・実行完了
+- [x] 単体テスト作成・実行完了
   - テストファイル: src/cli/__tests__/utils/prompt.test.ts
   - 対象: y/n入力、空入力、その他入力
-- [ ] 全テストパス
+- [x] 全テストパス
 
 **ACトレーサビリティ**: AC-WM-3, AC-WM-4, AC-WM-5
 
 ### Task 3-2: watermarkコマンド実装と統合テスト作成
 
 **完了条件**:
-- [ ] watermark.ts実装完了（src/cli/commands/watermark.ts）
+- [x] watermark.ts実装完了（src/cli/commands/watermark.ts）
   - createWatermarkCommand()関数実装
   - showサブコマンド: load()で現在値表示
   - resetサブコマンド:
@@ -258,12 +258,12 @@ npm run cli -- resend --all
     - 確認後update()で更新
   - 日時バリデーション（ISO 8601形式チェック）
   - 未設定時の「未設定」メッセージ
-- [ ] 統合テスト作成・実行完了
+- [x] 統合テスト作成・実行完了
   - テストファイル: src/cli/__tests__/integration/watermark-command.int.test.ts
-  - it.todoを全て実装（32件）
-- [ ] 単体テスト作成・実行完了（コマンドロジック）
+  - 全て実装（29件）
+- [x] 単体テスト作成・実行完了（コマンドロジック）
   - テストファイル: src/cli/__tests__/commands/watermark.test.ts
-- [ ] 全テストパス
+- [x] 全テストパス
 
 **ACトレーサビリティ**: AC-WM-1, AC-WM-2, AC-WM-3, AC-WM-4, AC-WM-5, AC-WM-6
 
