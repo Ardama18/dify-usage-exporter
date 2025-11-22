@@ -1,5 +1,7 @@
 import { loadConfig } from './config/env-config.js'
 import { createLogger } from './logger/winston-logger.js'
+import { createMetricsCollector } from './monitoring/metrics-collector.js'
+import { createMetricsReporter } from './monitoring/metrics-reporter.js'
 import { createScheduler } from './scheduler/cron-scheduler.js'
 import { setupGracefulShutdown } from './shutdown/graceful-shutdown.js'
 
@@ -14,20 +16,38 @@ export async function main(): Promise<void> {
     logLevel: config.LOG_LEVEL,
   })
 
-  // 3. スケジューラを作成
+  // 3. MetricsReporterを作成
+  const reporter = createMetricsReporter({ logger })
+
+  // 4. スケジューラを作成
   const scheduler = createScheduler(config, logger, async () => {
-    // 後続ストーリーで実装: データ取得 → 変換 → 送信
-    logger.info('エクスポートジョブ実行（プレースホルダー）')
+    // MetricsCollectorを作成・開始
+    const collector = createMetricsCollector()
+    const executionId = collector.startCollection()
+    logger.info('ジョブ実行開始', { executionId })
+
+    try {
+      // 後続ストーリーで実装: データ取得 → 変換 → 送信
+      logger.info('エクスポートジョブ実行（プレースホルダー）')
+    } finally {
+      // メトリクス収集停止とレポート出力
+      collector.stopCollection()
+      reporter.report(
+        collector.getExecutionId(),
+        collector.getMetrics(),
+        collector.getExecutionDuration(),
+      )
+    }
   })
 
-  // 4. Graceful Shutdownを設定
+  // 5. Graceful Shutdownを設定
   setupGracefulShutdown({
     timeoutMs: config.GRACEFUL_SHUTDOWN_TIMEOUT * 1000,
     scheduler,
     logger,
   })
 
-  // 5. スケジューラを起動
+  // 6. スケジューラを起動
   scheduler.start()
 
   // 設定ダンプ（シークレットはマスク）
