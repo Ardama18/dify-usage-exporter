@@ -31,6 +31,13 @@ export const envSchema = z
     MAX_RETRIES: z.coerce.number().min(0, 'Retries must be non-negative').default(3),
     MAX_SPOOL_RETRIES: z.coerce.number().min(0, 'Spool retries must be non-negative').default(10),
     BATCH_SIZE: z.coerce.number().min(1, 'Batch size must be at least 1').default(100),
+
+    // Healthcheck関連（Story 5）
+    HEALTHCHECK_PORT: z.coerce.number().default(8080),
+    HEALTHCHECK_ENABLED: z
+      .string()
+      .default('true')
+      .transform((val) => val.toLowerCase() === 'true'),
   })
   .refine((data) => data.EXTERNAL_API_URL.startsWith('https://'), {
     message: 'EXTERNAL_API_URL must use HTTPS protocol',
