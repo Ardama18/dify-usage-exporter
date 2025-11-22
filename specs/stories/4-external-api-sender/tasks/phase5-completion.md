@@ -23,9 +23,9 @@ based_on: specs/stories/4-external-api-sender/plan.md
 ## plan.mdチェックボックス確認
 
 ### フェーズ完了条件
-- [ ] 実装完了: 全タスクが完了している
-- [ ] 品質完了: 全テストがパス、TypeScriptビルド成功、Biomeチェック成功
-- [ ] 統合完了: E2Eフロー全体が正しく動作する
+- [x] 実装完了: 全タスクが完了している
+- [x] 品質完了: 全テストがパス、TypeScriptビルド成功、Biomeチェック成功
+- [x] 統合完了: E2Eフロー全体が正しく動作する
 
 ## Story 4 最終確認
 - **成果物**:

@@ -145,7 +145,7 @@ based_on: specs/stories/2-dify-usage-fetcher/plan.md
   ```
 - [x] DifyUsageFetcherが正常に動作する
 - [x] 全コンポーネントが連携して動作する
-- [ ] Design DocのE2E確認手順が成功
+- [x] Design DocのE2E確認手順が成功
 
 ## 関連する受入条件（AC）
 - **AC-2-1**: Fetcherが起動したとき、システムはDify Console API `/console/api/usage` を呼び出すこと
