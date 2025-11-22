@@ -176,22 +176,22 @@ npm run cli -- unknown-command  # エラー表示確認
 ### Task 2-1: ExternalApiSender拡張
 
 **完了条件**:
-- [ ] resendFailedFile()メソッド実装完了（src/sender/external-api-sender.ts）
+- [x] resendFailedFile()メソッド実装完了（src/sender/external-api-sender.ts）
   - ExternalApiRecord[]を受け取り、外部APIへ送信
   - スプール保存ロジックを含まない（send()との明確な分離）
   - 200/201/409レスポンスを成功扱い
   - batchIdempotencyKeyの計算（既存calculateBatchKey()を使用）
-- [ ] 単体テスト作成・実行完了
+- [x] 単体テスト作成・実行完了
   - テストファイル: src/sender/__tests__/external-api-sender.test.ts に追加
   - 対象: 送信成功パターン、送信失敗パターン、send()との違い検証
-- [ ] 既存のsend()、resendSpooled()のテストが引き続きパスすること
+- [x] 既存のsend()、resendSpooled()のテストが引き続きパスすること
 
 **ACトレーサビリティ**: AC-RESEND-2, AC-RESEND-3, AC-RESEND-4, AC-RESEND-5
 
 ### Task 2-2: resendコマンド実装と統合テスト作成
 
 **完了条件**:
-- [ ] resend.ts実装完了（src/cli/commands/resend.ts）
+- [x] resend.ts実装完了（src/cli/commands/resend.ts）
   - createResendCommand()関数実装
   - 引数なし: listFailedFiles()でファイル一覧表示
   - --file オプション: 指定ファイルの再送
@@ -199,12 +199,12 @@ npm run cli -- unknown-command  # エラー表示確認
   - 成功時: deleteFailedFile()でファイル削除
   - 失敗時: エラーメッセージ表示、ファイル保持
   - サマリー表示（ResendSummary形式）
-- [ ] 統合テスト作成・実行完了
+- [x] 統合テスト作成・実行完了
   - テストファイル: src/cli/__tests__/integration/resend-command.int.test.ts
-  - it.todoを全て実装（43件）
-- [ ] 単体テスト作成・実行完了（コマンドロジック）
+  - it.todoを全て実装（36件）
+- [x] 単体テスト作成・実行完了（コマンドロジック）
   - テストファイル: src/cli/__tests__/commands/resend.test.ts
-- [ ] 全テストパス
+- [x] 全テストパス
 
 **ACトレーサビリティ**: AC-RESEND-1, AC-RESEND-2, AC-RESEND-3, AC-RESEND-4, AC-RESEND-5, AC-RESEND-6
 
@@ -410,10 +410,10 @@ npm run test:coverage:fresh
 | フェーズ | 統合テスト | E2E | 合計 |
 |---------|----------|-----|------|
 | Phase 1 | 33/33件 | - | 33件 |
-| Phase 2 | 43/43件 | - | 43件 |
+| Phase 2 | 36/36件 | - | 36件 |
 | Phase 3 | 32/32件 | - | 32件 |
 | Phase 4 | - | 36/36件 | 36件 |
-| **合計** | 108件 | 36件 | **144件** |
+| **合計** | 101件 | 36件 | **137件** |
 
 ---
 
