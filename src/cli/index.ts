@@ -7,6 +7,7 @@
 import { Command } from 'commander'
 import { bootstrapCli } from './bootstrap.js'
 import { createListCommand } from './commands/list.js'
+import { handleError } from './utils/error-handler.js'
 
 async function main(): Promise<void> {
   const deps = bootstrapCli()
@@ -18,10 +19,16 @@ async function main(): Promise<void> {
   // program.addCommand(createResendCommand(deps))
   // program.addCommand(createWatermarkCommand(deps))
 
+  // 未知のコマンド処理
+  program.on('command:*', (operands) => {
+    console.error(`Unknown command: ${operands.join(' ')}`)
+    console.error(`Run 'dify-usage-exporter --help' for available commands.`)
+    process.exit(1)
+  })
+
   await program.parseAsync()
 }
 
 main().catch((error) => {
-  console.error('Error:', error instanceof Error ? error.message : error)
-  process.exit(1)
+  handleError(error)
 })

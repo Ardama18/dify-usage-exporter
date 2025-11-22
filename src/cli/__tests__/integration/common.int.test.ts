@@ -5,7 +5,53 @@
  * 実装タイミング: Phase 1-3 並行
  */
 
-import { describe, it } from 'vitest'
+import { spawn } from 'node:child_process'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { handleError, ValidationError } from '../../utils/error-handler.js'
+
+/**
+ * テスト用の環境変数
+ */
+const testEnv = {
+  DIFY_API_BASE_URL: 'https://api.dify.ai',
+  DIFY_API_TOKEN: 'test-dify-token',
+  EXTERNAL_API_URL: 'https://external-api.example.com',
+  EXTERNAL_API_TOKEN: 'test-external-token',
+}
+
+/**
+ * CLIコマンドを実行するヘルパー関数
+ */
+function runCli(
+  args: string[],
+  env: Record<string, string> = {},
+): Promise<{
+  stdout: string
+  stderr: string
+  exitCode: number | null
+}> {
+  return new Promise((resolve) => {
+    const child = spawn('npx', ['tsx', 'src/cli/index.ts', ...args], {
+      env: { ...process.env, ...testEnv, ...env },
+      cwd: process.cwd(),
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    child.stdout.on('data', (data) => {
+      stdout += data.toString()
+    })
+
+    child.stderr.on('data', (data) => {
+      stderr += data.toString()
+    })
+
+    child.on('close', (exitCode) => {
+      resolve({ stdout, stderr, exitCode })
+    })
+  })
+}
 
 describe('CLI共通機能統合テスト', () => {
   // ======================
@@ -17,7 +63,15 @@ describe('CLI共通機能統合テスト', () => {
     // @category: ux
     // @dependency: none
     // @complexity: low
-    it.todo('AC-COMMON-1: メインコマンドで--helpが使用方法を表示')
+    it('AC-COMMON-1: メインコマンドで--helpが使用方法を表示', async () => {
+      // Act
+      const result = await runCli(['--help'])
+
+      // Assert
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toContain('Dify usage data exporter CLI')
+      expect(result.stdout).toContain('Usage:')
+    })
 
     // @category: ux
     // @dependency: none
@@ -32,19 +86,41 @@ describe('CLI共通機能統合テスト', () => {
     // @category: ux
     // @dependency: none
     // @complexity: low
-    it.todo('AC-COMMON-1: listコマンドで--helpが使用方法を表示')
+    it('AC-COMMON-1: listコマンドで--helpが使用方法を表示', async () => {
+      // Act
+      const result = await runCli(['list', '--help'])
+
+      // Assert
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toContain('List failed files')
+    })
 
     // 検証: オプション一覧が表示されること
     // @category: ux
     // @dependency: none
     // @complexity: low
-    it.todo('AC-COMMON-1: ヘルプにオプション一覧が含まれる')
+    it('AC-COMMON-1: ヘルプにオプション一覧が含まれる', async () => {
+      // Act
+      const result = await runCli(['--help'])
+
+      // Assert
+      expect(result.stdout).toContain('Options:')
+      expect(result.stdout).toContain('--version')
+      expect(result.stdout).toContain('--help')
+    })
 
     // 検証: サブコマンド一覧が表示されること
     // @category: ux
     // @dependency: none
     // @complexity: low
-    it.todo('AC-COMMON-1: メインヘルプにサブコマンド一覧が含まれる')
+    it('AC-COMMON-1: メインヘルプにサブコマンド一覧が含まれる', async () => {
+      // Act
+      const result = await runCli(['--help'])
+
+      // Assert
+      expect(result.stdout).toContain('Commands:')
+      expect(result.stdout).toContain('list')
+    })
   })
 
   // ======================
@@ -56,13 +132,28 @@ describe('CLI共通機能統合テスト', () => {
     // @category: edge-case
     // @dependency: none
     // @complexity: low
-    it.todo('AC-COMMON-2: 存在しないコマンドでエラーメッセージが表示される')
+    it('AC-COMMON-2: 存在しないコマンドでエラーメッセージが表示される', async () => {
+      // Act
+      const result = await runCli(['unknowncommand'])
+
+      // Assert
+      expect(result.exitCode).toBe(1)
+      expect(result.stderr).toContain('Unknown command')
+    })
 
     // 検証: ヘルプ情報が併せて表示されること
     // @category: ux
     // @dependency: none
     // @complexity: low
-    it.todo('AC-COMMON-2: エラー時に利用可能なコマンド一覧が表示される')
+    it('AC-COMMON-2: エラー時に利用可能なコマンド一覧が表示される', async () => {
+      // Act
+      const result = await runCli(['unknowncommand'])
+
+      // Assert
+      expect(result.exitCode).toBe(1)
+      // ヘルプ情報または利用可能なコマンド情報が表示されること
+      expect(result.stdout + result.stderr).toMatch(/help|Commands|list/)
+    })
 
     // エッジケース: 類似コマンドのサジェスト
     // @category: ux
@@ -80,13 +171,25 @@ describe('CLI共通機能統合テスト', () => {
     // @category: core-functionality
     // @dependency: none
     // @complexity: low
-    it.todo('AC-COMMON-3: 正常終了時にexit code 0')
+    it('AC-COMMON-3: 正常終了時にexit code 0', async () => {
+      // Act: --helpは正常終了
+      const result = await runCli(['--help'])
+
+      // Assert
+      expect(result.exitCode).toBe(0)
+    })
 
     // 検証: エラー終了時のexit code
     // @category: core-functionality
     // @dependency: none
     // @complexity: low
-    it.todo('AC-COMMON-3: エラー時にexit code 1')
+    it('AC-COMMON-3: エラー時にexit code 1', async () => {
+      // Act: 未知のコマンドはエラー
+      const result = await runCli(['unknowncommand'])
+
+      // Assert
+      expect(result.exitCode).toBe(1)
+    })
 
     // 検証: バリデーションエラー時のexit code
     // @category: edge-case
@@ -183,16 +286,47 @@ describe('エラーハンドリング統合テスト', () => {
   // エラー種別の処理
   // ======================
   describe('エラー種別', () => {
+    let mockExit: ReturnType<typeof vi.spyOn>
+    let mockConsoleError: ReturnType<typeof vi.spyOn>
+
+    beforeEach(() => {
+      mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {
+        throw new Error('process.exit called')
+      })
+      mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    })
+
+    afterEach(() => {
+      mockExit.mockRestore()
+      mockConsoleError.mockRestore()
+    })
+
     // Design Doc: エラー種別と対応
     // @category: edge-case
     // @dependency: none
     // @complexity: medium
-    it.todo('ValidationErrorが適切にハンドリングされる')
+    it('ValidationErrorが適切にハンドリングされる', () => {
+      // Arrange
+      const error = new ValidationError('Invalid date format')
+
+      // Act & Assert
+      expect(() => handleError(error)).toThrow('process.exit called')
+      expect(mockConsoleError).toHaveBeenCalledWith('Error: Invalid date format')
+      expect(mockExit).toHaveBeenCalledWith(1)
+    })
 
     // @category: edge-case
     // @dependency: none
     // @complexity: medium
-    it.todo('ファイルシステムエラーが適切にハンドリングされる')
+    it('通常のErrorが適切にハンドリングされる', () => {
+      // Arrange
+      const error = new Error('File not found')
+
+      // Act & Assert
+      expect(() => handleError(error)).toThrow('process.exit called')
+      expect(mockConsoleError).toHaveBeenCalledWith('Error: File not found')
+      expect(mockExit).toHaveBeenCalledWith(1)
+    })
 
     // @category: edge-case
     // @dependency: none
@@ -202,23 +336,74 @@ describe('エラーハンドリング統合テスト', () => {
     // @category: edge-case
     // @dependency: none
     // @complexity: medium
-    it.todo('未知のエラーが適切にハンドリングされる')
+    it('未知のエラーが適切にハンドリングされる', () => {
+      // Arrange
+      const error = 'String error'
+
+      // Act & Assert
+      expect(() => handleError(error)).toThrow('process.exit called')
+      expect(mockConsoleError).toHaveBeenCalledWith('Unknown error occurred')
+      expect(mockExit).toHaveBeenCalledWith(1)
+    })
   })
 
   // ======================
   // DEBUG環境変数
   // ======================
   describe('DEBUGモード', () => {
+    let mockExit: ReturnType<typeof vi.spyOn>
+    let mockConsoleError: ReturnType<typeof vi.spyOn>
+    let originalDebug: string | undefined
+
+    beforeEach(() => {
+      originalDebug = process.env.DEBUG
+      mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {
+        throw new Error('process.exit called')
+      })
+      mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    })
+
+    afterEach(() => {
+      if (originalDebug === undefined) {
+        delete process.env.DEBUG
+      } else {
+        process.env.DEBUG = originalDebug
+      }
+      mockExit.mockRestore()
+      mockConsoleError.mockRestore()
+    })
+
     // Design Doc: DEBUG環境変数でスタックトレース表示
     // @category: ux
     // @dependency: none
     // @complexity: low
-    it.todo('DEBUG=trueでスタックトレースが表示される')
+    it('DEBUG=trueでスタックトレースが表示される', () => {
+      // Arrange
+      process.env.DEBUG = 'true'
+      const error = new Error('Test error')
+
+      // Act & Assert
+      expect(() => handleError(error)).toThrow('process.exit called')
+      // スタックトレースが出力されることを確認
+      expect(mockConsoleError).toHaveBeenCalledTimes(2)
+      expect(mockConsoleError).toHaveBeenNthCalledWith(1, 'Error: Test error')
+      expect(mockConsoleError).toHaveBeenNthCalledWith(2, expect.stringContaining('at'))
+    })
 
     // @category: ux
     // @dependency: none
     // @complexity: low
-    it.todo('DEBUG未設定でスタックトレースが非表示')
+    it('DEBUG未設定でスタックトレースが非表示', () => {
+      // Arrange
+      delete process.env.DEBUG
+      const error = new Error('Test error')
+
+      // Act & Assert
+      expect(() => handleError(error)).toThrow('process.exit called')
+      // スタックトレースが出力されないことを確認
+      expect(mockConsoleError).toHaveBeenCalledTimes(1)
+      expect(mockConsoleError).toHaveBeenCalledWith('Error: Test error')
+    })
   })
 })
 
