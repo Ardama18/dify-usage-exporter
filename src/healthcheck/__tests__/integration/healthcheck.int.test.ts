@@ -99,16 +99,22 @@ describe('HealthCheckServer 統合テスト', () => {
     })
 
     it('レスポンス時間が 10ms 以内（AC-PERF-1）', async () => {
-      // Arrange
-      const startTime = performance.now()
-
-      // Act
+      // Arrange: ウォームアップリクエスト（初回接続オーバーヘッドを除外）
       await fetch(`http://localhost:${testPort}/health`)
-      const endTime = performance.now()
 
-      // Assert
-      const responseTime = endTime - startTime
-      expect(responseTime).toBeLessThan(10)
+      // Act: 複数回測定して安定性を確認
+      const times: number[] = []
+      for (let i = 0; i < 5; i++) {
+        const startTime = performance.now()
+        await fetch(`http://localhost:${testPort}/health`)
+        const endTime = performance.now()
+        times.push(endTime - startTime)
+      }
+
+      // Assert: 全ての応答が10ms以内
+      for (const time of times) {
+        expect(time).toBeLessThan(10)
+      }
     })
   })
 
