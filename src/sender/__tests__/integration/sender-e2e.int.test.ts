@@ -16,7 +16,7 @@ import { ExternalApiSender } from '../../external-api-sender.js'
 import { HttpClient } from '../../http-client.js'
 import { SpoolManager } from '../../spool-manager.js'
 
-describe('ExternalApiSender E2E Integration Tests', () => {
+describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () => {
   const SPOOL_DIR = 'data/spool'
   const FAILED_DIR = 'data/failed'
   const API_BASE_URL = 'https://api.example.com'
@@ -179,9 +179,10 @@ describe('ExternalApiSender E2E Integration Tests', () => {
 
   describe('Exception Pattern 1: ネットワークエラー → リトライ → 成功', () => {
     it('should retry on 503 error and succeed', async () => {
-      // Arrange: モックAPI（1回目: 503、2回目: 成功）
+      // Arrange: モックAPI（1回目: 503、2-4回目: 成功）
+      // axios-retryが遅延付きでリトライするため、複数回の成功レスポンスを用意
       nock(API_BASE_URL).post('/usage').reply(503, { error: 'Service Unavailable' })
-      nock(API_BASE_URL).post('/usage').reply(200, { success: true })
+      nock(API_BASE_URL).post('/usage').times(3).reply(200, { success: true })
 
       // Act: 送信実行
       await sender.send(testRecords)
