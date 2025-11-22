@@ -7,6 +7,7 @@
 import { Command } from 'commander'
 import { bootstrapCli } from './bootstrap.js'
 import { createListCommand } from './commands/list.js'
+import { createResendCommand } from './commands/resend.js'
 import { handleError } from './utils/error-handler.js'
 
 async function main(): Promise<void> {
@@ -16,7 +17,7 @@ async function main(): Promise<void> {
 
   // コマンド登録
   program.addCommand(createListCommand(deps))
-  // program.addCommand(createResendCommand(deps))
+  program.addCommand(createResendCommand(deps))
   // program.addCommand(createWatermarkCommand(deps))
 
   // 未知のコマンド処理
