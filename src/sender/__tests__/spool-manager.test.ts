@@ -4,7 +4,7 @@ import type { Logger } from 'winston'
 import type { SpoolFile } from '../../types/spool.js'
 import { SpoolManager } from '../spool-manager.js'
 
-describe('SpoolManager', () => {
+describe('SpoolManager', { concurrent: false }, () => {
   let spoolManager: SpoolManager
   let mockLogger: Logger
   const testSpoolDir = 'data/spool'
@@ -85,6 +85,8 @@ describe('SpoolManager', () => {
       }
 
       await spoolManager.saveToSpool(spoolFile1)
+      // タイムスタンプの重複を防ぐため1ms待機
+      await new Promise((resolve) => setTimeout(resolve, 1))
       await spoolManager.saveToSpool(spoolFile2)
 
       const spoolFiles = await spoolManager.listSpoolFiles()
