@@ -108,6 +108,35 @@ async function main() {
           console.log(JSON.stringify(record, null, 2))
         }
       }
+
+      // 外部APIへ送信テスト
+      if (process.env.EXTERNAL_API_URL) {
+        console.log('\n=== 外部API送信テスト ===')
+
+        const payload = {
+          aggregation_period: 'monthly',
+          output_mode: 'per_user',
+          fetch_period: {
+            start: result.startDate,
+            end: result.endDate,
+          },
+          user_records: aggregationResult.userRecords,
+        }
+
+        const axios = (await import('axios')).default
+        try {
+          const response = await axios.post(process.env.EXTERNAL_API_URL, payload, {
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${process.env.EXTERNAL_API_TOKEN}`,
+            },
+          })
+          console.log(`送信成功: ${response.status} ${response.statusText}`)
+          console.log('webhook.siteで結果を確認してください')
+        } catch (error) {
+          console.error('送信エラー:', error)
+        }
+      }
     }
 
     console.log('\n=== テスト完了 ===')

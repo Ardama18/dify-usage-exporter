@@ -30,6 +30,21 @@ async function main() {
   })
   console.log('ログイン成功')
 
+  // Cookie JarからCSRFトークンを取得
+  const cookies = await jar.getCookies(baseUrl)
+  let csrfToken: string | undefined
+  for (const cookie of cookies) {
+    if (cookie.key === 'csrf_token') {
+      csrfToken = cookie.value
+    }
+  }
+  console.log(`CSRFトークン取得: ${csrfToken ? '成功' : '失敗'}`)
+
+  // CSRFトークンをヘッダーに設定
+  if (csrfToken) {
+    client.defaults.headers.common['X-CSRF-Token'] = csrfToken
+  }
+
   // アプリ一覧取得
   console.log('\n2. アプリ一覧取得...')
   const appsResponse = await client.get(`${baseUrl}/console/api/apps`, {
@@ -113,6 +128,54 @@ async function main() {
           console.log(`   workflow-runs: エラー ${error.response?.status}`)
         } else {
           console.log(`   workflow-runs: エラー ${error}`)
+        }
+      }
+    }
+
+    // chat-messages を試す（会話IDが必要）
+    if (app.mode === 'chat' || app.mode === 'agent-chat' || app.mode === 'advanced-chat') {
+      try {
+        // まず会話一覧から最初の会話IDを取得
+        const convResponse = await client.get(
+          `${baseUrl}/console/api/apps/${app.id}/chat-conversations`,
+          { params: { limit: 1 } }
+        )
+        const conversations = convResponse.data.data
+        if (conversations?.length > 0) {
+          const conversationId = conversations[0].id
+          console.log(`   会話ID: ${conversationId}`)
+
+          // chat-messages を取得
+          try {
+            const msgResponse = await client.get(
+              `${baseUrl}/console/api/apps/${app.id}/chat-messages`,
+              { params: { conversation_id: conversationId, limit: 10 } }
+            )
+            console.log('   chat-messages: 成功')
+            console.log(`   メッセージ数: ${msgResponse.data.data?.length || 0}`)
+            if (msgResponse.data.data?.length > 0) {
+              const msg = msgResponse.data.data[0]
+              console.log('   メッセージサンプル:')
+              console.log(`     id: ${msg.id}`)
+              console.log(`     message_tokens: ${msg.message_tokens}`)
+              console.log(`     answer_tokens: ${msg.answer_tokens}`)
+              console.log(`     from_source: ${msg.from_source}`)
+              console.log(`     from_end_user_id: ${msg.from_end_user_id}`)
+              console.log(`     from_account_id: ${msg.from_account_id}`)
+              console.log(`     created_at: ${msg.created_at}`)
+            }
+          } catch (error: unknown) {
+            if (axios.isAxiosError(error)) {
+              console.log(`   chat-messages: エラー ${error.response?.status}`)
+              console.log(`   レスポンス: ${JSON.stringify(error.response?.data)}`)
+            } else {
+              console.log(`   chat-messages: エラー ${error}`)
+            }
+          }
+        }
+      } catch (error: unknown) {
+        if (axios.isAxiosError(error)) {
+          console.log(`   会話取得エラー: ${error.response?.status}`)
         }
       }
     }

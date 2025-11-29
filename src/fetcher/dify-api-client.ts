@@ -325,21 +325,32 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
         if (lastId) {
           queryParams.last_id = lastId
         }
-        if (params.start) {
-          queryParams.start = params.start
-        }
-        if (params.end) {
-          queryParams.end = params.end
-        }
+        // Note: start/endパラメータはDify APIでサポートされていないため、
+        // 取得後にフィルタリングする必要がある
 
         const response = await authenticatedClient.get<DifyConversationsResponse>(
           `/console/api/apps/${params.appId}/chat-conversations`,
           { params: queryParams }
         )
 
-        conversations.push(...response.data.data)
+        // 期間フィルタ（start/endが指定されている場合）
+        let filteredData = response.data.data
+        if (params.start || params.end) {
+          filteredData = response.data.data.filter((conv) => {
+            if (params.start && conv.created_at < params.start) return false
+            if (params.end && conv.created_at > params.end) return false
+            return true
+          })
+        }
+
+        conversations.push(...filteredData)
 
         if (!response.data.has_more || response.data.data.length === 0) {
+          break
+        }
+
+        // 期間外のデータが出始めたら早期終了（降順前提）
+        if (params.start && response.data.data.some((conv) => conv.created_at < params.start!)) {
           break
         }
 
