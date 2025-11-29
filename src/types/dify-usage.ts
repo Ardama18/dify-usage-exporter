@@ -134,3 +134,113 @@ export const difyMessagesResponseSchema = z.object({
 
 export type DifyMessage = z.infer<typeof difyMessageSchema>
 export type DifyMessagesResponse = z.infer<typeof difyMessagesResponseSchema>
+
+/**
+ * /console/api/apps/{app_id}/workflow-runs のレスポンス形式
+ * ワークフロー実行一覧を取得
+ */
+export const difyWorkflowRunSchema = z.object({
+  id: z.string(),
+  version: z.string().optional(),
+  status: z.string(), // 'running' | 'succeeded' | 'failed' | 'stopped'
+  total_tokens: z.number().default(0),
+  total_steps: z.number().default(0),
+  created_by_role: z.string().optional(), // 'account' | 'end_user'
+  created_by_account: z
+    .object({
+      id: z.string(),
+      name: z.string().optional(),
+      email: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
+  created_by_end_user: z
+    .object({
+      id: z.string(),
+      session_id: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
+  created_at: z.number(), // Unix timestamp
+  finished_at: z.number().nullable().optional(),
+  elapsed_time: z.number().optional(),
+})
+
+export const difyWorkflowRunsResponseSchema = z.object({
+  data: z.array(difyWorkflowRunSchema),
+  has_more: z.boolean(),
+  limit: z.number(),
+})
+
+export type DifyWorkflowRun = z.infer<typeof difyWorkflowRunSchema>
+export type DifyWorkflowRunsResponse = z.infer<typeof difyWorkflowRunsResponseSchema>
+
+/**
+ * /console/api/apps/{app_id}/workflow-runs/{run_id}/node-executions のレスポンス形式
+ * ノード実行詳細を取得（LLMノードのモデル別トークン・コスト情報）
+ */
+export const difyLlmUsageSchema = z.object({
+  prompt_tokens: z.number().default(0),
+  prompt_unit_price: z.string().optional(),
+  prompt_price_unit: z.string().optional(),
+  prompt_price: z.string().optional(),
+  completion_tokens: z.number().default(0),
+  completion_unit_price: z.string().optional(),
+  completion_price_unit: z.string().optional(),
+  completion_price: z.string().optional(),
+  total_tokens: z.number().default(0),
+  total_price: z.string().optional(),
+  currency: z.string().default('USD'),
+  latency: z.number().optional(),
+})
+
+export const difyNodeExecutionSchema = z.object({
+  id: z.string(),
+  index: z.number().optional(),
+  node_id: z.string(),
+  node_type: z.string(), // 'llm' | 'start' | 'end' | 'code' | etc.
+  title: z.string().optional(),
+  status: z.string(), // 'running' | 'succeeded' | 'failed'
+  process_data: z
+    .object({
+      model_mode: z.string().optional(),
+      model_provider: z.string().optional(),
+      model_name: z.string().optional(),
+      usage: difyLlmUsageSchema.optional(),
+    })
+    .optional(),
+  outputs: z.record(z.unknown()).optional(),
+  execution_metadata: z
+    .object({
+      total_tokens: z.number().optional(),
+      total_price: z.string().optional(),
+      currency: z.string().optional(),
+    })
+    .optional(),
+  elapsed_time: z.number().optional(),
+  created_at: z.number().optional(),
+  created_by_role: z.string().optional(),
+  created_by_account: z
+    .object({
+      id: z.string(),
+      name: z.string().optional(),
+      email: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
+  created_by_end_user: z
+    .object({
+      id: z.string(),
+      session_id: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
+})
+
+export const difyNodeExecutionsResponseSchema = z.object({
+  data: z.array(difyNodeExecutionSchema),
+})
+
+export type DifyLlmUsage = z.infer<typeof difyLlmUsageSchema>
+export type DifyNodeExecution = z.infer<typeof difyNodeExecutionSchema>
+export type DifyNodeExecutionsResponse = z.infer<typeof difyNodeExecutionsResponseSchema>

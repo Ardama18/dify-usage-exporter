@@ -2,18 +2,21 @@ import https from 'node:https'
 import axios from 'axios'
 import {
   aggregateUsageData,
-  type AggregatedAppRecord,
-  type AggregatedWorkspaceRecord,
+  type RawModelUsageRecord,
   type RawTokenCostRecord,
+  type RawUserUsageRecord,
 } from './aggregator/usage-aggregator.js'
 import { loadConfig } from './config/env-config.js'
 import { createDifyApiClient } from './fetcher/dify-api-client.js'
 import { createDifyUsageFetcher, type FetchedTokenCostRecord } from './fetcher/dify-usage-fetcher.js'
+import { createModelUsageFetcher } from './fetcher/model-usage-fetcher.js'
+import { createUserUsageFetcher } from './fetcher/user-usage-fetcher.js'
 import { createLogger } from './logger/winston-logger.js'
 import { createMetricsCollector } from './monitoring/metrics-collector.js'
 import { createMetricsReporter } from './monitoring/metrics-reporter.js'
 import { createScheduler } from './scheduler/cron-scheduler.js'
 import { setupGracefulShutdown } from './shutdown/graceful-shutdown.js'
+import { calculateDateRange } from './utils/period-calculator.js'
 import { createWatermarkManager } from './watermark/watermark-manager.js'
 
 // IPv4を優先するエージェント（IPv6接続問題の回避）
@@ -44,6 +47,8 @@ export async function main(): Promise<void> {
     client: difyClient,
     watermarkManager,
   })
+  const modelUsageFetcher = createModelUsageFetcher({ difyClient, logger })
+  const userUsageFetcher = createUserUsageFetcher({ difyClient, logger })
 
   // 5. スケジューラを作成
   const scheduler = createScheduler(config, logger, async () => {
@@ -73,7 +78,65 @@ export async function main(): Promise<void> {
         return
       }
 
-      // 2. データ集計（RawTokenCostRecordに変換してから集計）
+      // 2. 期間計算（per_user/per_model/allモードで使用）
+      const periodRange = calculateDateRange(
+        config.DIFY_FETCH_PERIOD,
+        config.DIFY_FETCH_START_DATE,
+        config.DIFY_FETCH_END_DATE
+      )
+
+      // 3. ユーザー別使用量を取得（per_user/allモードの場合）
+      let rawUserRecords: RawUserUsageRecord[] = []
+      if (config.DIFY_OUTPUT_MODE === 'per_user' || config.DIFY_OUTPUT_MODE === 'all') {
+        const userResult = await userUsageFetcher.fetch({
+          startTimestamp: Math.floor(periodRange.startDate.getTime() / 1000),
+          endTimestamp: Math.floor(periodRange.endDate.getTime() / 1000),
+        })
+
+        rawUserRecords = userResult.records.map((record) => ({
+          date: record.date,
+          user_id: record.user_id,
+          user_type: record.user_type,
+          app_id: record.app_id,
+          app_name: record.app_name,
+          message_tokens: record.message_tokens,
+          answer_tokens: record.answer_tokens,
+          total_tokens: record.total_tokens,
+          conversation_id: record.conversation_id,
+        }))
+
+        logger.info('ユーザー別使用量取得完了', { recordCount: rawUserRecords.length })
+      }
+
+      // 4. モデル別使用量を取得（per_model/allモードの場合）
+      let rawModelRecords: RawModelUsageRecord[] = []
+      if (config.DIFY_OUTPUT_MODE === 'per_model' || config.DIFY_OUTPUT_MODE === 'all') {
+        const modelResult = await modelUsageFetcher.fetch({
+          startTimestamp: Math.floor(periodRange.startDate.getTime() / 1000),
+          endTimestamp: Math.floor(periodRange.endDate.getTime() / 1000),
+        })
+
+        rawModelRecords = modelResult.records.map((record) => ({
+          date: record.date,
+          user_id: record.user_id,
+          user_type: record.user_type,
+          app_id: record.app_id,
+          app_name: record.app_name,
+          model_provider: record.model_provider,
+          model_name: record.model_name,
+          prompt_tokens: record.prompt_tokens,
+          completion_tokens: record.completion_tokens,
+          total_tokens: record.total_tokens,
+          prompt_price: record.prompt_price,
+          completion_price: record.completion_price,
+          total_price: record.total_price,
+          currency: record.currency,
+        }))
+
+        logger.info('モデル別使用量取得完了', { recordCount: rawModelRecords.length })
+      }
+
+      // 5. データ集計（RawTokenCostRecordに変換してから集計）
       const rawRecords: RawTokenCostRecord[] = allRecords.map((record) => ({
         date: record.date,
         app_id: record.app_id,
@@ -86,11 +149,16 @@ export async function main(): Promise<void> {
       const aggregationResult = aggregateUsageData(
         rawRecords,
         config.DIFY_AGGREGATION_PERIOD,
-        config.DIFY_OUTPUT_MODE
+        config.DIFY_OUTPUT_MODE,
+        rawUserRecords,
+        rawModelRecords
       )
 
       const totalAggregatedRecords =
-        aggregationResult.appRecords.length + aggregationResult.workspaceRecords.length
+        aggregationResult.appRecords.length +
+        aggregationResult.workspaceRecords.length +
+        aggregationResult.userRecords.length +
+        aggregationResult.modelRecords.length
       collector.getMetrics().transformedRecords = totalAggregatedRecords
 
       if (totalAggregatedRecords === 0) {
@@ -103,24 +171,40 @@ export async function main(): Promise<void> {
         outputMode: config.DIFY_OUTPUT_MODE,
         appRecords: aggregationResult.appRecords.length,
         workspaceRecords: aggregationResult.workspaceRecords.length,
+        userRecords: aggregationResult.userRecords.length,
+        modelRecords: aggregationResult.modelRecords.length,
       })
 
-      // 3. 外部APIへ送信
-      const payload = {
+      // 4. 外部APIへ送信
+      const payload: Record<string, unknown> = {
         aggregation_period: config.DIFY_AGGREGATION_PERIOD,
         output_mode: config.DIFY_OUTPUT_MODE,
         fetch_period: {
           start: fetchResult.startDate,
           end: fetchResult.endDate,
         },
-        app_records: aggregationResult.appRecords,
-        workspace_records: aggregationResult.workspaceRecords,
+      }
+
+      // 出力モードに応じてペイロードを構築
+      if (aggregationResult.appRecords.length > 0) {
+        payload.app_records = aggregationResult.appRecords
+      }
+      if (aggregationResult.workspaceRecords.length > 0) {
+        payload.workspace_records = aggregationResult.workspaceRecords
+      }
+      if (aggregationResult.userRecords.length > 0) {
+        payload.user_records = aggregationResult.userRecords
+      }
+      if (aggregationResult.modelRecords.length > 0) {
+        payload.model_records = aggregationResult.modelRecords
       }
 
       logger.info('外部API送信開始', {
         url: config.EXTERNAL_API_URL,
         appRecordCount: aggregationResult.appRecords.length,
         workspaceRecordCount: aggregationResult.workspaceRecords.length,
+        userRecordCount: aggregationResult.userRecords.length,
+        modelRecordCount: aggregationResult.modelRecords.length,
       })
 
       const response = await axios.post(config.EXTERNAL_API_URL, payload, {
@@ -138,6 +222,8 @@ export async function main(): Promise<void> {
         status: response.status,
         appRecordCount: aggregationResult.appRecords.length,
         workspaceRecordCount: aggregationResult.workspaceRecords.length,
+        userRecordCount: aggregationResult.userRecords.length,
+        modelRecordCount: aggregationResult.modelRecords.length,
       })
     } catch (error) {
       const err = error as Error

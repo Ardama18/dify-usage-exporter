@@ -24,7 +24,8 @@ export const outputModeEnum = z.enum([
   'workspace', // ワークスペース全体
   'both', // 両方（per_app + workspace）
   'per_user', // ユーザー毎（ログAPIベース）
-  'all', // 全て（per_app + workspace + per_user）
+  'per_model', // ユーザー・モデル毎（ノード実行詳細ベース、価格情報付き）
+  'all', // 全て（per_app + workspace + per_user + per_model）
 ])
 export type OutputMode = z.infer<typeof outputModeEnum>
 
