@@ -29,10 +29,12 @@
   "license": "ISC",
   "dependencies": {
     "axios": "^1.13.2",
+    "axios-cookiejar-support": "^6.0.5",
     "axios-retry": "^4.5.0",
     "commander": "^14.0.2",
     "cron": "^3.5.0",
     "dotenv": "^16.6.1",
+    "tough-cookie": "^6.0.0",
     "winston": "^3.18.3",
     "zod": "^3.25.76"
   },
@@ -40,6 +42,7 @@
     "@biomejs/biome": "^2.3.6",
     "@types/nock": "^10.0.3",
     "@types/node": "^24.10.1",
+    "@types/tough-cookie": "^4.0.5",
     "@vitest/coverage-v8": "^4.0.12",
     "nock": "^14.0.10",
     "typescript": "^5.9.3",

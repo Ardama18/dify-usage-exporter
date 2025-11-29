@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  dify-usage-exporter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dify-usage-exporter
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # 必須環境変数
+      - DIFY_API_BASE_URL=${DIFY_API_BASE_URL}
+      - DIFY_EMAIL=${DIFY_EMAIL}
+      - DIFY_PASSWORD=${DIFY_PASSWORD}
+      - EXTERNAL_API_URL=${EXTERNAL_API_URL}
+      - EXTERNAL_API_TOKEN=${EXTERNAL_API_TOKEN}
+
+      # スケジュール設定
+      - CRON_SCHEDULE=${CRON_SCHEDULE:-0 0 1 * *}  # デフォルト: 毎月1日 0:00
+
+      # 期間・集計設定
+      - DIFY_FETCH_PERIOD=${DIFY_FETCH_PERIOD:-current_month}
+      - DIFY_AGGREGATION_PERIOD=${DIFY_AGGREGATION_PERIOD:-monthly}
+      - DIFY_OUTPUT_MODE=${DIFY_OUTPUT_MODE:-both}
+
+      # オプション設定
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - NODE_ENV=${NODE_ENV:-production}
+      - GRACEFUL_SHUTDOWN_TIMEOUT=${GRACEFUL_SHUTDOWN_TIMEOUT:-30}
+      - MAX_RETRY=${MAX_RETRY:-3}
+
+      # ヘルスチェック設定
+      - HEALTHCHECK_ENABLED=${HEALTHCHECK_ENABLED:-true}
+      - HEALTHCHECK_PORT=${HEALTHCHECK_PORT:-8080}
+
+    # ヘルスチェック
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # ボリューム（ウォーターマーク永続化用）
+    volumes:
+      - exporter-data:/app/data
+
+    # ログ設定
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  exporter-data:

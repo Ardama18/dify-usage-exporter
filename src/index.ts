@@ -1,9 +1,25 @@
+import https from 'node:https'
+import axios from 'axios'
+import {
+  aggregateUsageData,
+  type AggregatedAppRecord,
+  type AggregatedWorkspaceRecord,
+  type RawTokenCostRecord,
+} from './aggregator/usage-aggregator.js'
 import { loadConfig } from './config/env-config.js'
+import { createDifyApiClient } from './fetcher/dify-api-client.js'
+import { createDifyUsageFetcher, type FetchedTokenCostRecord } from './fetcher/dify-usage-fetcher.js'
 import { createLogger } from './logger/winston-logger.js'
 import { createMetricsCollector } from './monitoring/metrics-collector.js'
 import { createMetricsReporter } from './monitoring/metrics-reporter.js'
 import { createScheduler } from './scheduler/cron-scheduler.js'
 import { setupGracefulShutdown } from './shutdown/graceful-shutdown.js'
+import { createWatermarkManager } from './watermark/watermark-manager.js'
+
+// IPv4を優先するエージェント（IPv6接続問題の回避）
+const httpsAgent = new https.Agent({
+  family: 4,
+})
 
 export async function main(): Promise<void> {
   // 1. 環境変数を読み込み・検証
@@ -19,7 +35,17 @@ export async function main(): Promise<void> {
   // 3. MetricsReporterを作成
   const reporter = createMetricsReporter({ logger })
 
-  // 4. スケジューラを作成
+  // 4. 依存コンポーネントを作成
+  const difyClient = createDifyApiClient({ config, logger })
+  const watermarkManager = createWatermarkManager({ config, logger })
+  const fetcher = createDifyUsageFetcher({
+    config,
+    logger,
+    client: difyClient,
+    watermarkManager,
+  })
+
+  // 5. スケジューラを作成
   const scheduler = createScheduler(config, logger, async () => {
     // MetricsCollectorを作成・開始
     const collector = createMetricsCollector()
@@ -27,8 +53,98 @@ export async function main(): Promise<void> {
     logger.info('ジョブ実行開始', { executionId })
 
     try {
-      // 後続ストーリーで実装: データ取得 → 変換 → 送信
-      logger.info('エクスポートジョブ実行（プレースホルダー）')
+      // === 実際のエクスポート処理 ===
+
+      // 1. Difyからデータ取得
+      let allRecords: FetchedTokenCostRecord[] = []
+      const fetchResult = await fetcher.fetch(async (records) => {
+        allRecords = allRecords.concat(records)
+      })
+
+      collector.getMetrics().fetchedRecords = allRecords.length
+
+      if (!fetchResult.success) {
+        logger.error('データ取得失敗', { errors: fetchResult.errors })
+        return
+      }
+
+      if (allRecords.length === 0) {
+        logger.info('送信するデータがありません')
+        return
+      }
+
+      // 2. データ集計（RawTokenCostRecordに変換してから集計）
+      const rawRecords: RawTokenCostRecord[] = allRecords.map((record) => ({
+        date: record.date,
+        app_id: record.app_id,
+        app_name: record.app_name,
+        token_count: record.token_count,
+        total_price: record.total_price,
+        currency: record.currency,
+      }))
+
+      const aggregationResult = aggregateUsageData(
+        rawRecords,
+        config.DIFY_AGGREGATION_PERIOD,
+        config.DIFY_OUTPUT_MODE
+      )
+
+      const totalAggregatedRecords =
+        aggregationResult.appRecords.length + aggregationResult.workspaceRecords.length
+      collector.getMetrics().transformedRecords = totalAggregatedRecords
+
+      if (totalAggregatedRecords === 0) {
+        logger.info('送信するデータがありません（集計後）')
+        return
+      }
+
+      logger.info('データ集計完了', {
+        aggregationPeriod: config.DIFY_AGGREGATION_PERIOD,
+        outputMode: config.DIFY_OUTPUT_MODE,
+        appRecords: aggregationResult.appRecords.length,
+        workspaceRecords: aggregationResult.workspaceRecords.length,
+      })
+
+      // 3. 外部APIへ送信
+      const payload = {
+        aggregation_period: config.DIFY_AGGREGATION_PERIOD,
+        output_mode: config.DIFY_OUTPUT_MODE,
+        fetch_period: {
+          start: fetchResult.startDate,
+          end: fetchResult.endDate,
+        },
+        app_records: aggregationResult.appRecords,
+        workspace_records: aggregationResult.workspaceRecords,
+      }
+
+      logger.info('外部API送信開始', {
+        url: config.EXTERNAL_API_URL,
+        appRecordCount: aggregationResult.appRecords.length,
+        workspaceRecordCount: aggregationResult.workspaceRecords.length,
+      })
+
+      const response = await axios.post(config.EXTERNAL_API_URL, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${config.EXTERNAL_API_TOKEN}`,
+        },
+        timeout: config.EXTERNAL_API_TIMEOUT_MS,
+        httpsAgent,
+      })
+
+      collector.getMetrics().sendSuccess = totalAggregatedRecords
+
+      logger.info('外部API送信完了', {
+        status: response.status,
+        appRecordCount: aggregationResult.appRecords.length,
+        workspaceRecordCount: aggregationResult.workspaceRecords.length,
+      })
+    } catch (error) {
+      const err = error as Error
+      logger.error('エクスポートジョブ失敗', {
+        message: err.message,
+      })
+      collector.getMetrics().sendFailed = 1
     } finally {
       // メトリクス収集停止とレポート出力
       collector.stopCollection()
@@ -40,14 +156,14 @@ export async function main(): Promise<void> {
     }
   })
 
-  // 5. Graceful Shutdownを設定
+  // 6. Graceful Shutdownを設定
   setupGracefulShutdown({
     timeoutMs: config.GRACEFUL_SHUTDOWN_TIMEOUT * 1000,
     scheduler,
     logger,
   })
 
-  // 6. スケジューラを起動
+  // 7. スケジューラを起動
   scheduler.start()
 
   // 設定ダンプ（シークレットはマスク）

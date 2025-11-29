@@ -32,8 +32,33 @@ vi.mock('../monitoring/metrics-reporter.js', () => ({
   createMetricsReporter: vi.fn(),
 }))
 
+vi.mock('../fetcher/dify-api-client.js', () => ({
+  createDifyApiClient: vi.fn(),
+}))
+
+vi.mock('../watermark/watermark-manager.js', () => ({
+  createWatermarkManager: vi.fn(),
+}))
+
+vi.mock('../fetcher/dify-usage-fetcher.js', () => ({
+  createDifyUsageFetcher: vi.fn(),
+}))
+
+vi.mock('../transformer/data-transformer.js', () => ({
+  createDataTransformer: vi.fn(),
+}))
+
+vi.mock('axios', () => ({
+  default: {
+    post: vi.fn(),
+  },
+}))
+
 // 各モジュールをインポート
+import axios from 'axios'
 import { loadConfig } from '../config/env-config.js'
+import { createDifyApiClient } from '../fetcher/dify-api-client.js'
+import { createDifyUsageFetcher } from '../fetcher/dify-usage-fetcher.js'
 import { main } from '../index.js'
 import type { Logger } from '../logger/winston-logger.js'
 import { createLogger } from '../logger/winston-logger.js'
@@ -44,6 +69,8 @@ import { createMetricsReporter } from '../monitoring/metrics-reporter.js'
 import type { Scheduler } from '../scheduler/cron-scheduler.js'
 import { createScheduler } from '../scheduler/cron-scheduler.js'
 import { setupGracefulShutdown } from '../shutdown/graceful-shutdown.js'
+import { createDataTransformer } from '../transformer/data-transformer.js'
+import { createWatermarkManager } from '../watermark/watermark-manager.js'
 
 describe('index.ts メトリクス統合', () => {
   // モック
@@ -76,6 +103,17 @@ describe('index.ts メトリクス統合', () => {
     isRunning: vi.fn().mockReturnValue(false),
   }
 
+  // getMetricsで同じオブジェクトを返すために外部に定義
+  const mockMetricsData = {
+    fetchedRecords: 100,
+    transformedRecords: 98,
+    sendSuccess: 95,
+    sendFailed: 3,
+    spoolSaved: 1,
+    spoolResendSuccess: 0,
+    failedMoved: 0,
+  }
+
   const mockMetricsCollector: MetricsCollector = {
     startCollection: vi.fn().mockReturnValue('exec-1234567890-abc12345'),
     stopCollection: vi.fn(),
@@ -86,15 +124,7 @@ describe('index.ts メトリクス統合', () => {
     recordSpoolSaved: vi.fn(),
     recordSpoolResendSuccess: vi.fn(),
     recordFailedMoved: vi.fn(),
-    getMetrics: vi.fn().mockReturnValue({
-      fetchedRecords: 100,
-      transformedRecords: 98,
-      sendSuccess: 95,
-      sendFailed: 3,
-      spoolSaved: 1,
-      spoolResendSuccess: 0,
-      failedMoved: 0,
-    }),
+    getMetrics: vi.fn().mockReturnValue(mockMetricsData),
     getExecutionDuration: vi.fn().mockReturnValue(5432),
     getExecutionId: vi.fn().mockReturnValue('exec-1234567890-abc12345'),
   }
@@ -106,6 +136,12 @@ describe('index.ts メトリクス統合', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     capturedOnTick = undefined
+
+    // mockMetricsCollectorのモック関数を再設定（clearAllMocksでクリアされるため）
+    vi.mocked(mockMetricsCollector.startCollection).mockReturnValue('exec-1234567890-abc12345')
+    vi.mocked(mockMetricsCollector.getMetrics).mockReturnValue(mockMetricsData)
+    vi.mocked(mockMetricsCollector.getExecutionDuration).mockReturnValue(5432)
+    vi.mocked(mockMetricsCollector.getExecutionId).mockReturnValue('exec-1234567890-abc12345')
 
     // 環境変数読み込みモック
     vi.mocked(loadConfig).mockReturnValue(mockConfig as ReturnType<typeof loadConfig>)
@@ -124,6 +160,27 @@ describe('index.ts メトリクス統合', () => {
 
     // MetricsReporterモック
     vi.mocked(createMetricsReporter).mockReturnValue(mockMetricsReporter)
+
+    // 追加モック - onTick内で使用されるコンポーネント
+    const mockDifyClient = {}
+    const mockWatermarkManager = {}
+    const mockFetcher = {
+      fetch: vi.fn().mockResolvedValue({ success: true, totalRecords: 0, errors: [] }),
+    }
+    const mockTransformer = {
+      transform: vi.fn().mockReturnValue({
+        records: [],
+        successCount: 0,
+        failedCount: 0,
+        batchIdempotencyKey: 'test-batch-key',
+      }),
+    }
+
+    vi.mocked(createDifyApiClient).mockReturnValue(mockDifyClient as ReturnType<typeof createDifyApiClient>)
+    vi.mocked(createWatermarkManager).mockReturnValue(mockWatermarkManager as ReturnType<typeof createWatermarkManager>)
+    vi.mocked(createDifyUsageFetcher).mockReturnValue(mockFetcher as unknown as ReturnType<typeof createDifyUsageFetcher>)
+    vi.mocked(createDataTransformer).mockReturnValue(mockTransformer as ReturnType<typeof createDataTransformer>)
+    vi.mocked(axios.post).mockResolvedValue({ status: 200, data: {} })
   })
 
   afterEach(() => {

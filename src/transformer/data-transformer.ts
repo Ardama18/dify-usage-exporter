@@ -1,27 +1,20 @@
 import type { ITransformer, TransformError, TransformResult } from '../interfaces/transformer.js'
 import type { Logger } from '../logger/winston-logger.js'
-import type { DifyUsageRecord } from '../types/dify-usage.js'
 import type { ExternalApiRecord } from '../types/external-api.js'
 import { externalApiRecordSchema } from '../types/external-api.js'
 import { getCurrentISOTimestamp } from '../utils/date-utils.js'
 import { generateBatchIdempotencyKey, generateRecordIdempotencyKey } from './idempotency-key.js'
 
 /**
- * Providerを正規化する（小文字変換・空白除去）
- * @param provider 正規化対象のプロバイダー名
- * @returns 正規化されたプロバイダー名
+ * Fetcherから受け取るレコード形式（token-costs + アプリ情報）
  */
-export function normalizeProvider(provider: string): string {
-  return provider.trim().toLowerCase()
-}
-
-/**
- * Modelを正規化する（小文字変換・空白除去）
- * @param model 正規化対象のモデル名
- * @returns 正規化されたモデル名
- */
-export function normalizeModel(model: string): string {
-  return model.trim().toLowerCase()
+export interface TokenCostInputRecord {
+  date: string
+  token_count: number
+  total_price: string
+  currency: string
+  app_id: string
+  app_name: string
 }
 
 /**
@@ -40,7 +33,7 @@ export interface TransformerDeps {
  */
 export function createDataTransformer(deps: TransformerDeps): ITransformer {
   return {
-    transform(records: DifyUsageRecord[]): TransformResult {
+    transform(records: TokenCostInputRecord[]): TransformResult {
       const transformedAt = getCurrentISOTimestamp()
       const errors: TransformError[] = []
       const successRecords: ExternalApiRecord[] = []
@@ -48,27 +41,19 @@ export function createDataTransformer(deps: TransformerDeps): ITransformer {
 
       for (const record of records) {
         try {
-          const normalizedProvider = normalizeProvider(record.provider)
-          const normalizedModel = normalizeModel(record.model)
-
           const idempotencyKey = generateRecordIdempotencyKey({
             date: record.date,
             app_id: record.app_id,
-            provider: normalizedProvider,
-            model: normalizedModel,
           })
 
           const transformed = {
             date: record.date,
             app_id: record.app_id,
-            provider: normalizedProvider,
-            model: normalizedModel,
-            input_tokens: record.input_tokens,
-            output_tokens: record.output_tokens,
-            total_tokens: record.total_tokens,
-            idempotency_key: idempotencyKey,
             app_name: record.app_name,
-            user_id: record.user_id,
+            token_count: record.token_count,
+            total_price: record.total_price,
+            currency: record.currency,
+            idempotency_key: idempotencyKey,
             transformed_at: transformedAt,
           }
 

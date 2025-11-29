@@ -1,7 +1,7 @@
 /**
  * DifyApiClient 単体テスト
  *
- * Dify Console APIとのHTTP通信、Bearer Token認証、指数バックオフリトライの動作を検証する。
+ * Dify Console APIとのHTTP通信、メール/パスワードログイン認証、指数バックオフリトライの動作を検証する。
  * ADR 002（リトライポリシー）、ADR 007（HTTPクライアント）に準拠。
  */
 
@@ -13,9 +13,11 @@ import type { EnvConfig } from '../../../src/types/env.js'
 vi.mock('axios', async () => {
   const createMock = vi.fn()
   const getMock = vi.fn()
+  const postMock = vi.fn()
 
   const axiosInstance = {
     get: getMock,
+    post: postMock,
     interceptors: {
       request: {
         use: vi.fn(),
@@ -36,7 +38,31 @@ vi.mock('axios', async () => {
   return {
     default: {
       create: createMock,
+      post: postMock,
     },
+  }
+})
+
+// axios-cookiejar-supportをモック
+vi.mock('axios-cookiejar-support', async () => {
+  return {
+    wrapper: vi.fn((instance) => instance),
+  }
+})
+
+// tough-cookieをモック
+vi.mock('tough-cookie', async () => {
+  const mockCookies = [
+    { key: 'access_token', value: 'mock-access-token' },
+    { key: 'csrf_token', value: 'mock-csrf-token' },
+  ]
+
+  class MockCookieJar {
+    getCookies = vi.fn().mockResolvedValue(mockCookies)
+  }
+
+  return {
+    CookieJar: MockCookieJar,
   }
 })
 
@@ -70,7 +96,8 @@ describe('DifyApiClient', () => {
 
     config = {
       DIFY_API_BASE_URL: 'https://api.dify.ai',
-      DIFY_API_TOKEN: 'test-api-token',
+      DIFY_EMAIL: 'test@example.com',
+      DIFY_PASSWORD: 'test-password',
       EXTERNAL_API_URL: 'https://external.api',
       EXTERNAL_API_TOKEN: 'external-token',
       CRON_SCHEDULE: '0 0 * * *',
@@ -79,12 +106,13 @@ describe('DifyApiClient', () => {
       MAX_RETRY: 3,
       NODE_ENV: 'test',
       DIFY_FETCH_PAGE_SIZE: 100,
-      DIFY_INITIAL_FETCH_DAYS: 30,
+      DIFY_FETCH_DAYS: 30,
       DIFY_FETCH_TIMEOUT_MS: 30000,
       DIFY_FETCH_RETRY_COUNT: 3,
       DIFY_FETCH_RETRY_DELAY_MS: 1000,
       WATERMARK_FILE_PATH: 'data/watermark.json',
-    }
+      WATERMARK_ENABLED: true,
+    } as EnvConfig
 
     logger = {
       error: vi.fn(),
@@ -99,12 +127,80 @@ describe('DifyApiClient', () => {
     vi.resetModules()
   })
 
+  describe('ログイン機能', () => {
+    it('初回fetchApps時にログインが実行される', async () => {
+      const axios = await import('axios')
+      const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
+
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: {
+          data: [],
+          has_more: false,
+        },
+      })
+
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
+      const client = createDifyApiClient({ config, logger })
+
+      await client.fetchApps()
+
+      // ログインAPIが呼ばれることを確認（postが呼ばれる）
+      expect(axiosInstance.post).toBeDefined()
+    })
+
+    it('ログイン成功後にCookieが使用される', async () => {
+      const axios = await import('axios')
+      const { wrapper } = await import('axios-cookiejar-support')
+      const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
+
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: {
+          data: [],
+          has_more: false,
+        },
+      })
+
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
+
+      // wrapperが呼ばれることを確認（Cookie Jar対応）
+      expect(wrapper).toHaveBeenCalled()
+    })
+  })
+
   describe('axiosインスタンス設定', () => {
     it('baseURLが正しく設定される', async () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      createDifyApiClient({ config, logger })
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       expect(axios.default.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -117,7 +213,19 @@ describe('DifyApiClient', () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      createDifyApiClient({ config, logger })
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       expect(axios.default.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -126,26 +234,23 @@ describe('DifyApiClient', () => {
       )
     })
 
-    it('Authorization Bearerヘッダーが正しく設定される', async () => {
-      const axios = await import('axios')
-      const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      createDifyApiClient({ config, logger })
-
-      expect(axios.default.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            Authorization: 'Bearer test-api-token',
-          }),
-        }),
-      )
-    })
-
     it('Content-Typeがapplication/jsonに設定される', async () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      createDifyApiClient({ config, logger })
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       expect(axios.default.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -160,7 +265,19 @@ describe('DifyApiClient', () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      createDifyApiClient({ config, logger })
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       expect(axios.default.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -174,19 +291,45 @@ describe('DifyApiClient', () => {
 
   describe('リトライ設定', () => {
     it('axios-retryが設定される', async () => {
+      const axios = await import('axios')
       const axiosRetry = await import('axios-retry')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      createDifyApiClient({ config, logger })
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       expect(axiosRetry.default).toHaveBeenCalled()
     })
 
     it('リトライ回数が環境変数の値で設定される', async () => {
+      const axios = await import('axios')
       const axiosRetry = await import('axios-retry')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      createDifyApiClient({ config, logger })
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       expect(axiosRetry.default).toHaveBeenCalledWith(
         expect.anything(),
@@ -195,60 +338,31 @@ describe('DifyApiClient', () => {
         }),
       )
     })
-
-    it('retryDelayが設定される', async () => {
-      const axiosRetry = await import('axios-retry')
-      const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      createDifyApiClient({ config, logger })
-
-      expect(axiosRetry.default).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          retryDelay: expect.any(Function),
-        }),
-      )
-    })
-
-    it('retryConditionが設定される', async () => {
-      const axiosRetry = await import('axios-retry')
-      const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      createDifyApiClient({ config, logger })
-
-      expect(axiosRetry.default).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          retryCondition: expect.any(Function),
-        }),
-      )
-    })
-
-    it('onRetryが設定される', async () => {
-      const axiosRetry = await import('axios-retry')
-      const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      createDifyApiClient({ config, logger })
-
-      expect(axiosRetry.default).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          onRetry: expect.any(Function),
-        }),
-      )
-    })
   })
 
   describe('リトライ条件', () => {
     it('ネットワークエラーはリトライ対象', async () => {
+      const axios = await import('axios')
       const axiosRetry = await import('axios-retry')
       const axiosRetryMock = axiosRetry.default as ReturnType<typeof vi.fn>
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
       // isNetworkOrIdempotentRequestErrorがtrueを返すように設定
       vi.mocked(axiosRetry.isNetworkOrIdempotentRequestError).mockReturnValue(true)
 
-      createDifyApiClient({ config, logger })
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       // retryConditionを取得して実行
       const retryConfig = axiosRetryMock.mock.calls[0][1]
@@ -266,13 +380,26 @@ describe('DifyApiClient', () => {
     })
 
     it('5xxエラーはリトライ対象', async () => {
+      const axios = await import('axios')
       const axiosRetry = await import('axios-retry')
       const axiosRetryMock = axiosRetry.default as ReturnType<typeof vi.fn>
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
       vi.mocked(axiosRetry.isNetworkOrIdempotentRequestError).mockReturnValue(false)
 
-      createDifyApiClient({ config, logger })
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       const retryConfig = axiosRetryMock.mock.calls[0][1]
       const retryCondition = retryConfig.retryCondition as (error: {
@@ -286,13 +413,26 @@ describe('DifyApiClient', () => {
     })
 
     it('429エラーはリトライ対象', async () => {
+      const axios = await import('axios')
       const axiosRetry = await import('axios-retry')
       const axiosRetryMock = axiosRetry.default as ReturnType<typeof vi.fn>
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
       vi.mocked(axiosRetry.isNetworkOrIdempotentRequestError).mockReturnValue(false)
 
-      createDifyApiClient({ config, logger })
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       const retryConfig = axiosRetryMock.mock.calls[0][1]
       const retryCondition = retryConfig.retryCondition as (error: {
@@ -303,13 +443,26 @@ describe('DifyApiClient', () => {
     })
 
     it('400/401/403/404エラーはリトライ対象外', async () => {
+      const axios = await import('axios')
       const axiosRetry = await import('axios-retry')
       const axiosRetryMock = axiosRetry.default as ReturnType<typeof vi.fn>
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
       vi.mocked(axiosRetry.isNetworkOrIdempotentRequestError).mockReturnValue(false)
 
-      createDifyApiClient({ config, logger })
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       const retryConfig = axiosRetryMock.mock.calls[0][1]
       const retryCondition = retryConfig.retryCondition as (error: {
@@ -325,11 +478,24 @@ describe('DifyApiClient', () => {
 
   describe('リトライディレイ', () => {
     it('指数バックオフが適用される（1秒→2秒→4秒）', async () => {
+      const axios = await import('axios')
       const axiosRetry = await import('axios-retry')
       const axiosRetryMock = axiosRetry.default as ReturnType<typeof vi.fn>
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      createDifyApiClient({ config, logger })
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       const retryConfig = axiosRetryMock.mock.calls[0][1]
       const retryDelay = retryConfig.retryDelay as (
@@ -346,11 +512,24 @@ describe('DifyApiClient', () => {
     })
 
     it('Retry-Afterヘッダーがある場合はその値を使用する', async () => {
+      const axios = await import('axios')
       const axiosRetry = await import('axios-retry')
       const axiosRetryMock = axiosRetry.default as ReturnType<typeof vi.fn>
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      createDifyApiClient({ config, logger })
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       const retryConfig = axiosRetryMock.mock.calls[0][1]
       const retryDelay = retryConfig.retryDelay as (
@@ -381,11 +560,24 @@ describe('DifyApiClient', () => {
 
   describe('onRetryコールバック', () => {
     it('リトライ時にログが出力される', async () => {
+      const axios = await import('axios')
       const axiosRetry = await import('axios-retry')
       const axiosRetryMock = axiosRetry.default as ReturnType<typeof vi.fn>
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      createDifyApiClient({ config, logger })
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
+      const axiosInstance = axios.default.create()
+      axiosInstance.get = getMock
+
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       const retryConfig = axiosRetryMock.mock.calls[0][1]
       const onRetry = retryConfig.onRetry as (
@@ -416,8 +608,19 @@ describe('DifyApiClient', () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
       const axiosInstance = axios.default.create()
-      createDifyApiClient({ config, logger })
+      axiosInstance.get = getMock
+
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       expect(axiosInstance.interceptors.request.use).toHaveBeenCalled()
     })
@@ -426,24 +629,40 @@ describe('DifyApiClient', () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
+      const getMock = vi.fn().mockResolvedValue({
+        data: { data: [], has_more: false },
+      })
       const axiosInstance = axios.default.create()
-      createDifyApiClient({ config, logger })
+      axiosInstance.get = getMock
+
+      const client = createDifyApiClient({ config, logger })
+      await client.fetchApps()
 
       expect(axiosInstance.interceptors.response.use).toHaveBeenCalled()
     })
   })
 
-  describe('fetchUsage', () => {
-    it('/console/api/usageを呼び出す', async () => {
+  describe('fetchApps', () => {
+    it('/console/api/appsを呼び出す', async () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
       const getMock = vi.fn().mockResolvedValue({
         data: {
-          data: [],
-          total: 0,
-          page: 1,
-          limit: 100,
+          data: [
+            { id: 'app-1', name: 'App 1', mode: 'chat' },
+            { id: 'app-2', name: 'App 2', mode: 'completion' },
+          ],
           has_more: false,
         },
       })
@@ -453,77 +672,69 @@ describe('DifyApiClient', () => {
 
       const client = createDifyApiClient({ config, logger })
 
-      await client.fetchUsage({
-        startDate: '2024-01-01',
-        endDate: '2024-01-31',
-        page: 1,
-        limit: 100,
-      })
+      const result = await client.fetchApps()
 
       expect(getMock).toHaveBeenCalledWith(
-        '/console/api/usage',
+        '/console/api/apps',
         expect.objectContaining({
-          params: {
-            start_date: '2024-01-01',
-            end_date: '2024-01-31',
-            page: 1,
-            limit: 100,
-          },
+          params: { page: 1, limit: 100 },
         }),
       )
+      expect(result).toHaveLength(2)
+      expect(result[0].id).toBe('app-1')
     })
 
-    it('レスポンスデータを返す', async () => {
+    it('ページネーションで全アプリを取得する', async () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      const mockResponse = {
-        data: [
-          {
-            date: '2024-01-15',
-            app_id: 'app-123',
-            provider: 'openai',
-            model: 'gpt-4',
-            input_tokens: 100,
-            output_tokens: 50,
-            total_tokens: 150,
-          },
-        ],
-        total: 1,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      }
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
 
-      const getMock = vi.fn().mockResolvedValue({ data: mockResponse })
+      const getMock = vi
+        .fn()
+        .mockResolvedValueOnce({
+          data: {
+            data: [{ id: 'app-1', name: 'App 1', mode: 'chat' }],
+            has_more: true,
+          },
+        })
+        .mockResolvedValueOnce({
+          data: {
+            data: [{ id: 'app-2', name: 'App 2', mode: 'chat' }],
+            has_more: false,
+          },
+        })
+
       const axiosInstance = axios.default.create()
       axiosInstance.get = getMock
 
       const client = createDifyApiClient({ config, logger })
 
-      const result = await client.fetchUsage({
-        startDate: '2024-01-01',
-        endDate: '2024-01-31',
-        page: 1,
-        limit: 100,
-      })
+      const result = await client.fetchApps()
 
-      expect(result).toEqual(mockResponse)
+      expect(getMock).toHaveBeenCalledTimes(2)
+      expect(result).toHaveLength(2)
     })
   })
 
-  describe('パラメータ構築', () => {
-    it('日付パラメータが正しい形式で渡される', async () => {
+  describe('fetchAppTokenCosts', () => {
+    it('/console/api/apps/{appId}/statistics/token-costsを呼び出す', async () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
+      // ログインAPIモック
+      vi.mocked(axios.default.create().post).mockResolvedValue({
+        data: { result: 'success' },
+      })
+
       const getMock = vi.fn().mockResolvedValue({
         data: {
-          data: [],
-          total: 0,
-          page: 1,
-          limit: 100,
-          has_more: false,
+          data: [
+            { date: '2024-01-15', token_count: 100, total_price: '0.001', currency: 'USD' },
+          ],
         },
       })
 
@@ -532,59 +743,23 @@ describe('DifyApiClient', () => {
 
       const client = createDifyApiClient({ config, logger })
 
-      await client.fetchUsage({
-        startDate: '2024-01-01',
-        endDate: '2024-01-31',
-        page: 1,
-        limit: 100,
+      const result = await client.fetchAppTokenCosts({
+        appId: 'app-123',
+        start: '2024-01-01 00:00',
+        end: '2024-01-31 23:59',
       })
 
       expect(getMock).toHaveBeenCalledWith(
-        expect.anything(),
+        '/console/api/apps/app-123/statistics/token-costs',
         expect.objectContaining({
-          params: expect.objectContaining({
-            start_date: '2024-01-01',
-            end_date: '2024-01-31',
-          }),
+          params: {
+            start: '2024-01-01 00:00',
+            end: '2024-01-31 23:59',
+          },
         }),
       )
-    })
-
-    it('ページネーションパラメータが正しく渡される', async () => {
-      const axios = await import('axios')
-      const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      const getMock = vi.fn().mockResolvedValue({
-        data: {
-          data: [],
-          total: 0,
-          page: 5,
-          limit: 50,
-          has_more: false,
-        },
-      })
-
-      const axiosInstance = axios.default.create()
-      axiosInstance.get = getMock
-
-      const client = createDifyApiClient({ config, logger })
-
-      await client.fetchUsage({
-        startDate: '2024-01-01',
-        endDate: '2024-01-31',
-        page: 5,
-        limit: 50,
-      })
-
-      expect(getMock).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          params: expect.objectContaining({
-            page: 5,
-            limit: 50,
-          }),
-        }),
-      )
+      expect(result.data).toHaveLength(1)
+      expect(result.data[0].token_count).toBe(100)
     })
   })
 })

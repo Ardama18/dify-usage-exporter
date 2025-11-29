@@ -15,7 +15,8 @@ describe('envSchema - Healthcheck Extensions', () => {
     process.env = {
       ...originalEnv,
       DIFY_API_BASE_URL: 'https://api.dify.ai',
-      DIFY_API_TOKEN: 'test-token',
+      DIFY_EMAIL: 'test@example.com',
+      DIFY_PASSWORD: 'test-password',
       EXTERNAL_API_URL: 'https://api.example.com',
       EXTERNAL_API_TOKEN: 'test-token',
     }

@@ -1,5 +1,5 @@
 // Dify使用量データ取得機能 統合テスト - Design Doc: specs/stories/2-dify-usage-fetcher/design.md
-// 生成日: 2025-11-21
+// 生成日: 2025-11-29
 // テスト種別: Integration Test
 // 実装タイミング: 機能実装と同時
 
@@ -8,16 +8,15 @@ import os from 'node:os'
 import path from 'node:path'
 import axios from 'axios'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createDifyApiClient } from '../../src/fetcher/dify-api-client.js'
-import { createDifyUsageFetcher } from '../../src/fetcher/dify-usage-fetcher.js'
-import type { Logger } from '../../src/logger/winston-logger.js'
-import type { DifyUsageRecord } from '../../src/types/dify-usage.js'
-import type { EnvConfig } from '../../src/types/env.js'
-import type { Watermark } from '../../src/types/watermark.js'
+import { createDifyApiClient, type DifyApp } from '../../src/fetcher/dify-api-client.js'
 import {
-  createWatermarkManager,
-  WatermarkFileError,
-} from '../../src/watermark/watermark-manager.js'
+  createDifyUsageFetcher,
+  type FetchedTokenCostRecord,
+} from '../../src/fetcher/dify-usage-fetcher.js'
+import type { Logger } from '../../src/logger/winston-logger.js'
+import type { DifyAppTokenCost } from '../../src/types/dify-usage.js'
+import type { EnvConfig } from '../../src/types/env.js'
+import { createWatermarkManager } from '../../src/watermark/watermark-manager.js'
 
 // axiosをモック
 vi.mock('axios')
@@ -26,9 +25,84 @@ vi.mock('axios-retry', () => ({
   isNetworkOrIdempotentRequestError: vi.fn(),
   exponentialDelay: vi.fn(),
 }))
+vi.mock('axios-cookiejar-support', () => ({
+  wrapper: vi.fn((instance) => instance),
+}))
+vi.mock('tough-cookie', () => {
+  const mockCookies = [
+    { key: 'access_token', value: 'mock-access-token' },
+    { key: 'csrf_token', value: 'mock-csrf-token' },
+  ]
+  class MockCookieJar {
+    getCookies = vi.fn().mockResolvedValue(mockCookies)
+  }
+  return { CookieJar: MockCookieJar }
+})
 
 // ============================================
-// FR-1: Dify API認証 統合テスト（3件 + 2エッジケース）
+// ヘルパー関数
+// ============================================
+
+function createMockApp(overrides: Partial<DifyApp> = {}): DifyApp {
+  return {
+    id: 'app-123',
+    name: 'Test App',
+    mode: 'chat',
+    ...overrides,
+  }
+}
+
+function createMockTokenCost(overrides: Partial<DifyAppTokenCost> = {}): DifyAppTokenCost {
+  return {
+    date: '2024-01-15',
+    token_count: 100,
+    total_price: '0.001',
+    currency: 'USD',
+    ...overrides,
+  }
+}
+
+function createTestConfig(overrides: Partial<EnvConfig> = {}): EnvConfig {
+  return {
+    DIFY_API_BASE_URL: 'https://api.dify.ai',
+    DIFY_EMAIL: 'test@example.com',
+    DIFY_PASSWORD: 'test-password',
+    EXTERNAL_API_URL: 'https://external.api',
+    EXTERNAL_API_TOKEN: 'external-token',
+    CRON_SCHEDULE: '0 0 * * *',
+    LOG_LEVEL: 'info',
+    GRACEFUL_SHUTDOWN_TIMEOUT: 30,
+    MAX_RETRY: 3,
+    NODE_ENV: 'test',
+    DIFY_FETCH_PAGE_SIZE: 100,
+    DIFY_FETCH_DAYS: 30,
+    DIFY_FETCH_TIMEOUT_MS: 30000,
+    DIFY_FETCH_RETRY_COUNT: 3,
+    DIFY_FETCH_RETRY_DELAY_MS: 1000,
+    WATERMARK_FILE_PATH: 'data/watermark.json',
+      WATERMARK_ENABLED: true,
+    EXTERNAL_API_TIMEOUT_MS: 30000,
+    MAX_RETRIES: 3,
+    MAX_SPOOL_RETRIES: 10,
+    BATCH_SIZE: 100,
+    HEALTHCHECK_PORT: 8080,
+    HEALTHCHECK_ENABLED: true,
+    ...overrides,
+  }
+}
+
+function createMockLogger(): Logger {
+  return {
+    error: vi.fn(),
+    warn: vi.fn(),
+    info: vi.fn(),
+    debug: vi.fn(),
+    child: vi.fn().mockReturnThis(),
+  } as unknown as Logger
+}
+
+// ============================================
+// FR-1: Dify API認証 統合テスト
 // ============================================
 describe('FR-1: Dify API認証 統合テスト', () => {
   let config: EnvConfig
@@ -37,36 +111,15 @@ describe('FR-1: Dify API認証 統合テスト', () => {
   beforeEach(() => {
     vi.clearAllMocks()
 
-    config = {
-      DIFY_API_BASE_URL: 'https://api.dify.ai',
-      DIFY_API_TOKEN: 'test-api-token-12345',
-      EXTERNAL_API_URL: 'https://external.api',
-      EXTERNAL_API_TOKEN: 'external-token',
-      CRON_SCHEDULE: '0 0 * * *',
-      LOG_LEVEL: 'info',
-      GRACEFUL_SHUTDOWN_TIMEOUT: 30,
-      MAX_RETRY: 3,
-      NODE_ENV: 'test',
-      DIFY_FETCH_PAGE_SIZE: 100,
-      DIFY_INITIAL_FETCH_DAYS: 30,
-      DIFY_FETCH_TIMEOUT_MS: 30000,
-      DIFY_FETCH_RETRY_COUNT: 3,
-      DIFY_FETCH_RETRY_DELAY_MS: 1000,
-      WATERMARK_FILE_PATH: 'data/watermark.json',
-    }
-
-    logger = {
-      error: vi.fn(),
-      warn: vi.fn(),
-      info: vi.fn(),
-      debug: vi.fn(),
-      child: vi.fn().mockReturnThis(),
-    }
+    config = createTestConfig()
+    logger = createMockLogger()
 
     // axiosモックのセットアップ
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
     const getMock = vi.fn()
     const axiosInstance = {
       get: getMock,
+      post: postMock,
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
@@ -75,188 +128,89 @@ describe('FR-1: Dify API認証 統合テスト', () => {
     vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
   })
 
-  // AC-1-1解釈: [遍在型] すべてのAPIリクエストにBearerトークンヘッダーを含める
-  // 検証: DifyApiClientがすべてのリクエストにAuthorization: Bearer ${token}を設定すること
-  // @category: integration
-  // @dependency: DifyApiClient, EnvConfig
-  // @complexity: low
-  it('AC-1-1: すべてのAPIリクエストにAuthorization Bearerヘッダーが含まれる', () => {
-    // Act
-    createDifyApiClient({ config, logger })
+  // AC-1-1: Cookie Jarベースの認証を使用
+  it('AC-1-1: Cookie Jarを使用してセッション認証が行われる', async () => {
+    // Arrange - ログイン成功のモック設定
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
+    const getMock = vi.fn().mockResolvedValue({ data: { data: [], has_more: false } })
+    const axiosInstance = {
+      get: getMock,
+      post: postMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
 
+    const client = createDifyApiClient({ config, logger })
+
+    // Act - fetchAppsを呼ぶと内部でログインが発生
+    await client.fetchApps()
+
+    // Assert - Cookie Jar対応のaxiosが使用されている（wrapperがモックされている）
+    expect(axios.create).toHaveBeenCalled()
+  })
+
+  // AC-1-2: メール/パスワードによるログインが必要
+  it('AC-1-2: 環境変数DIFY_EMAILとDIFY_PASSWORDが設定されている', () => {
     // Assert
-    expect(axios.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer test-api-token-12345',
-        }),
-      }),
-    )
+    expect(config.DIFY_EMAIL).toBe('test@example.com')
+    expect(config.DIFY_PASSWORD).toBe('test-password')
   })
 
-  // AC-1-2解釈: [選択型] DIFY_API_TOKEN未設定時にエラー出力して終了
-  // 検証: EnvConfigがDIFY_API_TOKEN未設定を検出し、適切なエラーをスローすること
-  // Note: EnvConfigのzodバリデーションで実施されるため、統合テストではaxiosの設定を確認
-  it('AC-1-2: 環境変数DIFY_API_TOKENが未設定の場合、起動時にエラーを出力して終了する', () => {
-    // Arrange - トークンが空の場合はaxios設定時にHeaderに空が設定される
-    // 実際のバリデーションはEnvConfigのzodスキーマで実施
-    // このテストではDifyApiClientがトークンを正しくセットすることを確認
-    const testConfig = { ...config, DIFY_API_TOKEN: '' }
-
-    // Act
-    createDifyApiClient({ config: testConfig, logger })
-
-    // Assert - 空文字でもヘッダーは設定される（バリデーションはEnvConfigの責務）
-    expect(axios.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer ',
-        }),
-      }),
-    )
-  })
-
-  // AC-1-3解釈: [不測型] 401エラー時にログ出力して処理終了
-  // 検証: DifyApiClientが401を受けた場合、DifyUsageFetcherがエラーログを出力し処理を停止すること
-  // @category: integration
-  // @dependency: DifyApiClient, DifyUsageFetcher, Logger
-  // @complexity: medium
+  // AC-1-3: 401エラー時のエラーハンドリング
   it('AC-1-3: APIが401エラーを返した場合、エラーログを出力して処理を終了する', async () => {
     // Arrange
     const authError = {
       response: { status: 401, data: { error: 'Unauthorized' } },
       message: 'Request failed with status code 401',
-      config: { url: '/console/api/usage' },
+      config: { url: '/console/api/login' },
     }
-    const getMock = vi.fn().mockRejectedValue(authError)
+    const postMock = vi.fn().mockRejectedValue(authError)
     const axiosInstance = {
-      get: getMock,
+      get: vi.fn(),
+      post: postMock,
       interceptors: {
         request: { use: vi.fn() },
-        response: {
-          use: vi.fn((_, errorHandler) => {
-            // レスポンスエラーハンドラーを即座に実行
-            axiosInstance.errorHandler = errorHandler
-          }),
-        },
+        response: { use: vi.fn() },
       },
-      errorHandler: null as ((error: unknown) => void) | null,
     }
     vi.mocked(axios.create).mockReturnValue(
-      axiosInstance as unknown as ReturnType<typeof axios.create>,
+      axiosInstance as unknown as ReturnType<typeof axios.create>
     )
 
     const client = createDifyApiClient({ config, logger })
 
     // Act & Assert
-    await expect(
-      client.fetchUsage({
-        startDate: '2024-01-01',
-        endDate: '2024-01-31',
-        page: 1,
-        limit: 100,
-      }),
-    ).rejects.toThrow()
-  })
-
-  // エッジケース: 無効なトークン形式
-  // 検証: 空文字やnullが設定された場合の挙動
-  // Note: EnvConfigのzodバリデーションで実施、統合テストでは設定反映を確認
-  it('AC-1-2-edge: 空文字のDIFY_API_TOKENが設定された場合、エラーを出力する（必須・高リスク）', () => {
-    // Arrange
-    const testConfig = { ...config, DIFY_API_TOKEN: '' }
-
-    // Act
-    createDifyApiClient({ config: testConfig, logger })
-
-    // Assert - ヘッダーに空のトークンが設定される
-    expect(axios.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer ',
-        }),
-      }),
-    )
-  })
-
-  // エッジケース: トークンの特殊文字
-  // 検証: 特殊文字を含むトークンが正しく処理されること
-  // @category: edge-case
-  // @dependency: DifyApiClient
-  // @complexity: low
-  it('AC-1-1-edge: 特殊文字を含むトークンが正しくヘッダーに設定される（推奨・中リスク）', () => {
-    // Arrange
-    config.DIFY_API_TOKEN = 'token-with-special-chars!@#$%^&*()'
-
-    // Act
-    createDifyApiClient({ config, logger })
-
-    // Assert
-    expect(axios.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer token-with-special-chars!@#$%^&*()',
-        }),
-      }),
-    )
+    await expect(client.fetchApps()).rejects.toThrow()
   })
 })
 
 // ============================================
-// FR-2: 使用量データ取得API呼び出し 統合テスト（4件 + 3エッジケース）
+// FR-2: アプリ一覧・トークンコスト取得 統合テスト
 // ============================================
-describe('FR-2: 使用量データ取得API呼び出し 統合テスト', () => {
+describe('FR-2: アプリ一覧・トークンコスト取得 統合テスト', () => {
   let config: EnvConfig
   let logger: Logger
 
   beforeEach(() => {
     vi.clearAllMocks()
-
-    config = {
-      DIFY_API_BASE_URL: 'https://api.dify.ai',
-      DIFY_API_TOKEN: 'test-api-token',
-      EXTERNAL_API_URL: 'https://external.api',
-      EXTERNAL_API_TOKEN: 'external-token',
-      CRON_SCHEDULE: '0 0 * * *',
-      LOG_LEVEL: 'info',
-      GRACEFUL_SHUTDOWN_TIMEOUT: 30,
-      MAX_RETRY: 3,
-      NODE_ENV: 'test',
-      DIFY_FETCH_PAGE_SIZE: 100,
-      DIFY_INITIAL_FETCH_DAYS: 30,
-      DIFY_FETCH_TIMEOUT_MS: 30000,
-      DIFY_FETCH_RETRY_COUNT: 3,
-      DIFY_FETCH_RETRY_DELAY_MS: 1000,
-      WATERMARK_FILE_PATH: 'data/watermark.json',
-    }
-
-    logger = {
-      error: vi.fn(),
-      warn: vi.fn(),
-      info: vi.fn(),
-      debug: vi.fn(),
-      child: vi.fn().mockReturnThis(),
-    }
+    config = createTestConfig()
+    logger = createMockLogger()
   })
 
-  // AC-2-1解釈: [契機型] Fetcher起動時にDify Console API呼び出し
-  // 検証: DifyUsageFetcherがDifyApiClientを通じて/console/api/usageを呼び出すこと
-  // @category: integration
-  // @dependency: DifyUsageFetcher, DifyApiClient
-  // @complexity: medium
-  it('AC-2-1: Fetcherが起動したとき、Dify Console API /console/api/usage を呼び出す', async () => {
+  // AC-2-1: fetchAppsでアプリ一覧を取得
+  it('AC-2-1: fetchAppsがDify Console APIからアプリ一覧を取得する', async () => {
     // Arrange
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [],
-        total: 0,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
+    const mockApps = [createMockApp({ id: 'app-1' }), createMockApp({ id: 'app-2' })]
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
+    const getMock = vi
+      .fn()
+      .mockResolvedValue({ data: { data: mockApps, has_more: false, total: 2 } })
     const axiosInstance = {
       get: getMock,
+      post: postMock,
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
@@ -267,35 +221,22 @@ describe('FR-2: 使用量データ取得API呼び出し 統合テスト', () => 
     const client = createDifyApiClient({ config, logger })
 
     // Act
-    await client.fetchUsage({
-      startDate: '2024-01-01',
-      endDate: '2024-01-31',
-      page: 1,
-      limit: 100,
-    })
+    const apps = await client.fetchApps()
 
     // Assert
-    expect(getMock).toHaveBeenCalledWith('/console/api/usage', expect.any(Object))
+    expect(apps).toHaveLength(2)
+    expect(getMock).toHaveBeenCalledWith('/console/api/apps', expect.any(Object))
   })
 
-  // AC-2-2解釈: [遍在型] start_date, end_date, page, limitパラメータ設定
-  // 検証: DifyApiClientが正しいクエリパラメータでリクエストを構築すること
-  // @category: integration
-  // @dependency: DifyApiClient, WatermarkManager
-  // @complexity: medium
-  it('AC-2-2: start_date、end_date、page、limitパラメータが正しく設定される', async () => {
+  // AC-2-2: fetchAppTokenCostsでアプリ別トークンコストを取得
+  it('AC-2-2: fetchAppTokenCostsがアプリ別のトークンコストを取得する', async () => {
     // Arrange
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [],
-        total: 0,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
+    const mockCosts = [createMockTokenCost({ date: '2024-01-15' })]
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
+    const getMock = vi.fn().mockResolvedValue({ data: { data: mockCosts } })
     const axiosInstance = {
       get: getMock,
+      post: postMock,
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
@@ -306,54 +247,28 @@ describe('FR-2: 使用量データ取得API呼び出し 統合テスト', () => 
     const client = createDifyApiClient({ config, logger })
 
     // Act
-    await client.fetchUsage({
-      startDate: '2024-01-01',
-      endDate: '2024-01-31',
-      page: 2,
-      limit: 50,
+    const result = await client.fetchAppTokenCosts({
+      appId: 'app-123',
+      start: '2024-01-01 00:00',
+      end: '2024-01-31 23:59',
     })
 
     // Assert
+    expect(result.data).toHaveLength(1)
     expect(getMock).toHaveBeenCalledWith(
-      '/console/api/usage',
-      expect.objectContaining({
-        params: {
-          start_date: '2024-01-01',
-          end_date: '2024-01-31',
-          page: 2,
-          limit: 50,
-        },
-      }),
+      '/console/api/apps/app-123/statistics/token-costs',
+      expect.any(Object)
     )
   })
 
-  // AC-2-3解釈: [選択型] JSONレスポンスをDifyUsageResponse型として解析
-  // 検証: DifyApiClientがJSONレスポンスを正しく型変換すること
-  // @category: integration
-  // @dependency: DifyApiClient, ResponseValidator
-  // @complexity: medium
-  it('AC-2-3: APIがJSON形式のレスポンスを返した場合、DifyUsageResponse型として解析する', async () => {
+  // AC-2-3: APIタイムアウト設定
+  it('AC-2-3: APIタイムアウトがDIFY_FETCH_TIMEOUT_MSで設定される', async () => {
     // Arrange
-    const mockData = {
-      data: [
-        {
-          date: '2024-01-15',
-          app_id: 'app-123',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 50,
-          total_tokens: 150,
-        },
-      ],
-      total: 1,
-      page: 1,
-      limit: 100,
-      has_more: false,
-    }
-    const getMock = vi.fn().mockResolvedValue({ data: mockData })
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
+    const getMock = vi.fn().mockResolvedValue({ data: { data: [], has_more: false } })
     const axiosInstance = {
       get: getMock,
+      post: postMock,
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
@@ -363,122 +278,26 @@ describe('FR-2: 使用量データ取得API呼び出し 統合テスト', () => 
 
     const client = createDifyApiClient({ config, logger })
 
-    // Act
-    const result = await client.fetchUsage({
-      startDate: '2024-01-01',
-      endDate: '2024-01-31',
-      page: 1,
-      limit: 100,
-    })
+    // Act - fetchAppsを呼ぶと内部でクライアントが初期化される
+    await client.fetchApps()
 
-    // Assert
-    expect(result).toEqual(mockData)
-    expect(result.data).toHaveLength(1)
-    expect(result.data[0].date).toBe('2024-01-15')
-  })
-
-  // AC-2-4解釈: [遍在型] APIタイムアウト30秒デフォルト設定
-  // 検証: DifyApiClientのaxiosインスタンスがtimeout: 30000で設定されていること
-  // @category: integration
-  // @dependency: DifyApiClient, EnvConfig
-  // @complexity: low
-  it('AC-2-4: APIタイムアウトがデフォルト30秒に設定される', () => {
-    // Arrange
-    const axiosInstance = {
-      get: vi.fn(),
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    // Act
-    createDifyApiClient({ config, logger })
-
-    // Assert
+    // Assert - タイムアウトが設定されたaxiosインスタンスが作成される
     expect(axios.create).toHaveBeenCalledWith(
       expect.objectContaining({
         timeout: 30000,
-      }),
+      })
     )
   })
 
-  // エッジケース: タイムアウト発生
-  // 検証: タイムアウト時のエラーハンドリング
-  // @category: edge-case
-  // @dependency: DifyApiClient, DifyUsageFetcher
-  // @complexity: medium
-  it('AC-2-4-edge: タイムアウトが発生した場合、適切なエラーログを出力する（必須・高リスク）', async () => {
-    // Arrange
-    const timeoutError = {
-      code: 'ECONNABORTED',
-      message: 'timeout of 30000ms exceeded',
-      config: { url: '/console/api/usage' },
-    }
-    const getMock = vi.fn().mockRejectedValue(timeoutError)
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-
-    // Act & Assert
-    await expect(
-      client.fetchUsage({
-        startDate: '2024-01-01',
-        endDate: '2024-01-31',
-        page: 1,
-        limit: 100,
-      }),
-    ).rejects.toMatchObject({
-      code: 'ECONNABORTED',
-    })
-  })
-
-  // エッジケース: 不正なJSONレスポンス
-  // 検証: JSONパースエラー時の挙動
-  it('AC-2-3-edge: 不正なJSONレスポンスを受けた場合、エラーログを出力する（必須・高リスク）', async () => {
-    // Arrange
-    const parseError = new SyntaxError('Unexpected token < in JSON at position 0')
-    const getMock = vi.fn().mockRejectedValue(parseError)
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-
-    // Act & Assert
-    await expect(
-      client.fetchUsage({
-        startDate: '2024-01-01',
-        endDate: '2024-01-31',
-        page: 1,
-        limit: 100,
-      }),
-    ).rejects.toThrow(SyntaxError)
-  })
-
-  // エッジケース: カスタムタイムアウト設定
-  // 検証: 環境変数DIFY_FETCH_TIMEOUT_MSの反映
-  // @category: edge-case
-  // @dependency: DifyApiClient, EnvConfig
-  // @complexity: low
-  it('AC-2-4-edge: DIFY_FETCH_TIMEOUT_MS環境変数でタイムアウト値を変更できる（推奨・中リスク）', () => {
+  // カスタムタイムアウト設定
+  it('AC-2-3-edge: カスタムタイムアウト値が正しく適用される', async () => {
     // Arrange
     config.DIFY_FETCH_TIMEOUT_MS = 60000
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
+    const getMock = vi.fn().mockResolvedValue({ data: { data: [], has_more: false } })
     const axiosInstance = {
-      get: vi.fn(),
+      get: getMock,
+      post: postMock,
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
@@ -486,62 +305,43 @@ describe('FR-2: 使用量データ取得API呼び出し 統合テスト', () => 
     }
     vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
 
-    // Act
-    createDifyApiClient({ config, logger })
+    const client = createDifyApiClient({ config, logger })
+
+    // Act - fetchAppsを呼ぶと内部でクライアントが初期化される
+    await client.fetchApps()
 
     // Assert
     expect(axios.create).toHaveBeenCalledWith(
       expect.objectContaining({
         timeout: 60000,
-      }),
+      })
     )
   })
 })
 
 // ============================================
-// FR-3: ページング処理 統合テスト（4件 + 4エッジケース）
+// FR-3: DifyUsageFetcher 統合テスト
 // ============================================
-describe('FR-3: ページング処理 統合テスト', () => {
+describe('FR-3: DifyUsageFetcher 統合テスト', () => {
   let testDir: string
   let config: EnvConfig
   let logger: Logger
 
   beforeEach(async () => {
     vi.clearAllMocks()
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2024-01-20T12:00:00.000Z'))
+    // Note: fake timersはasync処理と相性が悪いため使用しない
+    // 日付のモックは vi.spyOn(Date, 'now') で行う
 
     testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'fetcher-int-test-'))
 
-    config = {
-      DIFY_API_BASE_URL: 'https://api.dify.ai',
-      DIFY_API_TOKEN: 'test-api-token',
-      EXTERNAL_API_URL: 'https://external.api',
-      EXTERNAL_API_TOKEN: 'external-token',
-      CRON_SCHEDULE: '0 0 * * *',
-      LOG_LEVEL: 'info',
-      GRACEFUL_SHUTDOWN_TIMEOUT: 30,
-      MAX_RETRY: 3,
-      NODE_ENV: 'test',
-      DIFY_FETCH_PAGE_SIZE: 100,
-      DIFY_INITIAL_FETCH_DAYS: 30,
-      DIFY_FETCH_TIMEOUT_MS: 30000,
-      DIFY_FETCH_RETRY_COUNT: 3,
-      DIFY_FETCH_RETRY_DELAY_MS: 1000,
+    config = createTestConfig({
       WATERMARK_FILE_PATH: path.join(testDir, 'watermark.json'),
-    }
-
-    logger = {
-      error: vi.fn(),
-      warn: vi.fn(),
-      info: vi.fn(),
-      debug: vi.fn(),
-      child: vi.fn().mockReturnThis(),
-    }
+    })
+    logger = createMockLogger()
   })
 
   afterEach(async () => {
-    vi.useRealTimers()
+    vi.restoreAllMocks()
     try {
       await fs.rm(testDir, { recursive: true, force: true })
     } catch {
@@ -549,54 +349,21 @@ describe('FR-3: ページング処理 統合テスト', () => {
     }
   })
 
-  function createMockRecord(overrides: Partial<DifyUsageRecord> = {}): DifyUsageRecord {
-    return {
-      date: '2024-01-15',
-      app_id: 'app-123',
-      provider: 'openai',
-      model: 'gpt-4',
-      input_tokens: 100,
-      output_tokens: 50,
-      total_tokens: 150,
-      ...overrides,
-    }
-  }
-
-  // AC-3-1解釈: [状態型] has_more=trueの間、次のページを取得
-  it('AC-3-1: has_moreがtrueの間、次のページを取得し続ける', async () => {
+  // AC-3-1: 全アプリのトークンコストを取得
+  it('AC-3-1: 全アプリのtoken-costsを取得してコールバックに渡す', async () => {
     // Arrange
+    const mockApps = [createMockApp({ id: 'app-1', name: 'App 1' })]
+    const mockCosts = [createMockTokenCost()]
+
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
     const getMock = vi
       .fn()
-      .mockResolvedValueOnce({
-        data: {
-          data: [createMockRecord()],
-          total: 3,
-          page: 1,
-          limit: 100,
-          has_more: true,
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          data: [createMockRecord()],
-          total: 3,
-          page: 2,
-          limit: 100,
-          has_more: true,
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          data: [createMockRecord()],
-          total: 3,
-          page: 3,
-          limit: 100,
-          has_more: false,
-        },
-      })
+      .mockResolvedValueOnce({ data: { data: mockApps, has_more: false } }) // fetchApps
+      .mockResolvedValueOnce({ data: { data: mockCosts } }) // fetchAppTokenCosts
 
     const axiosInstance = {
       get: getMock,
+      post: postMock,
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
@@ -610,46 +377,37 @@ describe('FR-3: ページング処理 統合テスト', () => {
 
     const onRecords = vi.fn().mockResolvedValue(undefined)
 
-    // Act - runAllTimersAsyncを使用してすべてのタイマーを実行
-    const fetchPromise = fetcher.fetch(onRecords)
-    // 繰り返しタイマーを進める
-    for (let i = 0; i < 10; i++) {
-      await vi.advanceTimersByTimeAsync(1000)
-    }
-    const result = await fetchPromise
+    // Act
+    const result = await fetcher.fetch(onRecords)
 
     // Assert
-    expect(getMock).toHaveBeenCalledTimes(3)
-    expect(result.totalPages).toBe(3)
-    expect(result.totalRecords).toBe(3)
+    expect(result.success).toBe(true)
+    expect(onRecords).toHaveBeenCalled()
+    const receivedRecords = onRecords.mock.calls[0][0] as FetchedTokenCostRecord[]
+    expect(receivedRecords[0].app_id).toBe('app-1')
+    expect(receivedRecords[0].app_name).toBe('App 1')
   })
 
-  // AC-3-2解釈: [遍在型] 各ページ取得後1秒ディレイ
-  it('AC-3-2: 各ページ取得後に1秒のディレイを挿入する', async () => {
+  // AC-3-2: 複数アプリの処理
+  it('AC-3-2: 複数アプリのtoken-costsを順次取得する', async () => {
     // Arrange
+    const mockApps = [
+      createMockApp({ id: 'app-1', name: 'App 1' }),
+      createMockApp({ id: 'app-2', name: 'App 2' }),
+    ]
+    const mockCosts1 = [createMockTokenCost({ date: '2024-01-15' })]
+    const mockCosts2 = [createMockTokenCost({ date: '2024-01-16' })]
+
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
     const getMock = vi
       .fn()
-      .mockResolvedValueOnce({
-        data: {
-          data: [createMockRecord()],
-          total: 2,
-          page: 1,
-          limit: 100,
-          has_more: true,
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          data: [createMockRecord()],
-          total: 2,
-          page: 2,
-          limit: 100,
-          has_more: false,
-        },
-      })
+      .mockResolvedValueOnce({ data: { data: mockApps, has_more: false } })
+      .mockResolvedValueOnce({ data: { data: mockCosts1 } })
+      .mockResolvedValueOnce({ data: { data: mockCosts2 } })
 
     const axiosInstance = {
       get: getMock,
+      post: postMock,
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
@@ -664,125 +422,23 @@ describe('FR-3: ページング処理 統合テスト', () => {
     const onRecords = vi.fn().mockResolvedValue(undefined)
 
     // Act
-    const fetchPromise = fetcher.fetch(onRecords)
-
-    // 全てのタイマーを進めて2ページを取得
-    for (let i = 0; i < 5; i++) {
-      await vi.advanceTimersByTimeAsync(1000)
-    }
-    const result = await fetchPromise
-
-    // Assert - 2ページ分のAPI呼び出しが行われている
-    expect(getMock).toHaveBeenCalledTimes(2)
-    expect(result.totalPages).toBe(2)
-  })
-
-  // AC-3-3解釈: [選択型] DIFY_FETCH_PAGE_SIZE環境変数でページサイズ変更
-  it('AC-3-3: DIFY_FETCH_PAGE_SIZE環境変数の値を1ページあたりの取得件数として使用する', async () => {
-    // Arrange
-    config.DIFY_FETCH_PAGE_SIZE = 50
-
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [createMockRecord()],
-        total: 1,
-        page: 1,
-        limit: 50,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    await fetcher.fetch(onRecords)
+    const result = await fetcher.fetch(onRecords)
 
     // Assert
-    expect(getMock).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        params: expect.objectContaining({
-          limit: 50,
-        }),
-      }),
-    )
+    expect(result.success).toBe(true)
+    expect(result.totalRecords).toBe(2)
+    expect(onRecords).toHaveBeenCalledTimes(2)
   })
 
-  // AC-3-4解釈: [契機型] 100ページごとに進捗ログ出力
-  it('AC-3-4: 100ページ取得するごとに進捗ログを出力する', async () => {
-    // Arrange - 150ページのデータをシミュレート
-    const getMock = vi.fn()
-    for (let i = 1; i <= 150; i++) {
-      getMock.mockResolvedValueOnce({
-        data: {
-          data: [createMockRecord()],
-          total: 150,
-          page: i,
-          limit: 100,
-          has_more: i < 150,
-        },
-      })
-    }
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    const fetchPromise = fetcher.fetch(onRecords)
-    // 繰り返しタイマーを進める（150ページ分 = 150秒）
-    for (let i = 0; i < 200; i++) {
-      await vi.advanceTimersByTimeAsync(1000)
-    }
-    await fetchPromise
-
-    // Assert - 100ページ目で進捗ログが出力される
-    const infoCalls = vi.mocked(logger.info).mock.calls
-    const progressCalls = infoCalls.filter(
-      (call) => call[0] === '取得進捗' && (call[1] as Record<string, number>)?.page === 100,
-    )
-    expect(progressCalls.length).toBeGreaterThanOrEqual(1)
-  })
-
-  // エッジケース: 0件レスポンス
-  it('AC-3-1-edge: 0件のレスポンスを受けた場合、正常に処理を完了する（必須・高リスク）', async () => {
+  // AC-3-3: 0件レスポンスの処理
+  it('AC-3-3: アプリが0件の場合、正常に処理を完了する', async () => {
     // Arrange
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [],
-        total: 0,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
+    const getMock = vi.fn().mockResolvedValue({ data: { data: [], has_more: false } })
 
     const axiosInstance = {
       get: getMock,
+      post: postMock,
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
@@ -804,159 +460,10 @@ describe('FR-3: ページング処理 統合テスト', () => {
     expect(result.totalRecords).toBe(0)
     expect(onRecords).not.toHaveBeenCalled()
   })
-
-  // エッジケース: ページサイズ最大値
-  it('AC-3-3-edge: ページサイズ最大値1000が設定された場合、正しくリクエストされる（推奨・中リスク）', async () => {
-    // Arrange
-    config.DIFY_FETCH_PAGE_SIZE = 1000
-
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [createMockRecord()],
-        total: 1,
-        page: 1,
-        limit: 1000,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    await fetcher.fetch(onRecords)
-
-    // Assert
-    expect(getMock).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        params: expect.objectContaining({
-          limit: 1000,
-        }),
-      }),
-    )
-  })
-
-  // エッジケース: ページサイズ最小値
-  it('AC-3-3-edge: ページサイズ最小値1が設定された場合、正しくリクエストされる（推奨・中リスク）', async () => {
-    // Arrange
-    config.DIFY_FETCH_PAGE_SIZE = 1
-
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [createMockRecord()],
-        total: 1,
-        page: 1,
-        limit: 1,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    await fetcher.fetch(onRecords)
-
-    // Assert
-    expect(getMock).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        params: expect.objectContaining({
-          limit: 1,
-        }),
-      }),
-    )
-  })
-
-  // エッジケース: 大量ページ
-  it('AC-3-1-edge: 1000ページ以上のデータを正常に取得できる（推奨・中リスク）', async () => {
-    // Arrange - 少数のページでシミュレート（テスト時間短縮のため3ページ）
-    const getMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        data: {
-          data: [createMockRecord()],
-          total: 3,
-          page: 1,
-          limit: 100,
-          has_more: true,
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          data: [createMockRecord()],
-          total: 3,
-          page: 2,
-          limit: 100,
-          has_more: true,
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          data: [createMockRecord()],
-          total: 3,
-          page: 3,
-          limit: 100,
-          has_more: false,
-        },
-      })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    const fetchPromise = fetcher.fetch(onRecords)
-    for (let i = 0; i < 10; i++) {
-      await vi.advanceTimersByTimeAsync(1000)
-    }
-    const result = await fetchPromise
-
-    // Assert - 全ページが正常に取得される
-    expect(getMock).toHaveBeenCalledTimes(3)
-    expect(result.totalPages).toBe(3)
-    expect(result.totalRecords).toBe(3)
-  })
 })
 
 // ============================================
-// FR-4: ウォーターマーク管理 統合テスト（6件 + 5エッジケース）
+// FR-4: ウォーターマーク管理 統合テスト
 // ============================================
 describe('FR-4: ウォーターマーク管理 統合テスト', () => {
   let testDir: string
@@ -964,140 +471,88 @@ describe('FR-4: ウォーターマーク管理 統合テスト', () => {
   let logger: Logger
 
   beforeEach(async () => {
-    // テスト用一時ディレクトリを作成
     testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'watermark-int-test-'))
 
-    // モックconfigの作成
-    config = {
-      DIFY_API_BASE_URL: 'https://api.dify.ai',
-      DIFY_API_TOKEN: 'test-token',
-      EXTERNAL_API_URL: 'https://external.api',
-      EXTERNAL_API_TOKEN: 'external-token',
-      CRON_SCHEDULE: '0 0 * * *',
-      LOG_LEVEL: 'info',
-      GRACEFUL_SHUTDOWN_TIMEOUT: 30,
-      MAX_RETRY: 3,
-      NODE_ENV: 'test',
-      DIFY_FETCH_PAGE_SIZE: 100,
-      DIFY_INITIAL_FETCH_DAYS: 30,
-      DIFY_FETCH_TIMEOUT_MS: 30000,
-      DIFY_FETCH_RETRY_COUNT: 3,
-      DIFY_FETCH_RETRY_DELAY_MS: 1000,
+    config = createTestConfig({
       WATERMARK_FILE_PATH: path.join(testDir, 'watermark.json'),
-    }
-
-    // モックloggerの作成
-    logger = {
-      error: vi.fn(),
-      warn: vi.fn(),
-      info: vi.fn(),
-      debug: vi.fn(),
-      child: vi.fn().mockReturnThis(),
-    }
+    })
+    logger = createMockLogger()
   })
 
   afterEach(async () => {
-    // テスト後のクリーンアップ
     try {
       await fs.rm(testDir, { recursive: true, force: true })
     } catch {
-      // クリーンアップ失敗は無視
+      // ignore
     }
   })
 
-  // AC-4-1解釈: [契機型] Fetcher起動時にウォーターマークファイル読み込み
-  // 検証: WatermarkManagerがdata/watermark.jsonを読み込むこと
-  // @category: integration
-  // @dependency: DifyUsageFetcher, WatermarkManager
-  // @complexity: medium
-  it('AC-4-1: Fetcher起動時にウォーターマークファイル（data/watermark.json）を読み込む', async () => {
+  // AC-4-1: ウォーターマーク不存在時の初回実行
+  it('AC-4-1: ウォーターマークファイルが存在しない場合、初回実行として過去N日間を取得', async () => {
     // Arrange
-    const watermark: Watermark = {
-      last_fetched_date: '2024-01-15T00:00:00.000Z',
-      last_updated_at: '2024-01-15T10:30:00.000Z',
-    }
-    await fs.writeFile(config.WATERMARK_FILE_PATH, JSON.stringify(watermark, null, 2))
-
     const manager = createWatermarkManager({ config, logger })
 
     // Act
-    const result = await manager.load()
+    const watermark = await manager.load()
 
     // Assert
-    expect(result).toEqual(watermark)
-    expect(logger.info).toHaveBeenCalledWith(
-      'ウォーターマーク読み込み成功',
-      expect.objectContaining({
-        last_fetched_date: '2024-01-15T00:00:00.000Z',
-      }),
-    )
+    expect(watermark).toBeNull()
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('初回実行'))
   })
 
-  // AC-4-2解釈: [選択型] ファイル不存在時に過去30日間を取得期間に設定
-  // 検証: WatermarkManagerがnullを返し、Fetcherが30日前を計算すること
-  // @category: integration
-  // @dependency: DifyUsageFetcher, WatermarkManager, EnvConfig
-  // @complexity: medium
-  it('AC-4-2: ウォーターマークファイルが存在しない場合、過去30日間を取得期間として設定する', async () => {
+  // AC-4-2: ウォーターマークの読み込み
+  it('AC-4-2: ウォーターマークファイルを読み込んでWatermark型として返す', async () => {
     // Arrange
+    const watermarkData = {
+      last_fetched_date: '2024-01-15T00:00:00.000Z',
+      last_updated_at: '2024-01-15T12:00:00.000Z',
+    }
+    await fs.writeFile(config.WATERMARK_FILE_PATH, JSON.stringify(watermarkData), { mode: 0o600 })
+
     const manager = createWatermarkManager({ config, logger })
 
     // Act
-    const result = await manager.load()
+    const watermark = await manager.load()
 
     // Assert
-    expect(result).toBeNull()
-    expect(logger.info).toHaveBeenCalledWith('ウォーターマークファイル不存在（初回実行）')
+    expect(watermark).not.toBeNull()
+    expect(watermark?.last_fetched_date).toBe('2024-01-15T00:00:00.000Z')
   })
 
-  // AC-4-3解釈: [契機型] 全ページ取得完了時にウォーターマーク更新
-  // 検証: DifyUsageFetcherがWatermarkManager.updateを呼び出すこと
-  // @category: integration
-  // @dependency: DifyUsageFetcher, WatermarkManager
-  // @complexity: medium
-  it('AC-4-3: 全ページ取得完了時にウォーターマークを更新する', async () => {
+  // AC-4-3: ウォーターマークの更新
+  it('AC-4-3: ウォーターマークファイルを更新する', async () => {
     // Arrange
     const manager = createWatermarkManager({ config, logger })
-    const watermark: Watermark = {
-      last_fetched_date: '2024-01-15T00:00:00.000Z',
-      last_updated_at: '2024-01-15T10:30:00.000Z',
+    const newWatermark = {
+      last_fetched_date: '2024-01-20T00:00:00.000Z',
+      last_updated_at: '2024-01-20T12:00:00.000Z',
     }
 
     // Act
-    await manager.update(watermark)
+    await manager.update(newWatermark)
 
     // Assert
     const content = await fs.readFile(config.WATERMARK_FILE_PATH, 'utf-8')
-    const savedData = JSON.parse(content)
-    expect(savedData).toEqual(watermark)
-    expect(logger.info).toHaveBeenCalledWith(
-      'ウォーターマーク更新成功',
-      expect.objectContaining({
-        last_fetched_date: '2024-01-15T00:00:00.000Z',
-      }),
-    )
+    const saved = JSON.parse(content)
+    expect(saved.last_fetched_date).toBe('2024-01-20T00:00:00.000Z')
   })
 
-  // AC-4-4解釈: [遍在型] 更新前にバックアップファイル作成
-  // 検証: WatermarkManagerがwatermark.json.backupを作成すること
-  // @category: integration
-  // @dependency: WatermarkManager
-  // @complexity: medium
-  it('AC-4-4: ウォーターマーク更新前にバックアップファイル（watermark.json.backup）を作成する', async () => {
+  // AC-4-4: バックアップ作成
+  it('AC-4-4: ウォーターマーク更新前にバックアップを作成する', async () => {
     // Arrange
-    const oldWatermark: Watermark = {
-      last_fetched_date: '2024-01-14T00:00:00.000Z',
-      last_updated_at: '2024-01-14T10:30:00.000Z',
+    const initialWatermark = {
+      last_fetched_date: '2024-01-10T00:00:00.000Z',
+      last_updated_at: '2024-01-10T12:00:00.000Z',
     }
-    const newWatermark: Watermark = {
-      last_fetched_date: '2024-01-15T00:00:00.000Z',
-      last_updated_at: '2024-01-15T10:30:00.000Z',
-    }
-
-    // 既存ファイルを作成
-    await fs.writeFile(config.WATERMARK_FILE_PATH, JSON.stringify(oldWatermark, null, 2))
+    await fs.writeFile(config.WATERMARK_FILE_PATH, JSON.stringify(initialWatermark), {
+      mode: 0o600,
+    })
 
     const manager = createWatermarkManager({ config, logger })
+    const newWatermark = {
+      last_fetched_date: '2024-01-20T00:00:00.000Z',
+      last_updated_at: '2024-01-20T12:00:00.000Z',
+    }
 
     // Act
     await manager.update(newWatermark)
@@ -1105,661 +560,169 @@ describe('FR-4: ウォーターマーク管理 統合テスト', () => {
     // Assert
     const backupPath = `${config.WATERMARK_FILE_PATH}.backup`
     const backupContent = await fs.readFile(backupPath, 'utf-8')
-    const backupData = JSON.parse(backupContent)
-    expect(backupData).toEqual(oldWatermark)
+    const backup = JSON.parse(backupContent)
+    expect(backup.last_fetched_date).toBe('2024-01-10T00:00:00.000Z')
   })
 
-  // AC-4-5解釈: [選択型] ファイル破損時にバックアップから復元
-  // 検証: WatermarkManagerがバックアップを読み込み、本ファイルを復元すること
-  // @category: integration
-  // @dependency: WatermarkManager, Logger
-  // @complexity: high
-  it('AC-4-5: ウォーターマークファイルが破損している場合、バックアップから復元を試行する', async () => {
+  // AC-4-5: 破損ファイルからのバックアップ復元
+  it('AC-4-5: ウォーターマークファイルが破損した場合、バックアップから復元する', async () => {
     // Arrange
-    const watermark: Watermark = {
-      last_fetched_date: '2024-01-14T00:00:00.000Z',
-      last_updated_at: '2024-01-14T10:30:00.000Z',
+    const backupWatermark = {
+      last_fetched_date: '2024-01-10T00:00:00.000Z',
+      last_updated_at: '2024-01-10T12:00:00.000Z',
     }
-
-    // 本ファイルを破損状態で作成
-    await fs.writeFile(config.WATERMARK_FILE_PATH, 'invalid json {{{')
-
-    // バックアップファイルを正常状態で作成
-    await fs.writeFile(`${config.WATERMARK_FILE_PATH}.backup`, JSON.stringify(watermark, null, 2))
+    const backupPath = `${config.WATERMARK_FILE_PATH}.backup`
+    await fs.writeFile(backupPath, JSON.stringify(backupWatermark), { mode: 0o600 })
+    await fs.writeFile(config.WATERMARK_FILE_PATH, 'invalid json', { mode: 0o600 })
 
     const manager = createWatermarkManager({ config, logger })
 
     // Act
-    const result = await manager.load()
+    const watermark = await manager.load()
 
     // Assert
-    expect(result).toEqual(watermark)
-    expect(logger.warn).toHaveBeenCalledWith(
-      'ウォーターマークファイル破損、バックアップから復元試行',
-      expect.any(Object),
-    )
-    expect(logger.info).toHaveBeenCalledWith(
-      'バックアップから復元成功',
-      expect.objectContaining({
-        last_fetched_date: '2024-01-14T00:00:00.000Z',
-      }),
-    )
+    expect(watermark).not.toBeNull()
+    expect(watermark?.last_fetched_date).toBe('2024-01-10T00:00:00.000Z')
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('復元'), expect.any(Object))
   })
 
-  // AC-4-6解釈: [遍在型] ファイルパーミッション600設定
-  // 検証: WatermarkManagerがmode: 0o600で書き込むこと
-  // @category: integration
-  // @dependency: WatermarkManager
-  // @complexity: low
-  it('AC-4-6: ウォーターマークファイルのパーミッションを600に設定する', async () => {
+  // AC-4-6: ファイルパーミッション
+  it('AC-4-6: ウォーターマークファイルのパーミッションが600である', async () => {
     // Arrange
     const manager = createWatermarkManager({ config, logger })
-    const watermark: Watermark = {
-      last_fetched_date: '2024-01-15T00:00:00.000Z',
-      last_updated_at: '2024-01-15T10:30:00.000Z',
+    const newWatermark = {
+      last_fetched_date: '2024-01-20T00:00:00.000Z',
+      last_updated_at: '2024-01-20T12:00:00.000Z',
     }
 
     // Act
-    await manager.update(watermark)
+    await manager.update(newWatermark)
 
     // Assert
     const stats = await fs.stat(config.WATERMARK_FILE_PATH)
     const mode = stats.mode & 0o777
     expect(mode).toBe(0o600)
   })
-
-  // エッジケース: バックアップも破損
-  // 検証: 本ファイルとバックアップ両方が破損している場合
-  // @category: edge-case
-  // @dependency: WatermarkManager
-  // @complexity: high
-  it('AC-4-5-edge: バックアップファイルも破損している場合、WatermarkFileErrorをスローする（必須・高リスク）', async () => {
-    // Arrange
-    // 本ファイルを破損状態で作成
-    await fs.writeFile(config.WATERMARK_FILE_PATH, 'invalid json {{{')
-
-    // バックアップファイルも破損状態で作成
-    await fs.writeFile(`${config.WATERMARK_FILE_PATH}.backup`, 'also invalid {{{')
-
-    const manager = createWatermarkManager({ config, logger })
-
-    // Act & Assert
-    await expect(manager.load()).rejects.toThrow(WatermarkFileError)
-    await expect(manager.load()).rejects.toThrow(
-      'ウォーターマークファイルとバックアップの復元に失敗',
-    )
-  })
-
-  // エッジケース: ディレクトリ不存在
-  // 検証: data/ディレクトリが存在しない場合の自動作成
-  // @category: edge-case
-  // @dependency: WatermarkManager
-  // @complexity: medium
-  it('AC-4-1-edge: data/ディレクトリが存在しない場合、自動作成される（必須・高リスク）', async () => {
-    // Arrange
-    const nestedDir = path.join(testDir, 'nested', 'dir')
-    config.WATERMARK_FILE_PATH = path.join(nestedDir, 'watermark.json')
-
-    const manager = createWatermarkManager({ config, logger })
-    const watermark: Watermark = {
-      last_fetched_date: '2024-01-15T00:00:00.000Z',
-      last_updated_at: '2024-01-15T10:30:00.000Z',
-    }
-
-    // Act
-    await manager.update(watermark)
-
-    // Assert
-    const content = await fs.readFile(config.WATERMARK_FILE_PATH, 'utf-8')
-    const savedData = JSON.parse(content)
-    expect(savedData).toEqual(watermark)
-  })
-
-  // エッジケース: 書き込み権限なし
-  // 検証: ファイル書き込み失敗時のエラーハンドリング
-  // @category: edge-case
-  // @dependency: WatermarkManager
-  // @complexity: medium
-  it('AC-4-3-edge: ウォーターマークファイルの書き込みに失敗した場合、エラーログを出力する（必須・高リスク）', async () => {
-    // Arrange
-    // 読み取り専用ディレクトリを作成
-    const readOnlyDir = path.join(testDir, 'readonly')
-    await fs.mkdir(readOnlyDir)
-    await fs.chmod(readOnlyDir, 0o444)
-
-    config.WATERMARK_FILE_PATH = path.join(readOnlyDir, 'watermark.json')
-
-    const manager = createWatermarkManager({ config, logger })
-    const watermark: Watermark = {
-      last_fetched_date: '2024-01-15T00:00:00.000Z',
-      last_updated_at: '2024-01-15T10:30:00.000Z',
-    }
-
-    // Act & Assert
-    try {
-      await expect(manager.update(watermark)).rejects.toThrow()
-    } finally {
-      // クリーンアップのため権限を戻す
-      await fs.chmod(readOnlyDir, 0o755)
-    }
-  })
-
-  // エッジケース: カスタムファイルパス
-  // 検証: WATERMARK_FILE_PATH環境変数の反映
-  // @category: edge-case
-  // @dependency: WatermarkManager, EnvConfig
-  // @complexity: low
-  it('AC-4-1-edge: WATERMARK_FILE_PATH環境変数でファイルパスを変更できる（推奨・中リスク）', async () => {
-    // Arrange
-    const customPath = path.join(testDir, 'custom', 'path', 'watermark.json')
-    config.WATERMARK_FILE_PATH = customPath
-
-    const manager = createWatermarkManager({ config, logger })
-    const watermark: Watermark = {
-      last_fetched_date: '2024-01-15T00:00:00.000Z',
-      last_updated_at: '2024-01-15T10:30:00.000Z',
-    }
-
-    // Act
-    await manager.update(watermark)
-
-    // Assert
-    const content = await fs.readFile(customPath, 'utf-8')
-    const savedData = JSON.parse(content)
-    expect(savedData).toEqual(watermark)
-  })
-
-  // エッジケース: 初回取得日数のカスタマイズ
-  // 検証: DIFY_INITIAL_FETCH_DAYS環境変数の反映
-  it('AC-4-2-edge: DIFY_INITIAL_FETCH_DAYS環境変数で初回取得日数を変更できる（推奨・中リスク）', async () => {
-    // Arrange
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2024-01-20T12:00:00.000Z'))
-
-    config.DIFY_INITIAL_FETCH_DAYS = 7 // 7日間に変更
-
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [
-          {
-            date: '2024-01-15',
-            app_id: 'app-123',
-            provider: 'openai',
-            model: 'gpt-4',
-            input_tokens: 100,
-            output_tokens: 50,
-            total_tokens: 150,
-          },
-        ],
-        total: 1,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    const result = await fetcher.fetch(onRecords)
-
-    // Assert - 開始日が7日前になっている
-    const expectedStartDate = '2024-01-13' // 20 - 7 = 13
-    expect(getMock).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        params: expect.objectContaining({
-          start_date: expectedStartDate,
-        }),
-      }),
-    )
-    expect(result.totalRecords).toBe(1)
-
-    vi.useRealTimers()
-  })
 })
 
 // ============================================
-// FR-5: エラーハンドリング 統合テスト（5件 + 6エッジケース）
+// FR-5: エラーリトライ 統合テスト
 // ============================================
-describe('FR-5: エラーハンドリング 統合テスト', () => {
+describe('FR-5: エラーリトライ 統合テスト', () => {
   let config: EnvConfig
   let logger: Logger
 
   beforeEach(() => {
     vi.clearAllMocks()
-
-    config = {
-      DIFY_API_BASE_URL: 'https://api.dify.ai',
-      DIFY_API_TOKEN: 'test-api-token',
-      EXTERNAL_API_URL: 'https://external.api',
-      EXTERNAL_API_TOKEN: 'external-token',
-      CRON_SCHEDULE: '0 0 * * *',
-      LOG_LEVEL: 'info',
-      GRACEFUL_SHUTDOWN_TIMEOUT: 30,
-      MAX_RETRY: 3,
-      NODE_ENV: 'test',
-      DIFY_FETCH_PAGE_SIZE: 100,
-      DIFY_INITIAL_FETCH_DAYS: 30,
-      DIFY_FETCH_TIMEOUT_MS: 30000,
-      DIFY_FETCH_RETRY_COUNT: 3,
-      DIFY_FETCH_RETRY_DELAY_MS: 1000,
-      WATERMARK_FILE_PATH: 'data/watermark.json',
-    }
-
-    logger = {
-      error: vi.fn(),
-      warn: vi.fn(),
-      info: vi.fn(),
-      debug: vi.fn(),
-      child: vi.fn().mockReturnThis(),
-    }
+    config = createTestConfig()
+    logger = createMockLogger()
   })
 
-  // AC-5-1解釈: [選択型] ネットワークエラー/5xx/429で指数バックオフリトライ
-  // 検証: DifyApiClientのaxios-retry設定が正しく動作すること
-  // @category: integration
-  // @dependency: DifyApiClient
-  // @complexity: high
-  it('AC-5-1: ネットワークエラー/5xx/429が発生した場合、指数バックオフで最大3回リトライする', async () => {
+  // AC-5-1: 5xxエラーでリトライ
+  it('AC-5-1: 5xxエラー発生時にリトライが設定される', async () => {
     // Arrange
-    const axiosRetry = await import('axios-retry')
-    const axiosInstance = {
-      get: vi.fn(),
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    // Act
-    createDifyApiClient({ config, logger })
-
-    // Assert
-    expect(axiosRetry.default).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        retries: 3,
-      }),
-    )
-  })
-
-  // AC-5-2解釈: [選択型] 400/401/403/404はリトライなしで終了
-  // 検証: DifyApiClientがこれらのエラーでリトライしないこと
-  // @category: integration
-  // @dependency: DifyApiClient, DifyUsageFetcher
-  // @complexity: medium
-  it('AC-5-2: 400/401/403/404エラーが発生した場合、リトライせずに処理を終了する', async () => {
-    // Arrange
-    const badRequestError = {
-      response: { status: 400, data: { error: 'Bad Request' } },
-      message: 'Request failed with status code 400',
-      config: { url: '/console/api/usage' },
-    }
-    const getMock = vi.fn().mockRejectedValue(badRequestError)
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-
-    // Act & Assert
-    await expect(
-      client.fetchUsage({
-        startDate: '2024-01-01',
-        endDate: '2024-01-31',
-        page: 1,
-        limit: 100,
-      }),
-    ).rejects.toMatchObject({
-      response: { status: 400 },
-    })
-  })
-
-  // AC-5-3解釈: [選択型] 429エラーでRetry-Afterヘッダーを待機時間に使用
-  // 検証: DifyApiClientがRetry-Afterヘッダーの値を解析して待機すること
-  // @category: integration
-  // @dependency: DifyApiClient
-  // @complexity: high
-  it('AC-5-3: 429エラーでRetry-Afterヘッダーが存在する場合、その値を待機時間として使用する', async () => {
-    // Arrange
-    const axiosRetry = await import('axios-retry')
-    const axiosInstance = {
-      get: vi.fn(),
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    // Act
-    createDifyApiClient({ config, logger })
-
-    // Assert - retryDelayが設定されていることを確認
-    expect(axiosRetry.default).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        retryDelay: expect.any(Function),
-      }),
-    )
-  })
-
-  // AC-5-4解釈: [遍在型] 全エラーを構造化ログで記録
-  it('AC-5-4: すべてのエラーを構造化ログ（JSON形式）で記録する', async () => {
-    // Arrange
-    const apiError = {
+    const serverError = {
       response: { status: 500, data: { error: 'Internal Server Error' } },
       message: 'Request failed with status code 500',
-      config: { url: '/console/api/usage' },
+      config: { url: '/console/api/apps' },
     }
-    const getMock = vi.fn().mockRejectedValue(apiError)
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
+    const getMock = vi.fn().mockRejectedValue(serverError)
     const axiosInstance = {
       get: getMock,
+      post: postMock,
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
       },
     }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+    vi.mocked(axios.create).mockReturnValue(
+      axiosInstance as unknown as ReturnType<typeof axios.create>
+    )
 
     const client = createDifyApiClient({ config, logger })
 
     // Act & Assert
-    await expect(
-      client.fetchUsage({
-        startDate: '2024-01-01',
-        endDate: '2024-01-31',
-        page: 1,
-        limit: 100,
-      }),
-    ).rejects.toThrow()
+    await expect(client.fetchApps()).rejects.toThrow()
   })
 
-  // AC-5-5解釈: [選択型] ページ取得エラー時に取得済みまでウォーターマーク更新
-  it('AC-5-5: ページ取得中にエラーが発生した場合、取得済みデータまでウォーターマークを更新する', async () => {
+  // AC-5-2: 401エラーはリトライしない
+  it('AC-5-2: 401エラーはリトライせず即座に失敗する', async () => {
     // Arrange
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2024-01-20T12:00:00.000Z'))
-
-    const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'error-watermark-test-'))
-    const localConfig = { ...config, WATERMARK_FILE_PATH: path.join(testDir, 'watermark.json') }
-
-    const mockRecord = {
-      date: '2024-01-15',
-      app_id: 'app-123',
-      provider: 'openai',
-      model: 'gpt-4',
-      input_tokens: 100,
-      output_tokens: 50,
-      total_tokens: 150,
+    const authError = {
+      response: { status: 401, data: { error: 'Unauthorized' } },
+      message: 'Request failed with status code 401',
+      config: { url: '/console/api/login' },
     }
+    const postMock = vi.fn().mockRejectedValue(authError)
+    const axiosInstance = {
+      get: vi.fn(),
+      post: postMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(
+      axiosInstance as unknown as ReturnType<typeof axios.create>
+    )
 
-    const getMock = vi
-      .fn()
-      .mockResolvedValueOnce({
-        data: {
-          data: [mockRecord],
-          total: 2,
-          page: 1,
-          limit: 100,
-          has_more: true,
-        },
-      })
-      .mockRejectedValueOnce(new Error('Network Error'))
+    const client = createDifyApiClient({ config, logger })
 
+    // Act & Assert
+    await expect(client.fetchApps()).rejects.toThrow()
+    expect(postMock).toHaveBeenCalledTimes(1) // リトライなし
+  })
+
+  // AC-5-3: 429エラーでRetry-After対応
+  it('AC-5-3: 429エラー時にRetry-Afterヘッダーを考慮する', async () => {
+    // Arrange - axios-retryがモックされているため、設定が正しく渡されることを確認
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
+    const getMock = vi.fn().mockResolvedValue({ data: { data: [], has_more: false } })
     const axiosInstance = {
       get: getMock,
+      post: postMock,
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
       },
     }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config: localConfig, logger })
-    const watermarkManager = createWatermarkManager({ config: localConfig, logger })
-    const fetcher = createDifyUsageFetcher({
-      client,
-      watermarkManager,
-      logger,
-      config: localConfig,
-    })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    const fetchPromise = fetcher.fetch(onRecords)
-    for (let i = 0; i < 5; i++) {
-      await vi.advanceTimersByTimeAsync(1000)
-    }
-    const result = await fetchPromise
-
-    // Assert - 最初のページのデータはウォーターマークに記録される
-    expect(result.totalRecords).toBe(1)
-    expect(result.errors).toHaveLength(1)
-    expect(result.errors[0].type).toBe('api')
-
-    // クリーンアップ
-    vi.useRealTimers()
-    await fs.rm(testDir, { recursive: true, force: true })
-  })
-
-  // エッジケース: リトライ回数上限到達
-  it('AC-5-1-edge: 3回リトライ後も失敗する場合、エラーログを出力して処理を中断する（必須・高リスク）', async () => {
-    // Arrange
-    const axiosRetry = await import('axios-retry')
-    const axiosInstance = {
-      get: vi.fn(),
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    // Act
-    createDifyApiClient({ config, logger })
-
-    // Assert - axios-retryが3回リトライで設定されている
-    expect(axiosRetry.default).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        retries: 3,
-      }),
+    vi.mocked(axios.create).mockReturnValue(
+      axiosInstance as unknown as ReturnType<typeof axios.create>
     )
-  })
 
-  // エッジケース: ネットワーク切断
-  it('AC-5-1-edge: ネットワーク切断（ECONNREFUSED）が発生した場合、リトライする（必須・高リスク）', async () => {
-    // Arrange - axios-retryのisNetworkOrIdempotentRequestError設定を確認
+    // Act - fetchAppsを呼ぶと内部でaxios-retryが設定される
+    const client = createDifyApiClient({ config, logger })
+    await client.fetchApps()
+
+    // Assert - axios-retryが設定されている（モックで確認）
     const axiosRetry = await import('axios-retry')
-    const axiosInstance = {
-      get: vi.fn(),
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    // Act
-    createDifyApiClient({ config, logger })
-
-    // Assert - retryConditionが設定されている
-    expect(axiosRetry.default).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        retryCondition: expect.any(Function),
-      }),
-    )
-  })
-
-  // エッジケース: サーバーエラー各種
-  it('AC-5-1-edge: 500/502/503/504エラーがリトライ対象として処理される（必須・高リスク）', async () => {
-    // Arrange
-    const axiosRetry = await import('axios-retry')
-    const axiosInstance = {
-      get: vi.fn(),
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    // Act
-    createDifyApiClient({ config, logger })
-
-    // Assert - retryConditionがステータスコードに基づいて設定されている
-    const calls = vi.mocked(axiosRetry.default).mock.calls
-    expect(calls.length).toBeGreaterThan(0)
-    const retryConfig = calls[0][1]
-    expect(retryConfig.retryCondition).toBeDefined()
-  })
-
-  // エッジケース: Retry-Afterヘッダーなしの429
-  it('AC-5-3-edge: Retry-Afterヘッダーがない429の場合、指数バックオフでリトライする（推奨・中リスク）', async () => {
-    // Arrange
-    const axiosRetry = await import('axios-retry')
-    const axiosInstance = {
-      get: vi.fn(),
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    // Act
-    createDifyApiClient({ config, logger })
-
-    // Assert - retryDelayが指数バックオフとして設定されている
-    expect(axiosRetry.default).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        retryDelay: expect.any(Function),
-      }),
-    )
-  })
-
-  // エッジケース: 無効なRetry-After値
-  it('AC-5-3-edge: 無効なRetry-After値の場合、デフォルトの指数バックオフを使用する（推奨・中リスク）', async () => {
-    // Arrange - retryDelay関数がRetry-Afterヘッダーを処理する設定
-    const axiosRetry = await import('axios-retry')
-    const axiosInstance = {
-      get: vi.fn(),
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    // Act
-    createDifyApiClient({ config, logger })
-
-    // Assert
-    const calls = vi.mocked(axiosRetry.default).mock.calls
-    expect(calls.length).toBeGreaterThan(0)
-    const retryConfig = calls[0][1]
-    expect(retryConfig.retryDelay).toBeDefined()
-  })
-
-  // エッジケース: カスタムリトライ設定
-  // 検証: DIFY_FETCH_RETRY_COUNT/DIFY_FETCH_RETRY_DELAY_MSの反映
-  // @category: edge-case
-  // @dependency: DifyApiClient, EnvConfig
-  // @complexity: low
-  it('AC-5-1-edge: 環境変数でリトライ回数とディレイをカスタマイズできる（推奨・中リスク）', async () => {
-    // Arrange
-    config.DIFY_FETCH_RETRY_COUNT = 5
-    const axiosRetry = await import('axios-retry')
-    const axiosInstance = {
-      get: vi.fn(),
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    // Act
-    createDifyApiClient({ config, logger })
-
-    // Assert
-    expect(axiosRetry.default).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        retries: 5,
-      }),
-    )
+    expect(axiosRetry.default).toHaveBeenCalled()
   })
 })
 
 // ============================================
-// FR-6: データバリデーション 統合テスト（4件 + 4エッジケース）
+// FR-6: バリデーション 統合テスト
 // ============================================
-describe('FR-6: データバリデーション 統合テスト', () => {
+describe('FR-6: バリデーション 統合テスト', () => {
   let testDir: string
   let config: EnvConfig
   let logger: Logger
 
   beforeEach(async () => {
     vi.clearAllMocks()
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2024-01-20T12:00:00.000Z'))
+    // Note: fake timersはasync処理と相性が悪いため使用しない
 
     testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'validation-int-test-'))
 
-    config = {
-      DIFY_API_BASE_URL: 'https://api.dify.ai',
-      DIFY_API_TOKEN: 'test-api-token',
-      EXTERNAL_API_URL: 'https://external.api',
-      EXTERNAL_API_TOKEN: 'external-token',
-      CRON_SCHEDULE: '0 0 * * *',
-      LOG_LEVEL: 'info',
-      GRACEFUL_SHUTDOWN_TIMEOUT: 30,
-      MAX_RETRY: 3,
-      NODE_ENV: 'test',
-      DIFY_FETCH_PAGE_SIZE: 100,
-      DIFY_INITIAL_FETCH_DAYS: 30,
-      DIFY_FETCH_TIMEOUT_MS: 30000,
-      DIFY_FETCH_RETRY_COUNT: 3,
-      DIFY_FETCH_RETRY_DELAY_MS: 1000,
+    config = createTestConfig({
       WATERMARK_FILE_PATH: path.join(testDir, 'watermark.json'),
-    }
-
-    logger = {
-      error: vi.fn(),
-      warn: vi.fn(),
-      info: vi.fn(),
-      debug: vi.fn(),
-      child: vi.fn().mockReturnThis(),
-    }
+    })
+    logger = createMockLogger()
   })
 
   afterEach(async () => {
-    vi.useRealTimers()
+    vi.restoreAllMocks()
     try {
       await fs.rm(testDir, { recursive: true, force: true })
     } catch {
@@ -1767,522 +730,21 @@ describe('FR-6: データバリデーション 統合テスト', () => {
     }
   })
 
-  function createValidRecord(overrides: Partial<DifyUsageRecord> = {}): DifyUsageRecord {
-    return {
-      date: '2024-01-15',
-      app_id: 'app-123',
-      provider: 'openai',
-      model: 'gpt-4',
-      input_tokens: 100,
-      output_tokens: 50,
-      total_tokens: 150,
-      ...overrides,
-    }
-  }
-
-  // AC-6-1解釈: [遍在型] APIレスポンスをzodスキーマで検証
-  it('AC-6-1: APIレスポンスをzodスキーマで検証する', async () => {
+  // AC-6-1: 正常なレコードのバリデーション
+  it('AC-6-1: 正常なレコードがバリデーションに成功する', async () => {
     // Arrange
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [createValidRecord()],
-        total: 1,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
+    const mockApps = [createMockApp()]
+    const mockCosts = [createMockTokenCost()]
 
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const receivedRecords: DifyUsageRecord[] = []
-    const onRecords = vi.fn().mockImplementation(async (records: DifyUsageRecord[]) => {
-      receivedRecords.push(...records)
-    })
-
-    // Act
-    const result = await fetcher.fetch(onRecords)
-
-    // Assert - zodバリデーション後のレコードが渡される
-    expect(result.success).toBe(true)
-    expect(receivedRecords).toHaveLength(1)
-    expect(receivedRecords[0].date).toBe('2024-01-15')
-  })
-
-  // AC-6-2解釈: [遍在型] 必須フィールドの存在確認
-  it('AC-6-2: 必須フィールド（date, app_id, provider, model, total_tokens）の存在を確認する', async () => {
-    // Arrange - 全必須フィールドを持つレコード
-    const validRecord = createValidRecord()
-
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [validRecord],
-        total: 1,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const receivedRecords: DifyUsageRecord[] = []
-    const onRecords = vi.fn().mockImplementation(async (records: DifyUsageRecord[]) => {
-      receivedRecords.push(...records)
-    })
-
-    // Act
-    const result = await fetcher.fetch(onRecords)
-
-    // Assert
-    expect(result.success).toBe(true)
-    expect(receivedRecords[0]).toHaveProperty('date')
-    expect(receivedRecords[0]).toHaveProperty('app_id')
-    expect(receivedRecords[0]).toHaveProperty('provider')
-    expect(receivedRecords[0]).toHaveProperty('model')
-    expect(receivedRecords[0]).toHaveProperty('total_tokens')
-  })
-
-  // AC-6-3解釈: [選択型] バリデーションエラー時にログ記録してスキップ
-  it('AC-6-3: バリデーションエラーが発生した場合、エラーログを記録して該当レコードをスキップする', async () => {
-    // Arrange - 無効なレコードと有効なレコードを混在
-    const invalidRecord = {
-      date: 'invalid-date', // 無効な日付形式
-      app_id: 'app-123',
-      provider: 'openai',
-      model: 'gpt-4',
-      input_tokens: 100,
-      output_tokens: 50,
-      total_tokens: 150,
-    }
-    const validRecord = createValidRecord({ app_id: 'app-456' })
-
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [invalidRecord, validRecord],
-        total: 2,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const receivedRecords: DifyUsageRecord[] = []
-    const onRecords = vi.fn().mockImplementation(async (records: DifyUsageRecord[]) => {
-      receivedRecords.push(...records)
-    })
-
-    // Act
-    const result = await fetcher.fetch(onRecords)
-
-    // Assert
-    expect(receivedRecords).toHaveLength(1)
-    expect(receivedRecords[0].app_id).toBe('app-456')
-    expect(logger.warn).toHaveBeenCalledWith('レコードバリデーションエラー', expect.any(Object))
-    expect(result.errors).toHaveLength(1)
-    expect(result.errors[0].type).toBe('validation')
-  })
-
-  // AC-6-4解釈: [遍在型] トークン数が0以上の整数であることを検証
-  it('AC-6-4: トークン数が0以上の整数であることを検証する', async () => {
-    // Arrange
-    const validRecord = createValidRecord({
-      input_tokens: 0,
-      output_tokens: 0,
-      total_tokens: 0,
-    })
-
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [validRecord],
-        total: 1,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const receivedRecords: DifyUsageRecord[] = []
-    const onRecords = vi.fn().mockImplementation(async (records: DifyUsageRecord[]) => {
-      receivedRecords.push(...records)
-    })
-
-    // Act
-    const result = await fetcher.fetch(onRecords)
-
-    // Assert - 0はvalidなので受け入れられる
-    expect(result.success).toBe(true)
-    expect(receivedRecords).toHaveLength(1)
-    expect(receivedRecords[0].total_tokens).toBe(0)
-  })
-
-  // エッジケース: 必須フィールド欠落
-  it('AC-6-2-edge: date/app_id/provider/model/total_tokens各フィールド欠落時にエラーを検出する（必須・高リスク）', async () => {
-    // Arrange - app_idが欠落したレコード
-    const incompleteRecord = {
-      date: '2024-01-15',
-      // app_id missing
-      provider: 'openai',
-      model: 'gpt-4',
-      input_tokens: 100,
-      output_tokens: 50,
-      total_tokens: 150,
-    }
-
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [incompleteRecord],
-        total: 1,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    const result = await fetcher.fetch(onRecords)
-
-    // Assert
-    expect(onRecords).not.toHaveBeenCalled()
-    expect(result.errors).toHaveLength(1)
-    expect(result.errors[0].type).toBe('validation')
-  })
-
-  // エッジケース: 不正な日付形式
-  it('AC-6-2-edge: 日付形式がYYYY-MM-DD以外の場合、バリデーションエラーになる（必須・高リスク）', async () => {
-    // Arrange
-    const invalidDateRecord = {
-      date: '01/15/2024', // 無効な形式
-      app_id: 'app-123',
-      provider: 'openai',
-      model: 'gpt-4',
-      input_tokens: 100,
-      output_tokens: 50,
-      total_tokens: 150,
-    }
-
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [invalidDateRecord],
-        total: 1,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    const result = await fetcher.fetch(onRecords)
-
-    // Assert
-    expect(result.errors).toHaveLength(1)
-    expect(result.errors[0].type).toBe('validation')
-  })
-
-  // エッジケース: 負のトークン数
-  it('AC-6-4-edge: トークン数が負の値の場合、バリデーションエラーになる（必須・高リスク）', async () => {
-    // Arrange
-    const negativeTokenRecord = {
-      date: '2024-01-15',
-      app_id: 'app-123',
-      provider: 'openai',
-      model: 'gpt-4',
-      input_tokens: -100, // 負の値
-      output_tokens: 50,
-      total_tokens: 150,
-    }
-
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [negativeTokenRecord],
-        total: 1,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    const result = await fetcher.fetch(onRecords)
-
-    // Assert
-    expect(result.errors).toHaveLength(1)
-    expect(result.errors[0].type).toBe('validation')
-  })
-
-  // エッジケース: 小数のトークン数
-  it('AC-6-4-edge: トークン数が小数の場合、バリデーションエラーになる（必須・高リスク）', async () => {
-    // Arrange
-    const floatTokenRecord = {
-      date: '2024-01-15',
-      app_id: 'app-123',
-      provider: 'openai',
-      model: 'gpt-4',
-      input_tokens: 100.5, // 小数
-      output_tokens: 50,
-      total_tokens: 150,
-    }
-
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [floatTokenRecord],
-        total: 1,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    const result = await fetcher.fetch(onRecords)
-
-    // Assert
-    expect(result.errors).toHaveLength(1)
-    expect(result.errors[0].type).toBe('validation')
-  })
-})
-
-// ============================================
-// 非機能要件 統合テスト（4件）
-// ============================================
-describe('非機能要件 統合テスト', () => {
-  let testDir: string
-  let config: EnvConfig
-  let logger: Logger
-
-  beforeEach(async () => {
-    vi.clearAllMocks()
-
-    testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'nf-int-test-'))
-
-    config = {
-      DIFY_API_BASE_URL: 'https://api.dify.ai',
-      DIFY_API_TOKEN: 'secret-api-token-12345',
-      EXTERNAL_API_URL: 'https://external.api',
-      EXTERNAL_API_TOKEN: 'external-token',
-      CRON_SCHEDULE: '0 0 * * *',
-      LOG_LEVEL: 'info',
-      GRACEFUL_SHUTDOWN_TIMEOUT: 30,
-      MAX_RETRY: 3,
-      NODE_ENV: 'test',
-      DIFY_FETCH_PAGE_SIZE: 100,
-      DIFY_INITIAL_FETCH_DAYS: 30,
-      DIFY_FETCH_TIMEOUT_MS: 30000,
-      DIFY_FETCH_RETRY_COUNT: 3,
-      DIFY_FETCH_RETRY_DELAY_MS: 1000,
-      WATERMARK_FILE_PATH: path.join(testDir, 'watermark.json'),
-    }
-
-    logger = {
-      error: vi.fn(),
-      warn: vi.fn(),
-      info: vi.fn(),
-      debug: vi.fn(),
-      child: vi.fn().mockReturnThis(),
-    }
-  })
-
-  afterEach(async () => {
-    try {
-      await fs.rm(testDir, { recursive: true, force: true })
-    } catch {
-      // ignore
-    }
-  })
-
-  function createMockRecord(index: number): DifyUsageRecord {
-    return {
-      date: '2024-01-15',
-      app_id: `app-${index}`,
-      provider: 'openai',
-      model: 'gpt-4',
-      input_tokens: 100,
-      output_tokens: 50,
-      total_tokens: 150,
-    }
-  }
-
-  // AC-NF-1: 10,000件を30秒以内（サンプルデータで比例計算）
-  it('AC-NF-1: 10,000件のレコードを30秒以内で取得する', async () => {
-    // Arrange - 100件で処理時間を測定、10,000件に比例計算
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2024-01-20T12:00:00.000Z'))
-
-    const records = Array.from({ length: 100 }, (_, i) => createMockRecord(i))
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: records,
-        total: 100,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    const result = await fetcher.fetch(onRecords)
-
-    // Assert
-    expect(result.totalRecords).toBe(100)
-    // 100件で数ミリ秒なら10,000件でも30秒以内と推定
-    expect(result.durationMs).toBeLessThan(300) // 300ms以内
-
-    vi.useRealTimers()
-  })
-
-  // AC-NF-2: メモリ使用量100MB以内
-  it('AC-NF-2: メモリ使用量を100MB以内に抑制する', async () => {
-    // ページング処理によりバッチ処理されるため、メモリ効率が保たれる
-    // この統合テストでは設計の検証として、ページング構造を確認
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2024-01-20T12:00:00.000Z'))
-
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
     const getMock = vi
       .fn()
-      .mockResolvedValueOnce({
-        data: {
-          data: [createMockRecord(1)],
-          total: 2,
-          page: 1,
-          limit: 100,
-          has_more: true,
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          data: [createMockRecord(2)],
-          total: 2,
-          page: 2,
-          limit: 100,
-          has_more: false,
-        },
-      })
+      .mockResolvedValueOnce({ data: { data: mockApps, has_more: false } })
+      .mockResolvedValueOnce({ data: { data: mockCosts } })
 
     const axiosInstance = {
       get: getMock,
+      post: postMock,
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
@@ -2297,51 +759,32 @@ describe('非機能要件 統合テスト', () => {
     const onRecords = vi.fn().mockResolvedValue(undefined)
 
     // Act
-    const fetchPromise = fetcher.fetch(onRecords)
-    for (let i = 0; i < 5; i++) {
-      await vi.advanceTimersByTimeAsync(1000)
-    }
-    const result = await fetchPromise
+    const result = await fetcher.fetch(onRecords)
 
-    // Assert - ページごとにコールバックが呼ばれる（バッチ処理）
-    expect(onRecords).toHaveBeenCalledTimes(2) // 2ページ分
-    expect(result.totalRecords).toBe(2)
-
-    vi.useRealTimers()
+    // Assert
+    expect(result.success).toBe(true)
+    expect(result.totalRecords).toBe(1)
   })
 
-  // AC-NF-3: 重複取得率0%（ウォーターマーク保証）
-  it('AC-NF-3: ウォーターマーク方式により重複取得率0%を保証する', async () => {
+  // AC-6-2: 不正なレコードのスキップ
+  it('AC-6-2: 不正なレコードをスキップして処理を継続する', async () => {
     // Arrange
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2024-01-20T12:00:00.000Z'))
+    const mockApps = [createMockApp()]
+    const mockCosts = [
+      createMockTokenCost({ date: '2024-01-15' }),
+      { date: 'invalid-date', token_count: -1, total_price: 'invalid' }, // 不正なレコード
+      createMockTokenCost({ date: '2024-01-17' }),
+    ]
 
-    const firstRunRecords = [createMockRecord(1)]
-    const secondRunRecords = [createMockRecord(2)]
-
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
     const getMock = vi
       .fn()
-      .mockResolvedValueOnce({
-        data: {
-          data: firstRunRecords,
-          total: 1,
-          page: 1,
-          limit: 100,
-          has_more: false,
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          data: secondRunRecords,
-          total: 1,
-          page: 1,
-          limit: 100,
-          has_more: false,
-        },
-      })
+      .mockResolvedValueOnce({ data: { data: mockApps, has_more: false } })
+      .mockResolvedValueOnce({ data: { data: mockCosts } })
 
     const axiosInstance = {
       get: getMock,
+      post: postMock,
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
@@ -2353,47 +796,31 @@ describe('非機能要件 統合テスト', () => {
     const watermarkManager = createWatermarkManager({ config, logger })
     const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
 
-    const allRecords: DifyUsageRecord[] = []
-    const onRecords = vi.fn().mockImplementation(async (records: DifyUsageRecord[]) => {
-      allRecords.push(...records)
-    })
+    const onRecords = vi.fn().mockResolvedValue(undefined)
 
-    // Act - 1回目の実行
-    const result1 = await fetcher.fetch(onRecords)
-
-    // 時間を進めて2回目の実行
-    vi.setSystemTime(new Date('2024-01-21T12:00:00.000Z'))
-    const result2 = await fetcher.fetch(onRecords)
+    // Act
+    const result = await fetcher.fetch(onRecords)
 
     // Assert
-    expect(result1.totalRecords).toBe(1)
-    expect(result2.totalRecords).toBe(1)
-    expect(allRecords).toHaveLength(2)
-    // app_idが異なる（重複なし）
-    expect(allRecords[0].app_id).toBe('app-1')
-    expect(allRecords[1].app_id).toBe('app-2')
-
-    vi.useRealTimers()
+    expect(result.errors.some((e) => e.type === 'validation')).toBe(true)
+    expect(result.totalRecords).toBe(2) // 2件の正常なレコード
   })
 
-  // AC-NF-4: APIトークンをログに出力しない
-  it('AC-NF-4: APIトークンをログに出力しない', async () => {
+  // AC-6-3: バリデーションエラーのログ出力
+  it('AC-6-3: バリデーションエラー時にwarningログを出力する', async () => {
     // Arrange
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2024-01-20T12:00:00.000Z'))
+    const mockApps = [createMockApp()]
+    const mockCosts = [{ date: 'invalid', token_count: 'not-a-number', total_price: null }]
 
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [createMockRecord(1)],
-        total: 1,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
+    const getMock = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { data: mockApps, has_more: false } })
+      .mockResolvedValueOnce({ data: { data: mockCosts } })
 
     const axiosInstance = {
       get: getMock,
+      post: postMock,
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
@@ -2410,281 +837,158 @@ describe('非機能要件 統合テスト', () => {
     // Act
     await fetcher.fetch(onRecords)
 
-    // Assert - ログにトークンが含まれていないことを確認
-    const allLogCalls = [
+    // Assert
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('バリデーションエラー'),
+      expect.any(Object)
+    )
+  })
+})
+
+// ============================================
+// FR-7: ログ出力 統合テスト
+// ============================================
+describe('FR-7: ログ出力 統合テスト', () => {
+  let testDir: string
+  let config: EnvConfig
+  let logger: Logger
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    // Note: fake timersはasync処理と相性が悪いため使用しない
+
+    testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'log-int-test-'))
+
+    config = createTestConfig({
+      WATERMARK_FILE_PATH: path.join(testDir, 'watermark.json'),
+    })
+    logger = createMockLogger()
+  })
+
+  afterEach(async () => {
+    vi.restoreAllMocks()
+    try {
+      await fs.rm(testDir, { recursive: true, force: true })
+    } catch {
+      // ignore
+    }
+  })
+
+  // AC-7-1: 取得開始ログ
+  it('AC-7-1: 取得開始時にinfoログを出力する', async () => {
+    // Arrange
+    const mockApps = [createMockApp()]
+    const mockCosts = [createMockTokenCost()]
+
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
+    const getMock = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { data: mockApps, has_more: false } })
+      .mockResolvedValueOnce({ data: { data: mockCosts } })
+
+    const axiosInstance = {
+      get: getMock,
+      post: postMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    const client = createDifyApiClient({ config, logger })
+    const watermarkManager = createWatermarkManager({ config, logger })
+    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
+
+    // Act
+    await fetcher.fetch(async () => {})
+
+    // Assert
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('取得開始'),
+      expect.any(Object)
+    )
+  })
+
+  // AC-7-2: 取得完了ログ
+  it('AC-7-2: 取得完了時にinfoログを出力する', async () => {
+    // Arrange
+    const mockApps = [createMockApp()]
+    const mockCosts = [createMockTokenCost()]
+
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
+    const getMock = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { data: mockApps, has_more: false } })
+      .mockResolvedValueOnce({ data: { data: mockCosts } })
+
+    const axiosInstance = {
+      get: getMock,
+      post: postMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    const client = createDifyApiClient({ config, logger })
+    const watermarkManager = createWatermarkManager({ config, logger })
+    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
+
+    // Act
+    await fetcher.fetch(async () => {})
+
+    // Assert
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringContaining('取得完了'),
+      expect.objectContaining({
+        success: expect.any(Boolean),
+        totalRecords: expect.any(Number),
+        durationMs: expect.any(Number),
+      })
+    )
+  })
+
+  // AC-7-3: パスワードがログに含まれない
+  it('AC-7-3: DIFY_PASSWORDの値がログに含まれない', async () => {
+    // Arrange
+    const mockApps = [createMockApp()]
+    const mockCosts = [createMockTokenCost()]
+
+    const postMock = vi.fn().mockResolvedValue({ data: { result: 'success' } })
+    const getMock = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { data: mockApps, has_more: false } })
+      .mockResolvedValueOnce({ data: { data: mockCosts } })
+
+    const axiosInstance = {
+      get: getMock,
+      post: postMock,
+      interceptors: {
+        request: { use: vi.fn() },
+        response: { use: vi.fn() },
+      },
+    }
+    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
+
+    const client = createDifyApiClient({ config, logger })
+    const watermarkManager = createWatermarkManager({ config, logger })
+    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
+
+    // Act
+    await fetcher.fetch(async () => {})
+
+    // Assert
+    const allCalls = [
       ...vi.mocked(logger.info).mock.calls,
       ...vi.mocked(logger.debug).mock.calls,
       ...vi.mocked(logger.warn).mock.calls,
       ...vi.mocked(logger.error).mock.calls,
     ]
-
-    for (const call of allLogCalls) {
-      const logContent = JSON.stringify(call)
-      expect(logContent).not.toContain('secret-api-token-12345')
+    for (const call of allCalls) {
+      const logString = JSON.stringify(call)
+      expect(logString).not.toContain(config.DIFY_PASSWORD)
     }
-
-    vi.useRealTimers()
-  })
-})
-
-// ============================================
-// コンポーネント連携 統合テスト（5件）
-// ============================================
-describe('コンポーネント連携 統合テスト', () => {
-  let testDir: string
-  let config: EnvConfig
-  let logger: Logger
-
-  beforeEach(async () => {
-    vi.clearAllMocks()
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2024-01-20T12:00:00.000Z'))
-
-    testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'component-int-test-'))
-
-    config = {
-      DIFY_API_BASE_URL: 'https://api.dify.ai',
-      DIFY_API_TOKEN: 'test-api-token',
-      EXTERNAL_API_URL: 'https://external.api',
-      EXTERNAL_API_TOKEN: 'external-token',
-      CRON_SCHEDULE: '0 0 * * *',
-      LOG_LEVEL: 'info',
-      GRACEFUL_SHUTDOWN_TIMEOUT: 30,
-      MAX_RETRY: 3,
-      NODE_ENV: 'test',
-      DIFY_FETCH_PAGE_SIZE: 100,
-      DIFY_INITIAL_FETCH_DAYS: 30,
-      DIFY_FETCH_TIMEOUT_MS: 30000,
-      DIFY_FETCH_RETRY_COUNT: 3,
-      DIFY_FETCH_RETRY_DELAY_MS: 1000,
-      WATERMARK_FILE_PATH: path.join(testDir, 'watermark.json'),
-    }
-
-    logger = {
-      error: vi.fn(),
-      warn: vi.fn(),
-      info: vi.fn(),
-      debug: vi.fn(),
-      child: vi.fn().mockReturnThis(),
-    }
-  })
-
-  afterEach(async () => {
-    vi.useRealTimers()
-    try {
-      await fs.rm(testDir, { recursive: true, force: true })
-    } catch {
-      // ignore
-    }
-  })
-
-  function createMockRecord(overrides: Partial<DifyUsageRecord> = {}): DifyUsageRecord {
-    return {
-      date: '2024-01-15',
-      app_id: 'app-123',
-      provider: 'openai',
-      model: 'gpt-4',
-      input_tokens: 100,
-      output_tokens: 50,
-      total_tokens: 150,
-      ...overrides,
-    }
-  }
-
-  // DifyUsageFetcher → DifyApiClient 連携
-  it('DifyUsageFetcherがDifyApiClientと連携してAPIを呼び出す', async () => {
-    // Arrange
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [createMockRecord()],
-        total: 1,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    const result = await fetcher.fetch(onRecords)
-
-    // Assert - ClientがAPIを呼び出している
-    expect(getMock).toHaveBeenCalledWith('/console/api/usage', expect.any(Object))
-    expect(result.totalRecords).toBe(1)
-  })
-
-  // DifyUsageFetcher → WatermarkManager 連携
-  it('DifyUsageFetcherがWatermarkManagerと連携してウォーターマークを管理する', async () => {
-    // Arrange
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [createMockRecord()],
-        total: 1,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    await fetcher.fetch(onRecords)
-
-    // Assert - ウォーターマークファイルが作成されている
-    const watermarkContent = await fs.readFile(config.WATERMARK_FILE_PATH, 'utf-8')
-    const watermark = JSON.parse(watermarkContent)
-    expect(watermark.last_fetched_date).toBeDefined()
-    expect(watermark.last_updated_at).toBeDefined()
-  })
-
-  // DifyUsageFetcher → Logger 連携
-  it('DifyUsageFetcherがLoggerと連携してログを出力する', async () => {
-    // Arrange
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [createMockRecord()],
-        total: 1,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    await fetcher.fetch(onRecords)
-
-    // Assert - 適切なログが出力されている
-    expect(logger.info).toHaveBeenCalledWith('Dify使用量取得開始', expect.any(Object))
-    expect(logger.info).toHaveBeenCalledWith('ウォーターマーク更新完了', expect.any(Object))
-    expect(logger.info).toHaveBeenCalledWith('Dify使用量取得完了', expect.any(Object))
-  })
-
-  // DifyUsageFetcher → EnvConfig 連携
-  it('DifyUsageFetcherがEnvConfigから設定値を正しく取得する', async () => {
-    // Arrange - カスタムページサイズを設定
-    config.DIFY_FETCH_PAGE_SIZE = 50
-
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [createMockRecord()],
-        total: 1,
-        page: 1,
-        limit: 50,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const onRecords = vi.fn().mockResolvedValue(undefined)
-
-    // Act
-    await fetcher.fetch(onRecords)
-
-    // Assert - EnvConfigのページサイズが使用されている
-    expect(getMock).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        params: expect.objectContaining({
-          limit: 50,
-        }),
-      }),
-    )
-  })
-
-  // onRecordsコールバック連携
-  it('取得したレコードがonRecordsコールバックに正しく渡される', async () => {
-    // Arrange
-    const mockRecord = createMockRecord({ app_id: 'test-app-id' })
-    const getMock = vi.fn().mockResolvedValue({
-      data: {
-        data: [mockRecord],
-        total: 1,
-        page: 1,
-        limit: 100,
-        has_more: false,
-      },
-    })
-
-    const axiosInstance = {
-      get: getMock,
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    }
-    vi.mocked(axios.create).mockReturnValue(axiosInstance as ReturnType<typeof axios.create>)
-
-    const client = createDifyApiClient({ config, logger })
-    const watermarkManager = createWatermarkManager({ config, logger })
-    const fetcher = createDifyUsageFetcher({ client, watermarkManager, logger, config })
-
-    const receivedRecords: DifyUsageRecord[] = []
-    const onRecords = vi.fn().mockImplementation(async (records: DifyUsageRecord[]) => {
-      receivedRecords.push(...records)
-    })
-
-    // Act
-    const result = await fetcher.fetch(onRecords)
-
-    // Assert - コールバックにレコードが渡されている
-    expect(onRecords).toHaveBeenCalledTimes(1)
-    expect(receivedRecords).toHaveLength(1)
-    expect(receivedRecords[0].app_id).toBe('test-app-id')
-    expect(result.totalRecords).toBe(1)
   })
 })

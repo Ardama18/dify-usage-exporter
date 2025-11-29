@@ -31,11 +31,10 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
     {
       date: '2025-01-21',
       app_id: 'app-test',
-      provider: 'openai',
-      model: 'gpt-4',
-      input_tokens: 100,
-      output_tokens: 50,
-      total_tokens: 150,
+      app_name: 'Test App',
+      token_count: 100,
+      total_price: '0.001',
+      currency: 'USD',
       idempotency_key: 'test-key-1',
       transformed_at: '2025-01-21T00:00:00Z',
     },
@@ -52,7 +51,8 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
     // Config作成（必須フィールドを含む）
     config = {
       DIFY_API_BASE_URL: 'https://api.dify.test',
-      DIFY_API_TOKEN: 'test-dify-token',
+      DIFY_EMAIL: 'test@example.com',
+      DIFY_PASSWORD: 'test-password',
       EXTERNAL_API_URL: API_BASE_URL,
       EXTERNAL_API_TOKEN: 'test-token',
       EXTERNAL_API_TIMEOUT_MS: 5000,
@@ -64,12 +64,15 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
       MAX_RETRY: 3,
       NODE_ENV: 'test',
       DIFY_FETCH_PAGE_SIZE: 100,
-      DIFY_INITIAL_FETCH_DAYS: 30,
+      DIFY_FETCH_DAYS: 30,
       DIFY_FETCH_TIMEOUT_MS: 30000,
       DIFY_FETCH_RETRY_COUNT: 3,
       DIFY_FETCH_RETRY_DELAY_MS: 1000,
       WATERMARK_FILE_PATH: 'data/watermark.json',
+      WATERMARK_ENABLED: true,
       BATCH_SIZE: 100,
+      HEALTHCHECK_PORT: 8080,
+      HEALTHCHECK_ENABLED: true,
     } as EnvConfig
 
     // Logger作成（テスト用、コンソール出力抑制）

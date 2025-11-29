@@ -1,58 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createDataTransformer,
-  normalizeModel,
-  normalizeProvider,
   type TransformerDeps,
+  type TokenCostInputRecord,
 } from '../../../src/transformer/data-transformer.js'
-import type { DifyUsageRecord } from '../../../src/types/dify-usage.js'
-
-describe('normalizeProvider', () => {
-  it('should convert uppercase to lowercase', () => {
-    expect(normalizeProvider('OpenAI')).toBe('openai')
-    expect(normalizeProvider('ANTHROPIC')).toBe('anthropic')
-  })
-
-  it('should trim leading and trailing whitespace', () => {
-    expect(normalizeProvider('  openai  ')).toBe('openai')
-    expect(normalizeProvider('\topenai\t')).toBe('openai')
-  })
-
-  it('should handle special characters (tab, newline)', () => {
-    expect(normalizeProvider('\n openai \n')).toBe('openai')
-    expect(normalizeProvider(' OpenAI \t')).toBe('openai')
-  })
-
-  it('should handle already normalized input', () => {
-    expect(normalizeProvider('openai')).toBe('openai')
-  })
-})
-
-describe('normalizeModel', () => {
-  it('should convert uppercase to lowercase', () => {
-    expect(normalizeModel('GPT-4')).toBe('gpt-4')
-    expect(normalizeModel('Claude-3-OPUS')).toBe('claude-3-opus')
-  })
-
-  it('should trim leading and trailing whitespace', () => {
-    expect(normalizeModel('  gpt-4  ')).toBe('gpt-4')
-    expect(normalizeModel('\tgpt-4\t')).toBe('gpt-4')
-  })
-
-  it('should handle special characters (tab, newline)', () => {
-    expect(normalizeModel('\n gpt-4 \n')).toBe('gpt-4')
-    expect(normalizeModel(' GPT-4 \t')).toBe('gpt-4')
-  })
-
-  it('should handle already normalized input', () => {
-    expect(normalizeModel('gpt-4')).toBe('gpt-4')
-  })
-
-  it('should preserve hyphens and dots', () => {
-    expect(normalizeModel('gpt-4-turbo')).toBe('gpt-4-turbo')
-    expect(normalizeModel('claude-3.5-sonnet')).toBe('claude-3.5-sonnet')
-  })
-})
 
 describe('createDataTransformer', () => {
   let mockLogger: TransformerDeps['logger']
@@ -71,16 +22,13 @@ describe('createDataTransformer', () => {
 
   describe('正常系', () => {
     it('should transform a single record correctly', () => {
-      const record: DifyUsageRecord = {
+      const record: TokenCostInputRecord = {
         date: '2025-01-01',
         app_id: 'app-123',
         app_name: 'Test App',
-        provider: 'OpenAI',
-        model: 'GPT-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
-        user_id: 'user-456',
+        token_count: 100,
+        total_price: '0.001',
+        currency: 'USD',
       }
 
       const result = transformer.transform([record])
@@ -88,19 +36,21 @@ describe('createDataTransformer', () => {
       expect(result.successCount).toBe(1)
       expect(result.errorCount).toBe(0)
       expect(result.records).toHaveLength(1)
-      expect(result.records[0].provider).toBe('openai')
-      expect(result.records[0].model).toBe('gpt-4')
+      expect(result.records[0].app_id).toBe('app-123')
+      expect(result.records[0].app_name).toBe('Test App')
+      expect(result.records[0].token_count).toBe(100)
+      expect(result.records[0].total_price).toBe('0.001')
+      expect(result.records[0].currency).toBe('USD')
     })
 
     it('should add transformed_at to each record', () => {
-      const record: DifyUsageRecord = {
+      const record: TokenCostInputRecord = {
         date: '2025-01-01',
         app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
+        app_name: 'Test App',
+        token_count: 100,
+        total_price: '0.001',
+        currency: 'USD',
       }
 
       const result = transformer.transform([record])
@@ -110,40 +60,37 @@ describe('createDataTransformer', () => {
     })
 
     it('should generate idempotency_key for each record', () => {
-      const record: DifyUsageRecord = {
+      const record: TokenCostInputRecord = {
         date: '2025-01-01',
         app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
+        app_name: 'Test App',
+        token_count: 100,
+        total_price: '0.001',
+        currency: 'USD',
       }
 
       const result = transformer.transform([record])
 
-      expect(result.records[0].idempotency_key).toBe('2025-01-01_app-123_openai_gpt-4')
+      expect(result.records[0].idempotency_key).toBe('2025-01-01_app-123')
     })
 
     it('should generate batchIdempotencyKey', () => {
-      const records: DifyUsageRecord[] = [
+      const records: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: 'app-123',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'Test App 1',
+          token_count: 100,
+          total_price: '0.001',
+          currency: 'USD',
         },
         {
           date: '2025-01-01',
           app_id: 'app-456',
-          provider: 'anthropic',
-          model: 'claude-3',
-          input_tokens: 50,
-          output_tokens: 100,
-          total_tokens: 150,
+          app_name: 'Test App 2',
+          token_count: 50,
+          total_price: '0.0005',
+          currency: 'USD',
         },
       ]
 
@@ -163,14 +110,13 @@ describe('createDataTransformer', () => {
 
   describe('エラーハンドリング', () => {
     it('should record validation errors in errors array', () => {
-      const record: DifyUsageRecord = {
+      const record: TokenCostInputRecord = {
         date: '2025-01-01',
         app_id: '', // 空文字列でバリデーションエラー
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
+        app_name: 'Test App',
+        token_count: 100,
+        total_price: '0.001',
+        currency: 'USD',
       }
 
       const result = transformer.transform([record])
@@ -181,24 +127,22 @@ describe('createDataTransformer', () => {
     })
 
     it('should guarantee successCount + errorCount = input count', () => {
-      const records: DifyUsageRecord[] = [
+      const records: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: 'app-123',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'Test App 1',
+          token_count: 100,
+          total_price: '0.001',
+          currency: 'USD',
         },
         {
           date: '2025-01-01',
           app_id: '', // エラー
-          provider: 'anthropic',
-          model: 'claude-3',
-          input_tokens: 50,
-          output_tokens: 100,
-          total_tokens: 150,
+          app_name: 'Test App 2',
+          token_count: 50,
+          total_price: '0.0005',
+          currency: 'USD',
         },
       ]
 
@@ -208,15 +152,14 @@ describe('createDataTransformer', () => {
     })
 
     it('should not throw exceptions', () => {
-      const records: DifyUsageRecord[] = [
+      const records: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: '',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: -1, // 複数エラー
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'Test App',
+          token_count: -1, // 複数エラー
+          total_price: '0.001',
+          currency: 'USD',
         },
       ]
 
@@ -224,24 +167,22 @@ describe('createDataTransformer', () => {
     })
 
     it('should only return successful records', () => {
-      const records: DifyUsageRecord[] = [
+      const records: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: 'app-123',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'Test App 1',
+          token_count: 100,
+          total_price: '0.001',
+          currency: 'USD',
         },
         {
           date: '2025-01-01',
           app_id: '', // エラー
-          provider: 'anthropic',
-          model: 'claude-3',
-          input_tokens: 50,
-          output_tokens: 100,
-          total_tokens: 150,
+          app_name: 'Test App 2',
+          token_count: 50,
+          total_price: '0.0005',
+          currency: 'USD',
         },
       ]
 

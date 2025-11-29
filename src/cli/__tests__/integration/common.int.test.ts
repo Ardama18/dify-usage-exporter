@@ -14,7 +14,8 @@ import { handleError, ValidationError } from '../../utils/error-handler.js'
  */
 const testEnv = {
   DIFY_API_BASE_URL: 'https://api.dify.ai',
-  DIFY_API_TOKEN: 'test-dify-token',
+  DIFY_EMAIL: 'test@example.com',
+  DIFY_PASSWORD: 'test-password',
   EXTERNAL_API_URL: 'https://external-api.example.com',
   EXTERNAL_API_TOKEN: 'test-external-token',
 }

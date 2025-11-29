@@ -1,4 +1,4 @@
-import type { DifyUsageRecord } from '../types/dify-usage.js'
+import type { FetchedTokenCostRecord } from '../fetcher/dify-usage-fetcher.js'
 
 /**
  * Fetcherインターフェース
@@ -10,7 +10,7 @@ export interface IFetcher {
    * @param onRecords 取得したレコードを処理するコールバック
    * @returns 取得結果のサマリー
    */
-  fetch(onRecords: (records: DifyUsageRecord[]) => Promise<void>): Promise<FetchResult>
+  fetch(onRecords: (records: FetchedTokenCostRecord[]) => Promise<void>): Promise<FetchResult>
 }
 
 /**

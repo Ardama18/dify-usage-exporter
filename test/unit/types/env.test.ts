@@ -5,7 +5,8 @@ describe('envSchema', () => {
   // 基本的な必須環境変数のテスト用ベースデータ
   const baseValidEnv = {
     DIFY_API_BASE_URL: 'https://api.dify.ai',
-    DIFY_API_TOKEN: 'test-token',
+    DIFY_EMAIL: 'test@example.com',
+    DIFY_PASSWORD: 'test-password',
     EXTERNAL_API_URL: 'https://external-api.example.com',
     EXTERNAL_API_TOKEN: 'external-token',
   }
@@ -78,41 +79,41 @@ describe('envSchema', () => {
       })
     })
 
-    describe('DIFY_INITIAL_FETCH_DAYS', () => {
+    describe('DIFY_FETCH_DAYS', () => {
       it('デフォルト値30が設定される', () => {
         const result = envSchema.safeParse(baseValidEnv)
         expect(result.success).toBe(true)
         if (result.success) {
-          expect(result.data.DIFY_INITIAL_FETCH_DAYS).toBe(30)
+          expect(result.data.DIFY_FETCH_DAYS).toBe(30)
         }
       })
 
       it('有効な値（1）でバリデーションに成功する', () => {
         const result = envSchema.safeParse({
           ...baseValidEnv,
-          DIFY_INITIAL_FETCH_DAYS: '1',
+          DIFY_FETCH_DAYS: '1',
         })
         expect(result.success).toBe(true)
         if (result.success) {
-          expect(result.data.DIFY_INITIAL_FETCH_DAYS).toBe(1)
+          expect(result.data.DIFY_FETCH_DAYS).toBe(1)
         }
       })
 
       it('有効な値（365）でバリデーションに成功する', () => {
         const result = envSchema.safeParse({
           ...baseValidEnv,
-          DIFY_INITIAL_FETCH_DAYS: '365',
+          DIFY_FETCH_DAYS: '365',
         })
         expect(result.success).toBe(true)
         if (result.success) {
-          expect(result.data.DIFY_INITIAL_FETCH_DAYS).toBe(365)
+          expect(result.data.DIFY_FETCH_DAYS).toBe(365)
         }
       })
 
       it('最小値未満（0）でエラーになる', () => {
         const result = envSchema.safeParse({
           ...baseValidEnv,
-          DIFY_INITIAL_FETCH_DAYS: '0',
+          DIFY_FETCH_DAYS: '0',
         })
         expect(result.success).toBe(false)
       })
@@ -120,7 +121,7 @@ describe('envSchema', () => {
       it('最大値超過（366）でエラーになる', () => {
         const result = envSchema.safeParse({
           ...baseValidEnv,
-          DIFY_INITIAL_FETCH_DAYS: '366',
+          DIFY_FETCH_DAYS: '366',
         })
         expect(result.success).toBe(false)
       })
@@ -308,7 +309,7 @@ describe('envSchema', () => {
       const customEnv = {
         ...baseValidEnv,
         DIFY_FETCH_PAGE_SIZE: '500',
-        DIFY_INITIAL_FETCH_DAYS: '60',
+        DIFY_FETCH_DAYS: '60',
         DIFY_FETCH_TIMEOUT_MS: '60000',
         DIFY_FETCH_RETRY_COUNT: '5',
         DIFY_FETCH_RETRY_DELAY_MS: '2000',
@@ -319,7 +320,7 @@ describe('envSchema', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.DIFY_FETCH_PAGE_SIZE).toBe(500)
-        expect(result.data.DIFY_INITIAL_FETCH_DAYS).toBe(60)
+        expect(result.data.DIFY_FETCH_DAYS).toBe(60)
         expect(result.data.DIFY_FETCH_TIMEOUT_MS).toBe(60000)
         expect(result.data.DIFY_FETCH_RETRY_COUNT).toBe(5)
         expect(result.data.DIFY_FETCH_RETRY_DELAY_MS).toBe(2000)
@@ -333,7 +334,7 @@ describe('envSchema', () => {
       const result = envSchema.safeParse({
         ...baseValidEnv,
         DIFY_FETCH_PAGE_SIZE: '100',
-        DIFY_INITIAL_FETCH_DAYS: '30',
+        DIFY_FETCH_DAYS: '30',
         DIFY_FETCH_TIMEOUT_MS: '30000',
         DIFY_FETCH_RETRY_COUNT: '3',
         DIFY_FETCH_RETRY_DELAY_MS: '1000',
@@ -341,7 +342,7 @@ describe('envSchema', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(typeof result.data.DIFY_FETCH_PAGE_SIZE).toBe('number')
-        expect(typeof result.data.DIFY_INITIAL_FETCH_DAYS).toBe('number')
+        expect(typeof result.data.DIFY_FETCH_DAYS).toBe('number')
         expect(typeof result.data.DIFY_FETCH_TIMEOUT_MS).toBe('number')
         expect(typeof result.data.DIFY_FETCH_RETRY_COUNT).toBe('number')
         expect(typeof result.data.DIFY_FETCH_RETRY_DELAY_MS).toBe('number')
@@ -354,7 +355,8 @@ describe('型エクスポートの確認', () => {
   it('EnvConfig型にDify Fetcher関連のフィールドが含まれている', () => {
     const config: EnvConfig = {
       DIFY_API_BASE_URL: 'https://api.dify.ai',
-      DIFY_API_TOKEN: 'test-token',
+      DIFY_EMAIL: 'test@example.com',
+      DIFY_PASSWORD: 'test-password',
       EXTERNAL_API_URL: 'https://external-api.example.com',
       EXTERNAL_API_TOKEN: 'external-token',
       CRON_SCHEDULE: '0 0 * * *',
@@ -363,15 +365,16 @@ describe('型エクスポートの確認', () => {
       MAX_RETRY: 3,
       NODE_ENV: 'production',
       DIFY_FETCH_PAGE_SIZE: 100,
-      DIFY_INITIAL_FETCH_DAYS: 30,
+      DIFY_FETCH_DAYS: 30,
       DIFY_FETCH_TIMEOUT_MS: 30000,
       DIFY_FETCH_RETRY_COUNT: 3,
       DIFY_FETCH_RETRY_DELAY_MS: 1000,
       WATERMARK_FILE_PATH: 'data/watermark.json',
+      WATERMARK_ENABLED: true,
     }
 
     expect(config.DIFY_FETCH_PAGE_SIZE).toBe(100)
-    expect(config.DIFY_INITIAL_FETCH_DAYS).toBe(30)
+    expect(config.DIFY_FETCH_DAYS).toBe(30)
     expect(config.DIFY_FETCH_TIMEOUT_MS).toBe(30000)
     expect(config.DIFY_FETCH_RETRY_COUNT).toBe(3)
     expect(config.DIFY_FETCH_RETRY_DELAY_MS).toBe(1000)

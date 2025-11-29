@@ -7,84 +7,47 @@ describe('externalApiRecordSchema', () => {
       const record: ExternalApiRecord = {
         date: '2025-01-01',
         app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
-        idempotency_key: '2025-01-01_app-123_openai_gpt-4',
-        transformed_at: '2025-01-01T00:00:00.000Z',
-      }
-      const result = externalApiRecordSchema.safeParse(record)
-      expect(result.success).toBe(true)
-    })
-
-    it('should allow optional app_name', () => {
-      const record = {
-        date: '2025-01-01',
-        app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
-        idempotency_key: 'key',
         app_name: 'Test App',
+        token_count: 100,
+        total_price: '0.001',
+        currency: 'USD',
+        idempotency_key: '2025-01-01_app-123',
         transformed_at: '2025-01-01T00:00:00.000Z',
       }
       const result = externalApiRecordSchema.safeParse(record)
       expect(result.success).toBe(true)
     })
 
-    it('should allow optional user_id', () => {
+    it('should validate zero token_count', () => {
       const record = {
         date: '2025-01-01',
         app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
-        idempotency_key: 'key',
-        user_id: 'user-456',
-        transformed_at: '2025-01-01T00:00:00.000Z',
-      }
-      const result = externalApiRecordSchema.safeParse(record)
-      expect(result.success).toBe(true)
-    })
-
-    it('should allow both optional fields', () => {
-      const record = {
-        date: '2025-01-01',
-        app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
-        idempotency_key: 'key',
         app_name: 'Test App',
-        user_id: 'user-456',
+        token_count: 0,
+        total_price: '0.000',
+        currency: 'USD',
+        idempotency_key: 'key',
         transformed_at: '2025-01-01T00:00:00.000Z',
       }
       const result = externalApiRecordSchema.safeParse(record)
       expect(result.success).toBe(true)
     })
 
-    it('should validate zero tokens', () => {
+    it('should use default currency when not provided', () => {
       const record = {
         date: '2025-01-01',
         app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 0,
-        output_tokens: 0,
-        total_tokens: 0,
+        app_name: 'Test App',
+        token_count: 100,
+        total_price: '0.001',
         idempotency_key: 'key',
         transformed_at: '2025-01-01T00:00:00.000Z',
       }
       const result = externalApiRecordSchema.safeParse(record)
       expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.currency).toBe('USD')
+      }
     })
   })
 
@@ -93,11 +56,10 @@ describe('externalApiRecordSchema', () => {
       const record = {
         date: '2025/01/01',
         app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
+        app_name: 'Test App',
+        token_count: 100,
+        total_price: '0.001',
+        currency: 'USD',
         idempotency_key: 'key',
         transformed_at: '2025-01-01T00:00:00.000Z',
       }
@@ -109,11 +71,10 @@ describe('externalApiRecordSchema', () => {
       const record = {
         date: '01-01-2025',
         app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
+        app_name: 'Test App',
+        token_count: 100,
+        total_price: '0.001',
+        currency: 'USD',
         idempotency_key: 'key',
         transformed_at: '2025-01-01T00:00:00.000Z',
       }
@@ -121,47 +82,14 @@ describe('externalApiRecordSchema', () => {
       expect(result.success).toBe(false)
     })
 
-    it('should reject negative input_tokens', () => {
+    it('should reject negative token_count', () => {
       const record = {
         date: '2025-01-01',
         app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: -1,
-        output_tokens: 200,
-        total_tokens: 300,
-        idempotency_key: 'key',
-        transformed_at: '2025-01-01T00:00:00.000Z',
-      }
-      const result = externalApiRecordSchema.safeParse(record)
-      expect(result.success).toBe(false)
-    })
-
-    it('should reject negative output_tokens', () => {
-      const record = {
-        date: '2025-01-01',
-        app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: -1,
-        total_tokens: 300,
-        idempotency_key: 'key',
-        transformed_at: '2025-01-01T00:00:00.000Z',
-      }
-      const result = externalApiRecordSchema.safeParse(record)
-      expect(result.success).toBe(false)
-    })
-
-    it('should reject negative total_tokens', () => {
-      const record = {
-        date: '2025-01-01',
-        app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: -1,
+        app_name: 'Test App',
+        token_count: -1,
+        total_price: '0.001',
+        currency: 'USD',
         idempotency_key: 'key',
         transformed_at: '2025-01-01T00:00:00.000Z',
       }
@@ -173,11 +101,10 @@ describe('externalApiRecordSchema', () => {
       const record = {
         date: '2025-01-01',
         app_id: '',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
+        app_name: 'Test App',
+        token_count: 100,
+        total_price: '0.001',
+        currency: 'USD',
         idempotency_key: 'key',
         transformed_at: '2025-01-01T00:00:00.000Z',
       }
@@ -185,31 +112,14 @@ describe('externalApiRecordSchema', () => {
       expect(result.success).toBe(false)
     })
 
-    it('should reject empty provider', () => {
+    it('should reject empty app_name', () => {
       const record = {
         date: '2025-01-01',
         app_id: 'app-123',
-        provider: '',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
-        idempotency_key: 'key',
-        transformed_at: '2025-01-01T00:00:00.000Z',
-      }
-      const result = externalApiRecordSchema.safeParse(record)
-      expect(result.success).toBe(false)
-    })
-
-    it('should reject empty model', () => {
-      const record = {
-        date: '2025-01-01',
-        app_id: 'app-123',
-        provider: 'openai',
-        model: '',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
+        app_name: '',
+        token_count: 100,
+        total_price: '0.001',
+        currency: 'USD',
         idempotency_key: 'key',
         transformed_at: '2025-01-01T00:00:00.000Z',
       }
@@ -221,11 +131,10 @@ describe('externalApiRecordSchema', () => {
       const record = {
         date: '2025-01-01',
         app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
+        app_name: 'Test App',
+        token_count: 100,
+        total_price: '0.001',
+        currency: 'USD',
         idempotency_key: '',
         transformed_at: '2025-01-01T00:00:00.000Z',
       }
@@ -237,11 +146,10 @@ describe('externalApiRecordSchema', () => {
       const record = {
         date: '2025-01-01',
         app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
+        app_name: 'Test App',
+        token_count: 100,
+        total_price: '0.001',
+        currency: 'USD',
         idempotency_key: 'key',
         transformed_at: '2025-01-01 00:00:00',
       }
@@ -249,15 +157,14 @@ describe('externalApiRecordSchema', () => {
       expect(result.success).toBe(false)
     })
 
-    it('should reject float tokens', () => {
+    it('should reject float token_count', () => {
       const record = {
         date: '2025-01-01',
         app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100.5,
-        output_tokens: 200,
-        total_tokens: 300,
+        app_name: 'Test App',
+        token_count: 100.5,
+        total_price: '0.001',
+        currency: 'USD',
         idempotency_key: 'key',
         transformed_at: '2025-01-01T00:00:00.000Z',
       }
@@ -269,11 +176,10 @@ describe('externalApiRecordSchema', () => {
       const record = {
         date: '2025-01-01',
         app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        // total_tokens is missing
+        app_name: 'Test App',
+        // token_count is missing
+        total_price: '0.001',
+        currency: 'USD',
         idempotency_key: 'key',
         transformed_at: '2025-01-01T00:00:00.000Z',
       }

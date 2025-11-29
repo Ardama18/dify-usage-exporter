@@ -1,15 +1,15 @@
 /**
  * DifyUsageFetcher 単体テスト
  *
- * オーケストレーション機能、ページング処理、バリデーション、
+ * オーケストレーション機能、バリデーション、
  * エラーハンドリングの動作を検証する。
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DifyApiClient } from '../../../src/fetcher/dify-api-client.js'
+import type { DifyApiClient, DifyApp } from '../../../src/fetcher/dify-api-client.js'
 import type { IFetcher } from '../../../src/interfaces/fetcher.js'
 import type { Logger } from '../../../src/logger/winston-logger.js'
-import type { DifyUsageRecord, DifyUsageResponse } from '../../../src/types/dify-usage.js'
+import type { DifyAppTokenCost, DifyAppTokenCostsResponse } from '../../../src/types/dify-usage.js'
 import type { EnvConfig } from '../../../src/types/env.js'
 import type { Watermark } from '../../../src/types/watermark.js'
 import type { WatermarkManager } from '../../../src/watermark/watermark-manager.js'
@@ -30,7 +30,8 @@ describe('DifyUsageFetcher', () => {
 
     config = {
       DIFY_API_BASE_URL: 'https://api.dify.ai',
-      DIFY_API_TOKEN: 'test-api-token',
+      DIFY_EMAIL: 'test@example.com',
+      DIFY_PASSWORD: 'test-password',
       EXTERNAL_API_URL: 'https://external.api',
       EXTERNAL_API_TOKEN: 'external-token',
       CRON_SCHEDULE: '0 0 * * *',
@@ -39,11 +40,12 @@ describe('DifyUsageFetcher', () => {
       MAX_RETRY: 3,
       NODE_ENV: 'test',
       DIFY_FETCH_PAGE_SIZE: 100,
-      DIFY_INITIAL_FETCH_DAYS: 30,
+      DIFY_FETCH_DAYS: 30,
       DIFY_FETCH_TIMEOUT_MS: 30000,
       DIFY_FETCH_RETRY_COUNT: 3,
       DIFY_FETCH_RETRY_DELAY_MS: 1000,
       WATERMARK_FILE_PATH: 'data/watermark.json',
+      WATERMARK_ENABLED: true,
     }
 
     logger = {
@@ -55,7 +57,8 @@ describe('DifyUsageFetcher', () => {
     }
 
     mockClient = {
-      fetchUsage: vi.fn(),
+      fetchApps: vi.fn(),
+      fetchAppTokenCosts: vi.fn(),
     }
 
     mockWatermarkManager = {
@@ -68,36 +71,34 @@ describe('DifyUsageFetcher', () => {
     vi.useRealTimers()
   })
 
-  // ヘルパー関数：モックレスポンスの生成
-  function createMockResponse(
-    records: DifyUsageRecord[],
-    options: { total?: number; page?: number; has_more?: boolean } = {},
-  ): DifyUsageResponse {
+  // ヘルパー関数：モックアプリの生成
+  function createMockApp(overrides: Partial<DifyApp> = {}): DifyApp {
     return {
-      data: records,
-      total: options.total ?? records.length,
-      page: options.page ?? 1,
-      limit: config.DIFY_FETCH_PAGE_SIZE,
-      has_more: options.has_more ?? false,
-    }
-  }
-
-  // ヘルパー関数：モックレコードの生成
-  function createMockRecord(overrides: Partial<DifyUsageRecord> = {}): DifyUsageRecord {
-    return {
-      date: '2024-01-15',
-      app_id: 'app-123',
-      provider: 'openai',
-      model: 'gpt-4',
-      input_tokens: 100,
-      output_tokens: 50,
-      total_tokens: 150,
+      id: 'app-123',
+      name: 'Test App',
+      mode: 'chat',
       ...overrides,
     }
   }
 
+  // ヘルパー関数：モックトークンコストレコードの生成
+  function createMockTokenCost(overrides: Partial<DifyAppTokenCost> = {}): DifyAppTokenCost {
+    return {
+      date: '2024-01-15',
+      token_count: 100,
+      total_price: '0.001',
+      currency: 'USD',
+      ...overrides,
+    }
+  }
+
+  // ヘルパー関数：モックレスポンスの生成
+  function createMockTokenCostsResponse(data: DifyAppTokenCost[] = []): DifyAppTokenCostsResponse {
+    return { data }
+  }
+
   describe('オーケストレーション動作', () => {
-    it('ウォーターマーク読み込み→API呼び出し→ウォーターマーク更新の順序で実行される', async () => {
+    it('ウォーターマーク読み込み→アプリ取得→トークンコスト取得→ウォーターマーク更新の順序で実行される', async () => {
       // Arrange
       const { createDifyUsageFetcher } = await import('../../../src/fetcher/dify-usage-fetcher.js')
 
@@ -108,8 +109,11 @@ describe('DifyUsageFetcher', () => {
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(watermark)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      const response = createMockResponse([createMockRecord()])
-      vi.mocked(mockClient.fetchUsage).mockResolvedValue(response)
+      const apps = [createMockApp()]
+      vi.mocked(mockClient.fetchApps).mockResolvedValue(apps)
+
+      const response = createMockTokenCostsResponse([createMockTokenCost()])
+      vi.mocked(mockClient.fetchAppTokenCosts).mockResolvedValue(response)
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -121,54 +125,25 @@ describe('DifyUsageFetcher', () => {
       const onRecords = vi.fn().mockResolvedValue(undefined)
 
       // Act
-      await fetcher.fetch(onRecords)
+      const fetchPromise = fetcher.fetch(onRecords)
+      await vi.runAllTimersAsync()
+      await fetchPromise
 
       // Assert
       expect(mockWatermarkManager.load).toHaveBeenCalledTimes(1)
-      expect(mockClient.fetchUsage).toHaveBeenCalled()
+      expect(mockClient.fetchApps).toHaveBeenCalled()
+      expect(mockClient.fetchAppTokenCosts).toHaveBeenCalled()
       expect(mockWatermarkManager.update).toHaveBeenCalledTimes(1)
 
       // 順序の確認
       const loadCallOrder = vi.mocked(mockWatermarkManager.load).mock.invocationCallOrder[0]
-      const fetchCallOrder = vi.mocked(mockClient.fetchUsage).mock.invocationCallOrder[0]
+      const fetchAppsCallOrder = vi.mocked(mockClient.fetchApps).mock.invocationCallOrder[0]
+      const fetchCostsCallOrder = vi.mocked(mockClient.fetchAppTokenCosts).mock.invocationCallOrder[0]
       const updateCallOrder = vi.mocked(mockWatermarkManager.update).mock.invocationCallOrder[0]
 
-      expect(loadCallOrder).toBeLessThan(fetchCallOrder)
-      expect(fetchCallOrder).toBeLessThan(updateCallOrder)
-    })
-
-    it('開始日が正しく計算される（ウォーターマーク存在時）', async () => {
-      // Arrange
-      const { createDifyUsageFetcher } = await import('../../../src/fetcher/dify-usage-fetcher.js')
-
-      const watermark: Watermark = {
-        last_fetched_date: '2024-01-15T00:00:00.000Z',
-        last_updated_at: '2024-01-15T10:30:00.000Z',
-      }
-      vi.mocked(mockWatermarkManager.load).mockResolvedValue(watermark)
-      vi.mocked(mockWatermarkManager.update).mockResolvedValue()
-
-      const response = createMockResponse([createMockRecord()])
-      vi.mocked(mockClient.fetchUsage).mockResolvedValue(response)
-
-      fetcher = createDifyUsageFetcher({
-        client: mockClient,
-        watermarkManager: mockWatermarkManager,
-        logger,
-        config,
-      })
-
-      const onRecords = vi.fn().mockResolvedValue(undefined)
-
-      // Act
-      await fetcher.fetch(onRecords)
-
-      // Assert - 開始日はウォーターマークの翌日
-      expect(mockClient.fetchUsage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          startDate: '2024-01-16', // last_fetched_date + 1日
-        }),
-      )
+      expect(loadCallOrder).toBeLessThan(fetchAppsCallOrder)
+      expect(fetchAppsCallOrder).toBeLessThan(fetchCostsCallOrder)
+      expect(fetchCostsCallOrder).toBeLessThan(updateCallOrder)
     })
 
     it('開始日が正しく計算される（初回実行時：ウォーターマーク不存在）', async () => {
@@ -178,8 +153,11 @@ describe('DifyUsageFetcher', () => {
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      const response = createMockResponse([createMockRecord()])
-      vi.mocked(mockClient.fetchUsage).mockResolvedValue(response)
+      const apps = [createMockApp()]
+      vi.mocked(mockClient.fetchApps).mockResolvedValue(apps)
+
+      const response = createMockTokenCostsResponse([createMockTokenCost()])
+      vi.mocked(mockClient.fetchAppTokenCosts).mockResolvedValue(response)
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -191,12 +169,14 @@ describe('DifyUsageFetcher', () => {
       const onRecords = vi.fn().mockResolvedValue(undefined)
 
       // Act
-      await fetcher.fetch(onRecords)
+      const fetchPromise = fetcher.fetch(onRecords)
+      await vi.runAllTimersAsync()
+      await fetchPromise
 
-      // Assert - 開始日は30日前（DIFY_INITIAL_FETCH_DAYS）
-      expect(mockClient.fetchUsage).toHaveBeenCalledWith(
+      // Assert - 開始日は30日前（DIFY_FETCH_DAYS）
+      expect(mockClient.fetchAppTokenCosts).toHaveBeenCalledWith(
         expect.objectContaining({
-          startDate: '2023-12-21', // 2024-01-20 - 30日
+          start: expect.stringContaining('2023-12-21'), // 2024-01-20 - 30日
         }),
       )
     })
@@ -208,51 +188,11 @@ describe('DifyUsageFetcher', () => {
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      const response = createMockResponse([createMockRecord(), createMockRecord()])
-      vi.mocked(mockClient.fetchUsage).mockResolvedValue(response)
+      const apps = [createMockApp()]
+      vi.mocked(mockClient.fetchApps).mockResolvedValue(apps)
 
-      fetcher = createDifyUsageFetcher({
-        client: mockClient,
-        watermarkManager: mockWatermarkManager,
-        logger,
-        config,
-      })
-
-      const onRecords = vi.fn().mockResolvedValue(undefined)
-
-      // Act
-      const result = await fetcher.fetch(onRecords)
-
-      // Assert
-      expect(result.success).toBe(true)
-      expect(result.totalRecords).toBe(2)
-      expect(result.totalPages).toBe(1)
-      expect(result.errors).toHaveLength(0)
-      expect(result.startDate).toBeDefined()
-      expect(result.endDate).toBeDefined()
-      expect(result.durationMs).toBeGreaterThanOrEqual(0)
-    })
-  })
-
-  describe('ページング処理', () => {
-    it('has_more=trueの間、次のページを取得し続ける', async () => {
-      // Arrange
-      const { createDifyUsageFetcher } = await import('../../../src/fetcher/dify-usage-fetcher.js')
-
-      vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
-      vi.mocked(mockWatermarkManager.update).mockResolvedValue()
-
-      // 3ページ分のデータ
-      vi.mocked(mockClient.fetchUsage)
-        .mockResolvedValueOnce(
-          createMockResponse([createMockRecord()], { page: 1, has_more: true, total: 3 }),
-        )
-        .mockResolvedValueOnce(
-          createMockResponse([createMockRecord()], { page: 2, has_more: true, total: 3 }),
-        )
-        .mockResolvedValueOnce(
-          createMockResponse([createMockRecord()], { page: 3, has_more: false, total: 3 }),
-        )
+      const response = createMockTokenCostsResponse([createMockTokenCost(), createMockTokenCost()])
+      vi.mocked(mockClient.fetchAppTokenCosts).mockResolvedValue(response)
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -269,25 +209,35 @@ describe('DifyUsageFetcher', () => {
       const result = await fetchPromise
 
       // Assert
-      expect(mockClient.fetchUsage).toHaveBeenCalledTimes(3)
-      expect(result.totalPages).toBe(3)
-      expect(result.totalRecords).toBe(3)
+      expect(result.success).toBe(true)
+      expect(result.totalRecords).toBe(2)
+      expect(result.totalPages).toBe(1) // アプリベースなのでページングは使用しない
+      expect(result.errors).toHaveLength(0)
+      expect(result.startDate).toBeDefined()
+      expect(result.endDate).toBeDefined()
+      expect(result.durationMs).toBeGreaterThanOrEqual(0)
     })
+  })
 
-    it('ページ番号が正しくインクリメントされる', async () => {
+  describe('複数アプリ処理', () => {
+    it('複数アプリから順番にトークンコストを取得する', async () => {
       // Arrange
       const { createDifyUsageFetcher } = await import('../../../src/fetcher/dify-usage-fetcher.js')
 
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      vi.mocked(mockClient.fetchUsage)
-        .mockResolvedValueOnce(
-          createMockResponse([createMockRecord()], { page: 1, has_more: true }),
-        )
-        .mockResolvedValueOnce(
-          createMockResponse([createMockRecord()], { page: 2, has_more: false }),
-        )
+      const apps = [
+        createMockApp({ id: 'app-1', name: 'App 1' }),
+        createMockApp({ id: 'app-2', name: 'App 2' }),
+        createMockApp({ id: 'app-3', name: 'App 3' }),
+      ]
+      vi.mocked(mockClient.fetchApps).mockResolvedValue(apps)
+
+      vi.mocked(mockClient.fetchAppTokenCosts)
+        .mockResolvedValueOnce(createMockTokenCostsResponse([createMockTokenCost()]))
+        .mockResolvedValueOnce(createMockTokenCostsResponse([createMockTokenCost(), createMockTokenCost()]))
+        .mockResolvedValueOnce(createMockTokenCostsResponse([createMockTokenCost()]))
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -301,65 +251,33 @@ describe('DifyUsageFetcher', () => {
       // Act
       const fetchPromise = fetcher.fetch(onRecords)
       await vi.runAllTimersAsync()
-      await fetchPromise
+      const result = await fetchPromise
 
       // Assert
-      expect(mockClient.fetchUsage).toHaveBeenNthCalledWith(1, expect.objectContaining({ page: 1 }))
-      expect(mockClient.fetchUsage).toHaveBeenNthCalledWith(2, expect.objectContaining({ page: 2 }))
-    })
-
-    it('環境変数DIFY_FETCH_PAGE_SIZEがlimitに反映される', async () => {
-      // Arrange
-      const { createDifyUsageFetcher } = await import('../../../src/fetcher/dify-usage-fetcher.js')
-
-      config.DIFY_FETCH_PAGE_SIZE = 50
-
-      vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
-      vi.mocked(mockWatermarkManager.update).mockResolvedValue()
-
-      const response = createMockResponse([createMockRecord()])
-      vi.mocked(mockClient.fetchUsage).mockResolvedValue(response)
-
-      fetcher = createDifyUsageFetcher({
-        client: mockClient,
-        watermarkManager: mockWatermarkManager,
-        logger,
-        config,
-      })
-
-      const onRecords = vi.fn().mockResolvedValue(undefined)
-
-      // Act
-      await fetcher.fetch(onRecords)
-
-      // Assert
-      expect(mockClient.fetchUsage).toHaveBeenCalledWith(
-        expect.objectContaining({
-          limit: 50,
-        }),
+      expect(mockClient.fetchAppTokenCosts).toHaveBeenCalledTimes(3)
+      expect(mockClient.fetchAppTokenCosts).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ appId: 'app-1' }),
       )
+      expect(mockClient.fetchAppTokenCosts).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ appId: 'app-2' }),
+      )
+      expect(mockClient.fetchAppTokenCosts).toHaveBeenNthCalledWith(
+        3,
+        expect.objectContaining({ appId: 'app-3' }),
+      )
+      expect(result.totalRecords).toBe(4)
     })
-  })
 
-  describe('進捗ログ出力', () => {
-    it('100ページごとに進捗ログを出力する', async () => {
+    it('アプリが0件の場合はトークンコスト取得をスキップする', async () => {
       // Arrange
       const { createDifyUsageFetcher } = await import('../../../src/fetcher/dify-usage-fetcher.js')
 
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      // 200ページ分のデータをシミュレート
-      const fetchUsageMock = vi.mocked(mockClient.fetchUsage)
-      for (let i = 1; i <= 200; i++) {
-        fetchUsageMock.mockResolvedValueOnce(
-          createMockResponse([createMockRecord()], {
-            page: i,
-            has_more: i < 200,
-            total: 200,
-          }),
-        )
-      }
+      vi.mocked(mockClient.fetchApps).mockResolvedValue([])
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -373,83 +291,12 @@ describe('DifyUsageFetcher', () => {
       // Act
       const fetchPromise = fetcher.fetch(onRecords)
       await vi.runAllTimersAsync()
-      await fetchPromise
-
-      // Assert - 100ページと200ページで進捗ログが出力される
-      const infoCalls = vi.mocked(logger.info).mock.calls
-      const progressCalls = infoCalls.filter(
-        (call) => call[0] === '取得進捗' && call[1]?.page !== undefined,
-      )
-      expect(progressCalls.length).toBeGreaterThanOrEqual(1)
-    })
-  })
-
-  describe('ページ間ディレイ', () => {
-    it('各ページ取得後に1秒のディレイを挿入する', async () => {
-      // Arrange
-      const { createDifyUsageFetcher } = await import('../../../src/fetcher/dify-usage-fetcher.js')
-
-      vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
-      vi.mocked(mockWatermarkManager.update).mockResolvedValue()
-
-      vi.mocked(mockClient.fetchUsage)
-        .mockResolvedValueOnce(
-          createMockResponse([createMockRecord()], { page: 1, has_more: true }),
-        )
-        .mockResolvedValueOnce(
-          createMockResponse([createMockRecord()], { page: 2, has_more: false }),
-        )
-
-      fetcher = createDifyUsageFetcher({
-        client: mockClient,
-        watermarkManager: mockWatermarkManager,
-        logger,
-        config,
-      })
-
-      const onRecords = vi.fn().mockResolvedValue(undefined)
-
-      // Act
-      const fetchPromise = fetcher.fetch(onRecords)
-
-      // 最初のAPI呼び出しを待機
-      await vi.advanceTimersByTimeAsync(0)
-
-      // 1秒のディレイを進める
-      await vi.advanceTimersByTimeAsync(1000)
-
-      await fetchPromise
+      const result = await fetchPromise
 
       // Assert
-      expect(mockClient.fetchUsage).toHaveBeenCalledTimes(2)
-    })
-
-    it('最後のページ後はディレイを挿入しない', async () => {
-      // Arrange
-      const { createDifyUsageFetcher } = await import('../../../src/fetcher/dify-usage-fetcher.js')
-
-      vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
-      vi.mocked(mockWatermarkManager.update).mockResolvedValue()
-
-      const response = createMockResponse([createMockRecord()], { has_more: false })
-      vi.mocked(mockClient.fetchUsage).mockResolvedValue(response)
-
-      fetcher = createDifyUsageFetcher({
-        client: mockClient,
-        watermarkManager: mockWatermarkManager,
-        logger,
-        config,
-      })
-
-      const onRecords = vi.fn().mockResolvedValue(undefined)
-
-      // Act
-      const startTime = Date.now()
-      await fetcher.fetch(onRecords)
-      const endTime = Date.now()
-
-      // Assert - 1秒未満で完了（最後のページ後のディレイなし）
-      expect(endTime - startTime).toBeLessThan(1000)
+      expect(mockClient.fetchAppTokenCosts).not.toHaveBeenCalled()
+      expect(result.totalRecords).toBe(0)
+      expect(result.success).toBe(true)
     })
   })
 
@@ -461,9 +308,12 @@ describe('DifyUsageFetcher', () => {
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      const validRecord = createMockRecord()
-      const response = createMockResponse([validRecord])
-      vi.mocked(mockClient.fetchUsage).mockResolvedValue(response)
+      const app = createMockApp({ id: 'app-123', name: 'Test App' })
+      vi.mocked(mockClient.fetchApps).mockResolvedValue([app])
+
+      const validRecord = createMockTokenCost()
+      const response = createMockTokenCostsResponse([validRecord])
+      vi.mocked(mockClient.fetchAppTokenCosts).mockResolvedValue(response)
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -475,10 +325,18 @@ describe('DifyUsageFetcher', () => {
       const onRecords = vi.fn().mockResolvedValue(undefined)
 
       // Act
-      await fetcher.fetch(onRecords)
+      const fetchPromise = fetcher.fetch(onRecords)
+      await vi.runAllTimersAsync()
+      await fetchPromise
 
-      // Assert
-      expect(onRecords).toHaveBeenCalledWith([validRecord])
+      // Assert - app_idとapp_nameが付加されたレコードが渡される
+      expect(onRecords).toHaveBeenCalledWith([
+        expect.objectContaining({
+          ...validRecord,
+          app_id: 'app-123',
+          app_name: 'Test App',
+        }),
+      ])
     })
 
     it('バリデーションエラーのレコードはスキップされ、エラーログが出力される', async () => {
@@ -488,21 +346,21 @@ describe('DifyUsageFetcher', () => {
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      // 不正なレコード（total_tokensが負）
+      const app = createMockApp()
+      vi.mocked(mockClient.fetchApps).mockResolvedValue([app])
+
+      // 不正なレコード（token_countが負）
       const invalidRecord = {
         date: '2024-01-15',
-        app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 50,
-        total_tokens: -1, // 不正な値
-      } as DifyUsageRecord
+        token_count: -1, // 不正な値
+        total_price: '0.001',
+        currency: 'USD',
+      } as DifyAppTokenCost
 
-      const validRecord = createMockRecord()
+      const validRecord = createMockTokenCost()
 
-      const response = createMockResponse([invalidRecord, validRecord])
-      vi.mocked(mockClient.fetchUsage).mockResolvedValue(response)
+      const response = createMockTokenCostsResponse([invalidRecord, validRecord])
+      vi.mocked(mockClient.fetchAppTokenCosts).mockResolvedValue(response)
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -514,28 +372,31 @@ describe('DifyUsageFetcher', () => {
       const onRecords = vi.fn().mockResolvedValue(undefined)
 
       // Act
-      const result = await fetcher.fetch(onRecords)
+      const fetchPromise = fetcher.fetch(onRecords)
+      await vi.runAllTimersAsync()
+      const result = await fetchPromise
 
       // Assert - 有効なレコードのみ渡される
-      expect(onRecords).toHaveBeenCalledWith([validRecord])
+      expect(onRecords).toHaveBeenCalledWith([
+        expect.objectContaining({
+          date: validRecord.date,
+          token_count: validRecord.token_count,
+        }),
+      ])
       expect(result.totalRecords).toBe(1)
       expect(result.errors.some((e) => e.type === 'validation')).toBe(true)
     })
   })
 
   describe('エラーハンドリング', () => {
-    it('ページ取得失敗時にエラーをerrorsに追加してループを中断する', async () => {
+    it('アプリ一覧取得失敗時にエラーをerrorsに追加する', async () => {
       // Arrange
       const { createDifyUsageFetcher } = await import('../../../src/fetcher/dify-usage-fetcher.js')
 
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      vi.mocked(mockClient.fetchUsage)
-        .mockResolvedValueOnce(
-          createMockResponse([createMockRecord()], { page: 1, has_more: true }),
-        )
-        .mockRejectedValueOnce(new Error('API Error'))
+      vi.mocked(mockClient.fetchApps).mockRejectedValue(new Error('API Error'))
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -555,22 +416,63 @@ describe('DifyUsageFetcher', () => {
       expect(result.success).toBe(false)
       expect(result.errors).toHaveLength(1)
       expect(result.errors[0].type).toBe('api')
-      expect(result.totalRecords).toBe(1) // 1ページ目のレコードのみ
+      expect(result.errors[0].message).toContain('アプリ一覧')
       expect(logger.error).toHaveBeenCalled()
     })
 
-    it('エラー発生後も取得済みデータまでウォーターマークを更新する', async () => {
+    it('1つのアプリでトークンコスト取得失敗しても他のアプリは処理を継続する', async () => {
       // Arrange
       const { createDifyUsageFetcher } = await import('../../../src/fetcher/dify-usage-fetcher.js')
 
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      vi.mocked(mockClient.fetchUsage)
-        .mockResolvedValueOnce(
-          createMockResponse([createMockRecord()], { page: 1, has_more: true }),
-        )
-        .mockRejectedValueOnce(new Error('API Error'))
+      const apps = [
+        createMockApp({ id: 'app-1', name: 'App 1' }),
+        createMockApp({ id: 'app-2', name: 'App 2' }),
+        createMockApp({ id: 'app-3', name: 'App 3' }),
+      ]
+      vi.mocked(mockClient.fetchApps).mockResolvedValue(apps)
+
+      vi.mocked(mockClient.fetchAppTokenCosts)
+        .mockResolvedValueOnce(createMockTokenCostsResponse([createMockTokenCost()]))
+        .mockRejectedValueOnce(new Error('API Error for App 2'))
+        .mockResolvedValueOnce(createMockTokenCostsResponse([createMockTokenCost()]))
+
+      fetcher = createDifyUsageFetcher({
+        client: mockClient,
+        watermarkManager: mockWatermarkManager,
+        logger,
+        config,
+      })
+
+      const onRecords = vi.fn().mockResolvedValue(undefined)
+
+      // Act
+      const fetchPromise = fetcher.fetch(onRecords)
+      await vi.runAllTimersAsync()
+      const result = await fetchPromise
+
+      // Assert
+      expect(mockClient.fetchAppTokenCosts).toHaveBeenCalledTimes(3)
+      expect(result.success).toBe(false) // エラーがあるのでfalse
+      expect(result.totalRecords).toBe(2) // app-1とapp-3のレコード
+      expect(result.errors).toHaveLength(1)
+      expect(result.errors[0].message).toContain('App 2')
+    })
+
+    it('0件取得時はウォーターマークを更新しない', async () => {
+      // Arrange
+      const { createDifyUsageFetcher } = await import('../../../src/fetcher/dify-usage-fetcher.js')
+
+      vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
+      vi.mocked(mockWatermarkManager.update).mockResolvedValue()
+
+      const apps = [createMockApp()]
+      vi.mocked(mockClient.fetchApps).mockResolvedValue(apps)
+
+      const response = createMockTokenCostsResponse([])
+      vi.mocked(mockClient.fetchAppTokenCosts).mockResolvedValue(response)
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -586,32 +488,6 @@ describe('DifyUsageFetcher', () => {
       await vi.runAllTimersAsync()
       await fetchPromise
 
-      // Assert - ウォーターマークが更新されている
-      expect(mockWatermarkManager.update).toHaveBeenCalled()
-    })
-
-    it('0件取得時はウォーターマークを更新しない', async () => {
-      // Arrange
-      const { createDifyUsageFetcher } = await import('../../../src/fetcher/dify-usage-fetcher.js')
-
-      vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
-      vi.mocked(mockWatermarkManager.update).mockResolvedValue()
-
-      const response = createMockResponse([])
-      vi.mocked(mockClient.fetchUsage).mockResolvedValue(response)
-
-      fetcher = createDifyUsageFetcher({
-        client: mockClient,
-        watermarkManager: mockWatermarkManager,
-        logger,
-        config,
-      })
-
-      const onRecords = vi.fn().mockResolvedValue(undefined)
-
-      // Act
-      await fetcher.fetch(onRecords)
-
       // Assert
       expect(mockWatermarkManager.update).not.toHaveBeenCalled()
     })
@@ -625,8 +501,11 @@ describe('DifyUsageFetcher', () => {
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      const response = createMockResponse([createMockRecord()])
-      vi.mocked(mockClient.fetchUsage).mockResolvedValue(response)
+      const apps = [createMockApp()]
+      vi.mocked(mockClient.fetchApps).mockResolvedValue(apps)
+
+      const response = createMockTokenCostsResponse([createMockTokenCost()])
+      vi.mocked(mockClient.fetchAppTokenCosts).mockResolvedValue(response)
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -638,7 +517,9 @@ describe('DifyUsageFetcher', () => {
       const onRecords = vi.fn().mockResolvedValue(undefined)
 
       // Act
-      await fetcher.fetch(onRecords)
+      const fetchPromise = fetcher.fetch(onRecords)
+      await vi.runAllTimersAsync()
+      await fetchPromise
 
       // Assert
       expect(mockWatermarkManager.update).toHaveBeenCalledWith(
@@ -651,19 +532,25 @@ describe('DifyUsageFetcher', () => {
   })
 
   describe('onRecordsコールバック', () => {
-    it('各ページの有効なレコードがコールバックに渡される', async () => {
+    it('各アプリの有効なレコードがコールバックに渡される', async () => {
       // Arrange
       const { createDifyUsageFetcher } = await import('../../../src/fetcher/dify-usage-fetcher.js')
 
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      const record1 = createMockRecord({ app_id: 'app-1' })
-      const record2 = createMockRecord({ app_id: 'app-2' })
+      const apps = [
+        createMockApp({ id: 'app-1', name: 'App 1' }),
+        createMockApp({ id: 'app-2', name: 'App 2' }),
+      ]
+      vi.mocked(mockClient.fetchApps).mockResolvedValue(apps)
 
-      vi.mocked(mockClient.fetchUsage)
-        .mockResolvedValueOnce(createMockResponse([record1], { page: 1, has_more: true }))
-        .mockResolvedValueOnce(createMockResponse([record2], { page: 2, has_more: false }))
+      const record1 = createMockTokenCost({ date: '2024-01-15' })
+      const record2 = createMockTokenCost({ date: '2024-01-16' })
+
+      vi.mocked(mockClient.fetchAppTokenCosts)
+        .mockResolvedValueOnce(createMockTokenCostsResponse([record1]))
+        .mockResolvedValueOnce(createMockTokenCostsResponse([record2]))
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -681,8 +568,20 @@ describe('DifyUsageFetcher', () => {
 
       // Assert
       expect(onRecords).toHaveBeenCalledTimes(2)
-      expect(onRecords).toHaveBeenNthCalledWith(1, [record1])
-      expect(onRecords).toHaveBeenNthCalledWith(2, [record2])
+      expect(onRecords).toHaveBeenNthCalledWith(1, [
+        expect.objectContaining({
+          date: '2024-01-15',
+          app_id: 'app-1',
+          app_name: 'App 1',
+        }),
+      ])
+      expect(onRecords).toHaveBeenNthCalledWith(2, [
+        expect.objectContaining({
+          date: '2024-01-16',
+          app_id: 'app-2',
+          app_name: 'App 2',
+        }),
+      ])
     })
 
     it('空のレコードリストの場合はコールバックを呼び出さない', async () => {
@@ -692,8 +591,11 @@ describe('DifyUsageFetcher', () => {
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      const response = createMockResponse([])
-      vi.mocked(mockClient.fetchUsage).mockResolvedValue(response)
+      const apps = [createMockApp()]
+      vi.mocked(mockClient.fetchApps).mockResolvedValue(apps)
+
+      const response = createMockTokenCostsResponse([])
+      vi.mocked(mockClient.fetchAppTokenCosts).mockResolvedValue(response)
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -705,7 +607,9 @@ describe('DifyUsageFetcher', () => {
       const onRecords = vi.fn().mockResolvedValue(undefined)
 
       // Act
-      await fetcher.fetch(onRecords)
+      const fetchPromise = fetcher.fetch(onRecords)
+      await vi.runAllTimersAsync()
+      await fetchPromise
 
       // Assert
       expect(onRecords).not.toHaveBeenCalled()
@@ -720,8 +624,11 @@ describe('DifyUsageFetcher', () => {
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      const response = createMockResponse([createMockRecord()])
-      vi.mocked(mockClient.fetchUsage).mockResolvedValue(response)
+      const apps = [createMockApp()]
+      vi.mocked(mockClient.fetchApps).mockResolvedValue(apps)
+
+      const response = createMockTokenCostsResponse([createMockTokenCost()])
+      vi.mocked(mockClient.fetchAppTokenCosts).mockResolvedValue(response)
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -733,7 +640,9 @@ describe('DifyUsageFetcher', () => {
       const onRecords = vi.fn().mockResolvedValue(undefined)
 
       // Act
-      await fetcher.fetch(onRecords)
+      const fetchPromise = fetcher.fetch(onRecords)
+      await vi.runAllTimersAsync()
+      await fetchPromise
 
       // Assert
       expect(logger.info).toHaveBeenCalledWith(
@@ -752,8 +661,11 @@ describe('DifyUsageFetcher', () => {
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      const response = createMockResponse([createMockRecord()])
-      vi.mocked(mockClient.fetchUsage).mockResolvedValue(response)
+      const apps = [createMockApp()]
+      vi.mocked(mockClient.fetchApps).mockResolvedValue(apps)
+
+      const response = createMockTokenCostsResponse([createMockTokenCost()])
+      vi.mocked(mockClient.fetchAppTokenCosts).mockResolvedValue(response)
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -765,7 +677,9 @@ describe('DifyUsageFetcher', () => {
       const onRecords = vi.fn().mockResolvedValue(undefined)
 
       // Act
-      await fetcher.fetch(onRecords)
+      const fetchPromise = fetcher.fetch(onRecords)
+      await vi.runAllTimersAsync()
+      await fetchPromise
 
       // Assert
       expect(logger.info).toHaveBeenCalledWith(
@@ -773,21 +687,23 @@ describe('DifyUsageFetcher', () => {
         expect.objectContaining({
           success: expect.any(Boolean),
           totalRecords: expect.any(Number),
-          totalPages: expect.any(Number),
           durationMs: expect.any(Number),
         }),
       )
     })
 
-    it('APIトークンはログに出力されない', async () => {
+    it('メールアドレスはログに出力されない', async () => {
       // Arrange
       const { createDifyUsageFetcher } = await import('../../../src/fetcher/dify-usage-fetcher.js')
 
       vi.mocked(mockWatermarkManager.load).mockResolvedValue(null)
       vi.mocked(mockWatermarkManager.update).mockResolvedValue()
 
-      const response = createMockResponse([createMockRecord()])
-      vi.mocked(mockClient.fetchUsage).mockResolvedValue(response)
+      const apps = [createMockApp()]
+      vi.mocked(mockClient.fetchApps).mockResolvedValue(apps)
+
+      const response = createMockTokenCostsResponse([createMockTokenCost()])
+      vi.mocked(mockClient.fetchAppTokenCosts).mockResolvedValue(response)
 
       fetcher = createDifyUsageFetcher({
         client: mockClient,
@@ -799,9 +715,11 @@ describe('DifyUsageFetcher', () => {
       const onRecords = vi.fn().mockResolvedValue(undefined)
 
       // Act
-      await fetcher.fetch(onRecords)
+      const fetchPromise = fetcher.fetch(onRecords)
+      await vi.runAllTimersAsync()
+      await fetchPromise
 
-      // Assert - 全てのログ呼び出しにトークンが含まれていないことを確認
+      // Assert - 全てのログ呼び出しにメールアドレスが含まれていないことを確認
       const allLogCalls = [
         ...vi.mocked(logger.info).mock.calls,
         ...vi.mocked(logger.warn).mock.calls,
@@ -811,7 +729,8 @@ describe('DifyUsageFetcher', () => {
 
       for (const call of allLogCalls) {
         const logContent = JSON.stringify(call)
-        expect(logContent).not.toContain(config.DIFY_API_TOKEN)
+        expect(logContent).not.toContain(config.DIFY_EMAIL)
+        expect(logContent).not.toContain(config.DIFY_PASSWORD)
       }
     })
   })

@@ -1,22 +1,32 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// dotenvをモックして.envファイルの読み込みをスキップ
+vi.mock('dotenv', () => ({
+  default: { config: vi.fn() },
+  config: vi.fn(),
+}))
 
 // loadConfig関数をテストするため、process.envとprocess.exitをモック化
 describe('環境変数管理 - loadConfig()', () => {
   const originalEnv = process.env
-  const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {
-    throw new Error('process.exit called')
-  })
-  const mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  let mockExit: ReturnType<typeof vi.spyOn>
+  let mockConsoleError: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     vi.resetModules()
-    process.env = { ...originalEnv }
-    mockExit.mockClear()
-    mockConsoleError.mockClear()
+    // 毎回新しいオブジェクトとしてprocess.envを設定
+    process.env = {}
+    // モックを毎回設定し直す
+    mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {
+      throw new Error('process.exit called')
+    })
+    mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
     process.env = originalEnv
+    mockExit.mockRestore()
+    mockConsoleError.mockRestore()
   })
 
   // AC-ENV-1: 起動時の環境変数読み込み（2件）
@@ -24,7 +34,8 @@ describe('環境変数管理 - loadConfig()', () => {
     it('正常な環境変数セットでloadConfig()が成功する', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
 
@@ -35,7 +46,8 @@ describe('環境変数管理 - loadConfig()', () => {
       // Assert
       expect(config).toBeDefined()
       expect(config.DIFY_API_BASE_URL).toBe('https://api.dify.ai')
-      expect(config.DIFY_API_TOKEN).toBe('dify-token-123')
+      expect(config.DIFY_EMAIL).toBe('test@example.com')
+      expect(config.DIFY_PASSWORD).toBe('test-password')
       expect(config.EXTERNAL_API_URL).toBe('https://external.api.com')
       expect(config.EXTERNAL_API_TOKEN).toBe('external-token-456')
     })
@@ -43,7 +55,8 @@ describe('環境変数管理 - loadConfig()', () => {
     it('返却値がEnvConfig型に準拠する', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
       process.env.LOG_LEVEL = 'debug'
@@ -55,7 +68,8 @@ describe('環境変数管理 - loadConfig()', () => {
 
       // Assert - 全プロパティが存在することを確認
       expect(config).toHaveProperty('DIFY_API_BASE_URL')
-      expect(config).toHaveProperty('DIFY_API_TOKEN')
+      expect(config).toHaveProperty('DIFY_EMAIL')
+      expect(config).toHaveProperty('DIFY_PASSWORD')
       expect(config).toHaveProperty('EXTERNAL_API_URL')
       expect(config).toHaveProperty('EXTERNAL_API_TOKEN')
       expect(config).toHaveProperty('CRON_SCHEDULE')
@@ -72,7 +86,8 @@ describe('環境変数管理 - loadConfig()', () => {
   describe('AC-ENV-2: 必須環境変数未設定時のエラー処理', () => {
     it('DIFY_API_BASE_URL未設定でexit(1)が呼ばれる', async () => {
       // Arrange
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
       // DIFY_API_BASE_URLは未設定
@@ -83,12 +98,13 @@ describe('環境変数管理 - loadConfig()', () => {
       expect(mockExit).toHaveBeenCalledWith(1)
     })
 
-    it('DIFY_API_TOKEN未設定でexit(1)が呼ばれる', async () => {
+    it('DIFY_EMAIL未設定でexit(1)が呼ばれる', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
-      // DIFY_API_TOKENは未設定
+      // DIFY_EMAILは未設定
 
       // Act & Assert
       const { loadConfig } = await import('../../src/config/env-config.js')
@@ -99,7 +115,8 @@ describe('環境変数管理 - loadConfig()', () => {
     it('EXTERNAL_API_URL未設定でexit(1)が呼ばれる', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
       // EXTERNAL_API_URLは未設定
 
@@ -112,7 +129,8 @@ describe('環境変数管理 - loadConfig()', () => {
     it('EXTERNAL_API_TOKEN未設定でexit(1)が呼ばれる', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       // EXTERNAL_API_TOKENは未設定
 
@@ -137,7 +155,8 @@ describe('環境変数管理 - loadConfig()', () => {
     it('DIFY_API_BASE_URLが不正なURL形式でexit(1)が呼ばれる', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'not-a-valid-url'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
 
@@ -150,7 +169,8 @@ describe('環境変数管理 - loadConfig()', () => {
     it('EXTERNAL_API_URLが不正なURL形式でexit(1)が呼ばれる', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'invalid-url'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
 
@@ -163,7 +183,8 @@ describe('環境変数管理 - loadConfig()', () => {
     it('LOG_LEVELが無効な値でexit(1)が呼ばれる', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
       process.env.LOG_LEVEL = 'invalid'
@@ -177,7 +198,8 @@ describe('環境変数管理 - loadConfig()', () => {
     it('GRACEFUL_SHUTDOWN_TIMEOUTが数値でない場合exit(1)が呼ばれる', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
       process.env.GRACEFUL_SHUTDOWN_TIMEOUT = 'not-a-number'
@@ -191,7 +213,8 @@ describe('環境変数管理 - loadConfig()', () => {
     it('GRACEFUL_SHUTDOWN_TIMEOUTが1未満でexit(1)が呼ばれる', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
       process.env.GRACEFUL_SHUTDOWN_TIMEOUT = '0'
@@ -205,7 +228,8 @@ describe('環境変数管理 - loadConfig()', () => {
     it('GRACEFUL_SHUTDOWN_TIMEOUTが300超過でexit(1)が呼ばれる', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
       process.env.GRACEFUL_SHUTDOWN_TIMEOUT = '301'
@@ -219,7 +243,8 @@ describe('環境変数管理 - loadConfig()', () => {
     it('MAX_RETRYが1未満でexit(1)が呼ばれる', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
       process.env.MAX_RETRY = '0'
@@ -233,7 +258,8 @@ describe('環境変数管理 - loadConfig()', () => {
     it('MAX_RETRYが10超過でexit(1)が呼ばれる', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
       process.env.MAX_RETRY = '11'
@@ -250,7 +276,8 @@ describe('環境変数管理 - loadConfig()', () => {
     beforeEach(() => {
       // 全テストで必須環境変数を設定
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
     })
@@ -309,7 +336,8 @@ describe('環境変数管理 - loadConfig()', () => {
     it('process.envを直接参照せずloadConfig()経由で取得する', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
       process.env.LOG_LEVEL = 'debug'
@@ -329,7 +357,8 @@ describe('環境変数管理 - loadConfig()', () => {
     it('複数回呼び出しても同一設定を返却する', async () => {
       // Arrange
       process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-      process.env.DIFY_API_TOKEN = 'dify-token-123'
+      process.env.DIFY_EMAIL = 'test@example.com'
+      process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
 
@@ -369,7 +398,8 @@ describe('ログ出力基盤 - createLogger()', () => {
     process.env = { ...originalEnv }
     // 必須環境変数を設定
     process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-    process.env.DIFY_API_TOKEN = 'dify-token-123'
+    process.env.DIFY_EMAIL = 'test@example.com'
+    process.env.DIFY_PASSWORD = 'test-password'
     process.env.EXTERNAL_API_URL = 'https://external.api.com'
     process.env.EXTERNAL_API_TOKEN = 'external-token-456'
     process.env.NODE_ENV = 'test'
@@ -705,22 +735,23 @@ describe('ログ出力基盤 - createLogger()', () => {
 
   // AC-LOG-5: シークレット情報の非出力（3件）
   describe('AC-LOG-5: シークレット情報の非出力', () => {
-    it('DIFY_API_TOKENがログに含まれない（呼び出し側の責務）', async () => {
+    it('DIFY_PASSWORDがログに含まれない（呼び出し側の責務）', async () => {
       // Arrange
       const { loadConfig } = await import('../../src/config/env-config.js')
       const { createLogger } = await import('../../src/logger/winston-logger.js')
       const config = loadConfig()
       const logger = createLogger(config, { stream: captureStream })
 
-      // Act - 意図的にトークンを含めない（呼び出し側の責務）
+      // Act - 意図的にパスワードを含めない（呼び出し側の責務）
       logger.info('設定値', {
         difyApiUrl: config.DIFY_API_BASE_URL,
-        // DIFY_API_TOKENは渡さない
+        difyEmail: config.DIFY_EMAIL,
+        // DIFY_PASSWORDは渡さない
       })
 
       // Assert
       const output = capturedOutput[0]
-      expect(output).not.toContain('dify-token-123')
+      expect(output).not.toContain('test-password')
     })
 
     it('EXTERNAL_API_TOKENがログに含まれない（呼び出し側の責務）', async () => {
@@ -751,12 +782,12 @@ describe('ログ出力基盤 - createLogger()', () => {
       // Act - 注意事項に記載の通り、ログ関数はフィルタリングしない
       // これは「呼び出し側でシークレットを渡さない」責務を示すテスト
       logger.info('危険な使い方', {
-        token: config.DIFY_API_TOKEN,
+        password: config.DIFY_PASSWORD,
       })
 
       // Assert - フィルタリングしないので出力される（これは警告目的のテスト）
       const output = capturedOutput[0]
-      expect(output).toContain('dify-token-123')
+      expect(output).toContain('test-password')
     })
   })
 
@@ -805,8 +836,16 @@ describe('定期実行スケジューラ - createScheduler()', () => {
   const originalEnv = process.env
   let capturedOutput: string[]
   let captureStream: Writable
-  const mockExit = vi.spyOn(process, 'exit').mockImplementation(() => {
-    throw new Error('process.exit called')
+  let mockExit: ReturnType<typeof vi.spyOn>
+
+  beforeAll(() => {
+    mockExit = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null | undefined) => {
+      throw new Error(`process.exit called with ${code}`)
+    })
+  })
+
+  afterAll(() => {
+    mockExit.mockRestore()
   })
 
   beforeEach(() => {
@@ -814,7 +853,8 @@ describe('定期実行スケジューラ - createScheduler()', () => {
     process.env = { ...originalEnv }
     // 必須環境変数を設定
     process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-    process.env.DIFY_API_TOKEN = 'dify-token-123'
+    process.env.DIFY_EMAIL = 'test@example.com'
+    process.env.DIFY_PASSWORD = 'test-password'
     process.env.EXTERNAL_API_URL = 'https://external.api.com'
     process.env.EXTERNAL_API_TOKEN = 'external-token-456'
     process.env.NODE_ENV = 'test'
@@ -1064,7 +1104,7 @@ describe('定期実行スケジューラ - createScheduler()', () => {
       const onTick = vi.fn().mockResolvedValue(undefined)
 
       // Act & Assert
-      expect(() => createScheduler(config, logger, onTick)).toThrow('process.exit called')
+      expect(() => createScheduler(config, logger, onTick)).toThrow('process.exit called with 1')
 
       const errorLog = capturedOutput.find((output) => {
         const parsed = JSON.parse(output)
@@ -1084,7 +1124,7 @@ describe('定期実行スケジューラ - createScheduler()', () => {
       const onTick = vi.fn().mockResolvedValue(undefined)
 
       // Act & Assert
-      expect(() => createScheduler(config, logger, onTick)).toThrow('process.exit called')
+      expect(() => createScheduler(config, logger, onTick)).toThrow('process.exit called with 1')
       expect(mockExit).toHaveBeenCalledWith(1)
     })
 
@@ -1574,7 +1614,8 @@ describe('Graceful Shutdown - setupGracefulShutdown()', () => {
     process.env = { ...originalEnv }
     // 必須環境変数を設定
     process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-    process.env.DIFY_API_TOKEN = 'dify-token-123'
+    process.env.DIFY_EMAIL = 'test@example.com'
+    process.env.DIFY_PASSWORD = 'test-password'
     process.env.EXTERNAL_API_URL = 'https://external.api.com'
     process.env.EXTERNAL_API_TOKEN = 'external-token-456'
     process.env.NODE_ENV = 'test'
@@ -2288,7 +2329,8 @@ describe('エントリーポイント - main()', () => {
     process.env = { ...originalEnv }
     // 必須環境変数を設定
     process.env.DIFY_API_BASE_URL = 'https://api.dify.ai'
-    process.env.DIFY_API_TOKEN = 'dify-token-123'
+    process.env.DIFY_EMAIL = 'test@example.com'
+    process.env.DIFY_PASSWORD = 'test-password'
     process.env.EXTERNAL_API_URL = 'https://external.api.com'
     process.env.EXTERNAL_API_TOKEN = 'external-token-456'
     process.env.NODE_ENV = 'test'
@@ -2306,7 +2348,8 @@ describe('エントリーポイント - main()', () => {
       // Arrange
       const mockLoadConfig = vi.fn().mockReturnValue({
         DIFY_API_BASE_URL: 'https://api.dify.ai',
-        DIFY_API_TOKEN: 'dify-token-123',
+        DIFY_EMAIL: 'test@example.com',
+        DIFY_PASSWORD: 'test-password',
         EXTERNAL_API_URL: 'https://external.api.com',
         EXTERNAL_API_TOKEN: 'external-token-456',
         CRON_SCHEDULE: '0 0 * * *',
@@ -2359,7 +2402,8 @@ describe('エントリーポイント - main()', () => {
       // Arrange
       const mockConfig = {
         DIFY_API_BASE_URL: 'https://api.dify.ai',
-        DIFY_API_TOKEN: 'dify-token-123',
+        DIFY_EMAIL: 'test@example.com',
+        DIFY_PASSWORD: 'test-password',
         EXTERNAL_API_URL: 'https://external.api.com',
         EXTERNAL_API_TOKEN: 'external-token-456',
         CRON_SCHEDULE: '0 0 * * *',
@@ -2414,7 +2458,8 @@ describe('エントリーポイント - main()', () => {
       // Arrange
       const mockConfig = {
         DIFY_API_BASE_URL: 'https://api.dify.ai',
-        DIFY_API_TOKEN: 'dify-token-123',
+        DIFY_EMAIL: 'test@example.com',
+        DIFY_PASSWORD: 'test-password',
         EXTERNAL_API_URL: 'https://external.api.com',
         EXTERNAL_API_TOKEN: 'external-token-456',
         CRON_SCHEDULE: '0 0 * * *',
@@ -2471,7 +2516,8 @@ describe('エントリーポイント - main()', () => {
       // Arrange
       const mockConfig = {
         DIFY_API_BASE_URL: 'https://api.dify.ai',
-        DIFY_API_TOKEN: 'dify-token-123',
+        DIFY_EMAIL: 'test@example.com',
+        DIFY_PASSWORD: 'test-password',
         EXTERNAL_API_URL: 'https://external.api.com',
         EXTERNAL_API_TOKEN: 'external-token-456',
         CRON_SCHEDULE: '0 0 * * *',

@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createDataTransformer,
+  type TokenCostInputRecord,
   type TransformerDeps,
 } from '../../src/transformer/data-transformer.js'
-import type { DifyUsageRecord } from '../../src/types/dify-usage.js'
 import { externalApiRecordSchema } from '../../src/types/external-api.js'
 
 describe('Data Transformation E2E Tests', () => {
@@ -23,17 +23,14 @@ describe('Data Transformation E2E Tests', () => {
 
   describe('E2E-1: 全体疎通', () => {
     it('should complete full transformation flow', () => {
-      const records: DifyUsageRecord[] = [
+      const records: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: 'app-123',
           app_name: 'Test App',
-          provider: 'OpenAI',
-          model: 'GPT-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
-          user_id: 'user-456',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
       ]
 
@@ -43,12 +40,9 @@ describe('Data Transformation E2E Tests', () => {
       expect(result.records[0].date).toBe('2025-01-01')
       expect(result.records[0].app_id).toBe('app-123')
       expect(result.records[0].app_name).toBe('Test App')
-      expect(result.records[0].provider).toBe('openai')
-      expect(result.records[0].model).toBe('gpt-4')
-      expect(result.records[0].input_tokens).toBe(100)
-      expect(result.records[0].output_tokens).toBe(200)
-      expect(result.records[0].total_tokens).toBe(300)
-      expect(result.records[0].user_id).toBe('user-456')
+      expect(result.records[0].token_count).toBe(300)
+      expect(result.records[0].total_price).toBe('0.003')
+      expect(result.records[0].currency).toBe('USD')
       expect(result.records[0].idempotency_key).toBeDefined()
       expect(result.records[0].transformed_at).toBeDefined()
       expect(result.batchIdempotencyKey).toBeDefined()
@@ -65,33 +59,30 @@ describe('Data Transformation E2E Tests', () => {
     })
 
     it('should process mixed valid and invalid records', () => {
-      const records: DifyUsageRecord[] = [
+      const records: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: 'app-1',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'App 1',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
         {
           date: '2025-01-01',
-          app_id: '',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_id: '', // invalid
+          app_name: 'App 2',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
         {
           date: '2025-01-01',
           app_id: 'app-2',
-          provider: 'anthropic',
-          model: 'claude-3',
-          input_tokens: 50,
-          output_tokens: 100,
-          total_tokens: 150,
+          app_name: 'App 3',
+          token_count: 150,
+          total_price: '0.0015',
+          currency: 'USD',
         },
       ]
 
@@ -105,14 +96,13 @@ describe('Data Transformation E2E Tests', () => {
 
   describe('E2E-2: 冪等キー整合性', () => {
     it('should generate consistent record keys', () => {
-      const record: DifyUsageRecord = {
+      const record: TokenCostInputRecord = {
         date: '2025-01-01',
         app_id: 'app-123',
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
+        app_name: 'Test App',
+        token_count: 300,
+        total_price: '0.003',
+        currency: 'USD',
       }
 
       const result1 = transformer.transform([record])
@@ -122,24 +112,22 @@ describe('Data Transformation E2E Tests', () => {
     })
 
     it('should generate consistent batch keys for same records', () => {
-      const records: DifyUsageRecord[] = [
+      const records: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: 'app-1',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'App 1',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
         {
           date: '2025-01-01',
           app_id: 'app-2',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 50,
-          output_tokens: 100,
-          total_tokens: 150,
+          app_name: 'App 2',
+          token_count: 150,
+          total_price: '0.0015',
+          currency: 'USD',
         },
       ]
 
@@ -150,44 +138,40 @@ describe('Data Transformation E2E Tests', () => {
     })
 
     it('should generate order-independent batch keys', () => {
-      const records1: DifyUsageRecord[] = [
+      const records1: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: 'app-1',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'App 1',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
         {
           date: '2025-01-01',
           app_id: 'app-2',
-          provider: 'anthropic',
-          model: 'claude-3',
-          input_tokens: 50,
-          output_tokens: 100,
-          total_tokens: 150,
+          app_name: 'App 2',
+          token_count: 150,
+          total_price: '0.0015',
+          currency: 'USD',
         },
       ]
-      const records2: DifyUsageRecord[] = [
+      const records2: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: 'app-2',
-          provider: 'anthropic',
-          model: 'claude-3',
-          input_tokens: 50,
-          output_tokens: 100,
-          total_tokens: 150,
+          app_name: 'App 2',
+          token_count: 150,
+          total_price: '0.0015',
+          currency: 'USD',
         },
         {
           date: '2025-01-01',
           app_id: 'app-1',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'App 1',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
       ]
 
@@ -200,24 +184,22 @@ describe('Data Transformation E2E Tests', () => {
 
   describe('E2E-3: エラーリカバリ', () => {
     it('should recover from validation errors', () => {
-      const records: DifyUsageRecord[] = [
+      const records: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: '',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'App 1',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
         {
           date: '2025-01-01',
           app_id: 'app-valid',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'App 2',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
       ]
 
@@ -228,15 +210,14 @@ describe('Data Transformation E2E Tests', () => {
     })
 
     it('should provide detailed error information', () => {
-      const records: DifyUsageRecord[] = [
+      const records: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: '',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'Test App',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
       ]
 
@@ -249,33 +230,30 @@ describe('Data Transformation E2E Tests', () => {
     })
 
     it('should continue processing after errors', () => {
-      const records: DifyUsageRecord[] = [
+      const records: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: '',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'App 1',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
         {
           date: '2025-01-01',
           app_id: '',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'App 2',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
         {
           date: '2025-01-01',
           app_id: 'app-valid',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'App 3',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
       ]
 
@@ -289,16 +267,13 @@ describe('Data Transformation E2E Tests', () => {
 
   describe('E2E-4: データ整合性', () => {
     it('should preserve all original data', () => {
-      const record: DifyUsageRecord = {
+      const record: TokenCostInputRecord = {
         date: '2025-12-31',
         app_id: 'app-xyz-789',
         app_name: 'Production App',
-        provider: 'ANTHROPIC',
-        model: 'CLAUDE-3-OPUS',
-        input_tokens: 12345,
-        output_tokens: 67890,
-        total_tokens: 80235,
-        user_id: 'user-abc-123',
+        token_count: 80235,
+        total_price: '8.0235',
+        currency: 'JPY',
       }
 
       const result = transformer.transform([record])
@@ -306,38 +281,34 @@ describe('Data Transformation E2E Tests', () => {
       expect(result.records[0].date).toBe('2025-12-31')
       expect(result.records[0].app_id).toBe('app-xyz-789')
       expect(result.records[0].app_name).toBe('Production App')
-      expect(result.records[0].input_tokens).toBe(12345)
-      expect(result.records[0].output_tokens).toBe(67890)
-      expect(result.records[0].total_tokens).toBe(80235)
-      expect(result.records[0].user_id).toBe('user-abc-123')
+      expect(result.records[0].token_count).toBe(80235)
+      expect(result.records[0].total_price).toBe('8.0235')
+      expect(result.records[0].currency).toBe('JPY')
     })
 
-    it('should correctly normalize provider and model', () => {
-      const record: DifyUsageRecord = {
+    it('should correctly preserve currency', () => {
+      const record: TokenCostInputRecord = {
         date: '2025-01-01',
         app_id: 'app-123',
-        provider: '  OpenAI  ',
-        model: '  GPT-4-Turbo  ',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
+        app_name: 'Test App',
+        token_count: 300,
+        total_price: '0.003',
+        currency: 'EUR',
       }
 
       const result = transformer.transform([record])
 
-      expect(result.records[0].provider).toBe('openai')
-      expect(result.records[0].model).toBe('gpt-4-turbo')
+      expect(result.records[0].currency).toBe('EUR')
     })
 
     it('should generate valid output records', () => {
-      const records: DifyUsageRecord[] = Array.from({ length: 10 }, (_, i) => ({
+      const records: TokenCostInputRecord[] = Array.from({ length: 10 }, (_, i) => ({
         date: '2025-01-01',
         app_id: `app-${i}`,
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
+        app_name: `App ${i}`,
+        token_count: 300,
+        total_price: '0.003',
+        currency: 'USD',
       }))
 
       const result = transformer.transform(records)
@@ -351,16 +322,13 @@ describe('Data Transformation E2E Tests', () => {
 
   describe('E2E-5: 実運用シナリオ', () => {
     it('should handle typical daily batch', () => {
-      const records: DifyUsageRecord[] = Array.from({ length: 100 }, (_, i) => ({
+      const records: TokenCostInputRecord[] = Array.from({ length: 100 }, (_, i) => ({
         date: '2025-01-15',
         app_id: `app-${i % 10}`,
         app_name: `App ${i % 10}`,
-        provider: i % 3 === 0 ? 'openai' : i % 3 === 1 ? 'anthropic' : 'google',
-        model: i % 3 === 0 ? 'gpt-4' : i % 3 === 1 ? 'claude-3' : 'gemini-pro',
-        input_tokens: Math.floor(Math.random() * 1000),
-        output_tokens: Math.floor(Math.random() * 2000),
-        total_tokens: Math.floor(Math.random() * 3000),
-        user_id: `user-${i % 20}`,
+        token_count: Math.floor(Math.random() * 3000),
+        total_price: `${(Math.random() * 0.1).toFixed(6)}`,
+        currency: 'USD',
       }))
 
       const result = transformer.transform(records)
@@ -370,87 +338,89 @@ describe('Data Transformation E2E Tests', () => {
       expect(result.batchIdempotencyKey).toMatch(/^[a-f0-9]{64}$/)
     })
 
-    it('should handle multi-provider scenario', () => {
-      const records: DifyUsageRecord[] = [
+    it('should handle multi-currency scenario', () => {
+      const records: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: 'app-1',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'App 1',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
         {
           date: '2025-01-01',
-          app_id: 'app-1',
-          provider: 'anthropic',
-          model: 'claude-3',
-          input_tokens: 150,
-          output_tokens: 250,
-          total_tokens: 400,
+          app_id: 'app-2',
+          app_name: 'App 2',
+          token_count: 400,
+          total_price: '0.5',
+          currency: 'JPY',
         },
         {
           date: '2025-01-01',
-          app_id: 'app-1',
-          provider: 'google',
-          model: 'gemini-pro',
-          input_tokens: 200,
-          output_tokens: 300,
-          total_tokens: 500,
+          app_id: 'app-3',
+          app_name: 'App 3',
+          token_count: 500,
+          total_price: '0.004',
+          currency: 'EUR',
         },
       ]
 
       const result = transformer.transform(records)
 
       expect(result.successCount).toBe(3)
-      const providers = result.records.map((r) => r.provider)
-      expect(providers).toContain('openai')
-      expect(providers).toContain('anthropic')
-      expect(providers).toContain('google')
+      const currencies = result.records.map((r) => r.currency)
+      expect(currencies).toContain('USD')
+      expect(currencies).toContain('JPY')
+      expect(currencies).toContain('EUR')
     })
 
-    it('should handle records with missing optional fields', () => {
-      const records: DifyUsageRecord[] = [
+    it('should handle records with various token counts', () => {
+      const records: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: 'app-1',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'App 1',
+          token_count: 0,
+          total_price: '0',
+          currency: 'USD',
+        },
+        {
+          date: '2025-01-01',
+          app_id: 'app-2',
+          app_name: 'App 2',
+          token_count: 1000000,
+          total_price: '100.00',
+          currency: 'USD',
         },
       ]
 
       const result = transformer.transform(records)
 
-      expect(result.successCount).toBe(1)
-      expect(result.records[0].app_name).toBeUndefined()
-      expect(result.records[0].user_id).toBeUndefined()
+      expect(result.successCount).toBe(2)
+      expect(result.records[0].token_count).toBe(0)
+      expect(result.records[1].token_count).toBe(1000000)
     })
   })
 
   describe('E2E-6: ログ・モニタリング', () => {
     it('should log transformation completion', () => {
-      const records: DifyUsageRecord[] = [
+      const records: TokenCostInputRecord[] = [
         {
           date: '2025-01-01',
           app_id: 'app-1',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'App 1',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
         {
           date: '2025-01-01',
           app_id: '',
-          provider: 'openai',
-          model: 'gpt-4',
-          input_tokens: 100,
-          output_tokens: 200,
-          total_tokens: 300,
+          app_name: 'App 2',
+          token_count: 300,
+          total_price: '0.003',
+          currency: 'USD',
         },
       ]
 
@@ -467,14 +437,13 @@ describe('Data Transformation E2E Tests', () => {
     })
 
     it('should provide metrics for monitoring', () => {
-      const records: DifyUsageRecord[] = Array.from({ length: 50 }, (_, i) => ({
+      const records: TokenCostInputRecord[] = Array.from({ length: 50 }, (_, i) => ({
         date: '2025-01-01',
         app_id: i % 5 === 0 ? '' : `app-${i}`,
-        provider: 'openai',
-        model: 'gpt-4',
-        input_tokens: 100,
-        output_tokens: 200,
-        total_tokens: 300,
+        app_name: `App ${i}`,
+        token_count: 300,
+        total_price: '0.003',
+        currency: 'USD',
       }))
 
       const result = transformer.transform(records)

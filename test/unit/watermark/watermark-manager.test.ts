@@ -21,7 +21,8 @@ describe('WatermarkManager', () => {
     // モックconfigの作成
     config = {
       DIFY_API_BASE_URL: 'https://api.dify.ai',
-      DIFY_API_TOKEN: 'test-token',
+      DIFY_EMAIL: 'test@example.com',
+      DIFY_PASSWORD: 'test-password',
       EXTERNAL_API_URL: 'https://external.api',
       EXTERNAL_API_TOKEN: 'external-token',
       CRON_SCHEDULE: '0 0 * * *',
@@ -30,7 +31,7 @@ describe('WatermarkManager', () => {
       MAX_RETRY: 3,
       NODE_ENV: 'test',
       DIFY_FETCH_PAGE_SIZE: 100,
-      DIFY_INITIAL_FETCH_DAYS: 30,
+      DIFY_FETCH_DAYS: 30,
       DIFY_FETCH_TIMEOUT_MS: 30000,
       DIFY_FETCH_RETRY_COUNT: 3,
       DIFY_FETCH_RETRY_DELAY_MS: 1000,

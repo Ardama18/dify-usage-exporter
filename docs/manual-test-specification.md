@@ -9,7 +9,8 @@ dify-usage-exporter 全体の手動テスト仕様書です。自動テストで
 ```bash
 # 必須環境変数
 export DIFY_API_BASE_URL="https://api.dify.ai"
-export DIFY_API_TOKEN="your-dify-api-token"
+export DIFY_EMAIL="your-email@example.com"
+export DIFY_PASSWORD="your-password"
 export EXTERNAL_API_URL="https://your-external-api.com"
 export EXTERNAL_API_TOKEN="your-external-api-token"
 
@@ -41,7 +42,7 @@ npm run build
 | ID | テスト項目 | 手順 | 期待結果 |
 |----|-----------|------|----------|
 | BASIC-1 | 正常起動 | `npm start` | 起動ログが表示され、cronジョブがスケジュールされる |
-| BASIC-2 | 環境変数不足 | `DIFY_API_TOKEN`を未設定で起動 | バリデーションエラーで終了 |
+| BASIC-2 | 環境変数不足 | `DIFY_EMAIL`または`DIFY_PASSWORD`を未設定で起動 | バリデーションエラーで終了 |
 | BASIC-3 | Graceful Shutdown | 起動後 `Ctrl+C` | 「Graceful shutdown completed」が表示 |
 
 ### 2.2 データ取得・送信
@@ -177,7 +178,7 @@ Current Watermark:
 
 | ID | テスト項目 | 手順 | 期待結果 |
 |----|-----------|------|----------|
-| ERR-1 | Dify API接続失敗 | 無効なDIFY_API_TOKENで起動 | エラーログ出力、次回リトライ |
+| ERR-1 | Dify API接続失敗 | 無効なDIFY_EMAILまたはDIFY_PASSWORDで起動 | エラーログ出力、次回リトライ |
 | ERR-2 | 外部API接続失敗 | 無効なEXTERNAL_API_URLで起動 | データがspoolに保存 |
 | ERR-3 | ディスク容量不足 | data/ディレクトリを読み取り専用に | エラーログ出力 |
 

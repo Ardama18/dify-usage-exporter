@@ -12,7 +12,8 @@ const DOCKER_IMAGE_NAME = 'dify-usage-exporter-test'
 function getValidEnv(): Record<string, string> {
   return {
     DIFY_API_BASE_URL: 'https://api.dify.ai',
-    DIFY_API_TOKEN: 'test-dify-token',
+    DIFY_EMAIL: 'test@example.com',
+    DIFY_PASSWORD: 'test-password',
     EXTERNAL_API_URL: 'https://external.api.com',
     EXTERNAL_API_TOKEN: 'test-external-token',
     NODE_ENV: 'test',
@@ -432,10 +433,10 @@ describe('アプリケーション起動 E2Eテスト', () => {
   })
 
   // 4. シークレットマスク
-  it('APIトークンがログに出力されない', async () => {
+  it('パスワードがログに出力されない', async () => {
     const env = {
       ...getValidEnv(),
-      DIFY_API_TOKEN: 'super-secret-token-12345',
+      DIFY_PASSWORD: 'super-secret-password-12345',
       EXTERNAL_API_TOKEN: 'another-secret-token-67890',
     }
     proc = startProcess('node', ['dist/index.js'], env)
@@ -443,7 +444,7 @@ describe('アプリケーション起動 E2Eテスト', () => {
     await waitForCondition(() => logsContain(proc?.logs, 'スケジューラ起動完了'), 5000)
 
     const allLogs = proc.logs.join('')
-    expect(allLogs).not.toContain('super-secret-token-12345')
+    expect(allLogs).not.toContain('super-secret-password-12345')
     expect(allLogs).not.toContain('another-secret-token-67890')
   })
 
@@ -830,7 +831,8 @@ describe('異常系 E2Eテスト', () => {
   it('必須環境変数が不足している場合exit 1で終了する', async () => {
     const env = {
       // DIFY_API_BASE_URLが不足
-      DIFY_API_TOKEN: 'test-token',
+      DIFY_EMAIL: 'test@example.com',
+      DIFY_PASSWORD: 'test-password',
       EXTERNAL_API_URL: 'https://external.api.com',
       EXTERNAL_API_TOKEN: 'test-external-token',
       NODE_ENV: 'test',

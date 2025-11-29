@@ -13,6 +13,10 @@ export default defineConfig({
         singleFork: false,
       },
     },
+    sequence: {
+      shuffle: false,
+    },
+    fileParallelism: false,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
