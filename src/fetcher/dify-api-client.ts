@@ -12,7 +12,17 @@ import { wrapper } from 'axios-cookiejar-support'
 import axiosRetry from 'axios-retry'
 import { CookieJar } from 'tough-cookie'
 import type { Logger } from '../logger/winston-logger.js'
-import type { DifyAppTokenCostsResponse } from '../types/dify-usage.js'
+import type {
+  DifyAppTokenCostsResponse,
+  DifyConversation,
+  DifyConversationsResponse,
+  DifyMessage,
+  DifyMessagesResponse,
+  DifyNodeExecution,
+  DifyNodeExecutionsResponse,
+  DifyWorkflowRun,
+  DifyWorkflowRunsResponse,
+} from '../types/dify-usage.js'
 import type { EnvConfig } from '../types/env.js'
 
 /**
@@ -56,6 +66,56 @@ export interface FetchAppTokenCostsParams {
 }
 
 /**
+ * 会話一覧取得パラメータ
+ */
+export interface FetchConversationsParams {
+  /** アプリID */
+  appId: string
+  /** 開始日時（Unix timestamp） */
+  start?: number
+  /** 終了日時（Unix timestamp） */
+  end?: number
+  /** 取得上限 */
+  limit?: number
+}
+
+/**
+ * メッセージ一覧取得パラメータ
+ */
+export interface FetchMessagesParams {
+  /** アプリID */
+  appId: string
+  /** 会話ID */
+  conversationId: string
+  /** 取得上限 */
+  limit?: number
+}
+
+/**
+ * ワークフロー実行一覧取得パラメータ
+ */
+export interface FetchWorkflowRunsParams {
+  /** アプリID */
+  appId: string
+  /** 開始日時（Unix timestamp） */
+  start?: number
+  /** 終了日時（Unix timestamp） */
+  end?: number
+  /** 取得上限 */
+  limit?: number
+}
+
+/**
+ * ノード実行詳細取得パラメータ
+ */
+export interface FetchNodeExecutionsParams {
+  /** アプリID */
+  appId: string
+  /** ワークフロー実行ID */
+  workflowRunId: string
+}
+
+/**
  * Difyログインレスポンス（レスポンスボディ用、実際はCookieで返される）
  */
 interface DifyLoginResponse {
@@ -79,6 +139,34 @@ export interface DifyApiClient {
    * @returns トークンコストレスポンス
    */
   fetchAppTokenCosts(params: FetchAppTokenCostsParams): Promise<DifyAppTokenCostsResponse>
+
+  /**
+   * 会話一覧を取得する（ユーザー別集計用）
+   * @param params 取得パラメータ
+   * @returns 会話一覧
+   */
+  fetchConversations(params: FetchConversationsParams): Promise<DifyConversation[]>
+
+  /**
+   * メッセージ一覧を取得する（トークン情報含む）
+   * @param params 取得パラメータ
+   * @returns メッセージ一覧
+   */
+  fetchMessages(params: FetchMessagesParams): Promise<DifyMessage[]>
+
+  /**
+   * ワークフロー実行一覧を取得する
+   * @param params 取得パラメータ
+   * @returns ワークフロー実行一覧
+   */
+  fetchWorkflowRuns(params: FetchWorkflowRunsParams): Promise<DifyWorkflowRun[]>
+
+  /**
+   * ノード実行詳細を取得する（LLMノードのモデル別コスト情報）
+   * @param params 取得パラメータ
+   * @returns ノード実行詳細一覧
+   */
+  fetchNodeExecutions(params: FetchNodeExecutionsParams): Promise<DifyNodeExecution[]>
 }
 
 /**
@@ -265,6 +353,161 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
         }
       )
       return response.data
+    },
+
+    async fetchConversations(params: FetchConversationsParams): Promise<DifyConversation[]> {
+      const authenticatedClient = await getAuthenticatedClient()
+      const conversations: DifyConversation[] = []
+      const limit = params.limit ?? 100
+      let lastId: string | undefined
+
+      // ページネーション（無限スクロール形式）
+      while (true) {
+        const queryParams: Record<string, string | number> = { limit }
+        if (lastId) {
+          queryParams.last_id = lastId
+        }
+        // Note: start/endパラメータはDify APIでサポートされていないため、
+        // 取得後にフィルタリングする必要がある
+
+        const response = await authenticatedClient.get<DifyConversationsResponse>(
+          `/console/api/apps/${params.appId}/chat-conversations`,
+          { params: queryParams }
+        )
+
+        // 期間フィルタ（start/endが指定されている場合）
+        let filteredData = response.data.data
+        if (params.start || params.end) {
+          filteredData = response.data.data.filter((conv) => {
+            if (params.start && conv.created_at < params.start) return false
+            if (params.end && conv.created_at > params.end) return false
+            return true
+          })
+        }
+
+        conversations.push(...filteredData)
+
+        if (!response.data.has_more || response.data.data.length === 0) {
+          break
+        }
+
+        // 期間外のデータが出始めたら早期終了（降順前提）
+        if (params.start && response.data.data.some((conv) => conv.created_at < params.start!)) {
+          break
+        }
+
+        // 次のページ用に最後のIDを保存
+        lastId = response.data.data[response.data.data.length - 1].id
+      }
+
+      logger.info('会話一覧取得完了', { appId: params.appId, count: conversations.length })
+      return conversations
+    },
+
+    async fetchMessages(params: FetchMessagesParams): Promise<DifyMessage[]> {
+      const authenticatedClient = await getAuthenticatedClient()
+      const messages: DifyMessage[] = []
+      const limit = params.limit ?? 100
+      let firstId: string | undefined
+
+      // ページネーション（first_id形式で遡る）
+      while (true) {
+        const queryParams: Record<string, string | number> = {
+          conversation_id: params.conversationId,
+          limit,
+        }
+        if (firstId) {
+          queryParams.first_id = firstId
+        }
+
+        const response = await authenticatedClient.get<DifyMessagesResponse>(
+          `/console/api/apps/${params.appId}/chat-messages`,
+          { params: queryParams }
+        )
+
+        messages.push(...response.data.data)
+
+        if (!response.data.has_more || response.data.data.length === 0) {
+          break
+        }
+
+        // 次のページ用に最初のIDを保存（古い方向に遡る）
+        firstId = response.data.data[0].id
+      }
+
+      logger.debug('メッセージ一覧取得完了', {
+        appId: params.appId,
+        conversationId: params.conversationId,
+        count: messages.length,
+      })
+      return messages
+    },
+
+    async fetchWorkflowRuns(params: FetchWorkflowRunsParams): Promise<DifyWorkflowRun[]> {
+      const authenticatedClient = await getAuthenticatedClient()
+      const workflowRuns: DifyWorkflowRun[] = []
+      const limit = params.limit ?? 100
+      let lastId: string | undefined
+
+      // ページネーション（無限スクロール形式）
+      while (true) {
+        const queryParams: Record<string, string | number> = { limit }
+        if (lastId) {
+          queryParams.last_id = lastId
+        }
+
+        const response = await authenticatedClient.get<DifyWorkflowRunsResponse>(
+          `/console/api/apps/${params.appId}/workflow-runs`,
+          { params: queryParams }
+        )
+
+        // 期間フィルタ（start/endが指定されている場合）
+        let filteredData = response.data.data
+        if (params.start || params.end) {
+          filteredData = response.data.data.filter((run) => {
+            if (params.start && run.created_at < params.start) return false
+            if (params.end && run.created_at > params.end) return false
+            return true
+          })
+        }
+
+        workflowRuns.push(...filteredData)
+
+        if (!response.data.has_more || response.data.data.length === 0) {
+          break
+        }
+
+        // 期間外のデータが出始めたら早期終了（降順前提）
+        if (params.start && response.data.data.some((run) => run.created_at < params.start!)) {
+          break
+        }
+
+        // 次のページ用に最後のIDを保存
+        lastId = response.data.data[response.data.data.length - 1].id
+      }
+
+      logger.info('ワークフロー実行一覧取得完了', { appId: params.appId, count: workflowRuns.length })
+      return workflowRuns
+    },
+
+    async fetchNodeExecutions(params: FetchNodeExecutionsParams): Promise<DifyNodeExecution[]> {
+      const authenticatedClient = await getAuthenticatedClient()
+
+      const response = await authenticatedClient.get<DifyNodeExecutionsResponse>(
+        `/console/api/apps/${params.appId}/workflow-runs/${params.workflowRunId}/node-executions`
+      )
+
+      // レスポンス形式が配列の場合とdataプロパティの場合に対応
+      const nodeExecutions = Array.isArray(response.data)
+        ? response.data
+        : response.data.data || []
+
+      logger.debug('ノード実行詳細取得完了', {
+        appId: params.appId,
+        workflowRunId: params.workflowRunId,
+        count: nodeExecutions.length,
+      })
+      return nodeExecutions
     },
   }
 }

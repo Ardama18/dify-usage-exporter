@@ -48,13 +48,15 @@ POST {EXTERNAL_API_URL}
 ```json
 {
   "aggregation_period": "monthly",
-  "output_mode": "both",
+  "output_mode": "all",
   "fetch_period": {
-    "start": "2025-11-01T00:00:00.000Z",
-    "end": "2025-11-30T00:00:00.000Z"
+    "start": "2025-10-31T15:00:00.000Z",
+    "end": "2025-11-29T15:00:00.000Z"
   },
   "app_records": [...],
-  "workspace_records": [...]
+  "workspace_records": [...],
+  "user_records": [...],
+  "model_records": [...]
 }
 ```
 
@@ -67,10 +69,12 @@ POST {EXTERNAL_API_URL}
 | フィールド | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | aggregation_period | string | ✅ | 集計周期（`monthly` / `weekly` / `daily`） |
-| output_mode | string | ✅ | 出力モード（`per_app` / `workspace` / `both`） |
+| output_mode | string | ✅ | 出力モード（`per_app` / `workspace` / `both` / `per_user` / `per_model` / `all`） |
 | fetch_period | object | ✅ | データ取得期間 |
-| app_records | array | ✅ | アプリ別集計レコード（output_modeに応じて空配列の場合あり） |
-| workspace_records | array | ✅ | ワークスペース全体集計レコード（output_modeに応じて空配列の場合あり） |
+| app_records | array | 条件付 | アプリ別集計レコード（output_modeに応じて含まれる） |
+| workspace_records | array | 条件付 | ワークスペース全体集計レコード（output_modeに応じて含まれる） |
+| user_records | array | 条件付 | ユーザー別集計レコード（output_modeに応じて含まれる） |
+| model_records | array | 条件付 | モデル別集計レコード（output_modeに応じて含まれる）
 
 ### 3.2 aggregation_period（集計周期）
 
@@ -82,11 +86,22 @@ POST {EXTERNAL_API_URL}
 
 ### 3.3 output_mode（出力モード）
 
-| 値 | 説明 | app_records | workspace_records |
-|-----|------|-------------|-------------------|
-| `per_app` | アプリ毎のみ | データあり | 空配列 |
-| `workspace` | ワークスペース全体のみ | 空配列 | データあり |
-| `both` | 両方 | データあり | データあり |
+| 値 | 説明 | app_records | workspace_records | user_records | model_records |
+|-----|------|-------------|-------------------|--------------|---------------|
+| `per_app` | アプリ毎のみ | ✅ | - | - | - |
+| `workspace` | ワークスペース全体のみ | - | ✅ | - | - |
+| `both` | アプリ＋ワークスペース | ✅ | ✅ | - | - |
+| `per_user` | ユーザー毎（トークン使用量） | - | - | ✅ | - |
+| `per_model` | ユーザー・モデル毎（価格情報付き） | - | - | - | ✅ |
+| `all` | 全て | ✅ | ✅ | ✅ | ✅ |
+
+**データソースの違い:**
+
+| モード | データソース | 特徴 |
+|--------|-------------|------|
+| `per_app` / `workspace` / `both` | Dify Token Cost API | アプリ単位の集計、価格情報あり |
+| `per_user` | Dify Log API（会話履歴） | ユーザー単位のトークン使用量、会話数・メッセージ数 |
+| `per_model` | Dify Node Execution API | ユーザー×モデル単位、詳細な価格情報（prompt/completion別） |
 
 ### 3.4 fetch_period（取得期間）
 
@@ -153,6 +168,88 @@ POST {EXTERNAL_API_URL}
   "token_count": 500000,
   "total_price": "5.0000000",
   "currency": "USD"
+}
+```
+
+### 3.7 user_records（ユーザー別集計レコード）
+
+ユーザー毎・アプリ毎・集計期間毎のトークン使用量を格納します。会話ログAPIから取得したデータを集計します。
+
+| フィールド | 型 | 説明 | 例 |
+|-----------|-----|------|-----|
+| period | string | 集計期間（aggregation_periodに応じた形式） | `"2025-11"` |
+| period_type | string | 集計周期タイプ | `"monthly"` |
+| user_id | string | ユーザーID | `"17e91503-abc123"` |
+| user_type | string | ユーザータイプ（`end_user` / `account`） | `"end_user"` |
+| app_id | string | DifyアプリのユニークID | `"abc123-def456"` |
+| app_name | string | Difyアプリの表示名 | `"顧客対応Bot"` |
+| message_tokens | integer | 入力（質問）トークン数 | `5000` |
+| answer_tokens | integer | 出力（回答）トークン数 | `8000` |
+| total_tokens | integer | 合計トークン数 | `13000` |
+| message_count | integer | メッセージ数 | `50` |
+| conversation_count | integer | 会話数（ユニークな会話セッション数） | `10` |
+
+**サンプル:**
+
+```json
+{
+  "period": "2025-11",
+  "period_type": "monthly",
+  "user_id": "17e91503-abc123-def456",
+  "user_type": "end_user",
+  "app_id": "abc123-def456-789",
+  "app_name": "顧客対応Bot",
+  "message_tokens": 5000,
+  "answer_tokens": 8000,
+  "total_tokens": 13000,
+  "message_count": 50,
+  "conversation_count": 10
+}
+```
+
+### 3.8 model_records（モデル別集計レコード）
+
+ユーザー毎・モデル毎・集計期間毎の使用量と価格を格納します。ノード実行詳細APIから取得したLLM呼び出し情報を集計します。
+
+| フィールド | 型 | 説明 | 例 |
+|-----------|-----|------|-----|
+| period | string | 集計期間（aggregation_periodに応じた形式） | `"2025-11"` |
+| period_type | string | 集計周期タイプ | `"monthly"` |
+| user_id | string | ユーザーID | `"841a3828-xyz789"` |
+| user_type | string | ユーザータイプ（`end_user` / `account`） | `"account"` |
+| app_id | string | DifyアプリのユニークID | `"abc123-def456"` |
+| app_name | string | Difyアプリの表示名 | `"FAQ検索システム"` |
+| model_provider | string | モデルプロバイダー名 | `"openai"` |
+| model_name | string | モデル名 | `"gpt-4o-mini"` |
+| prompt_tokens | integer | 入力トークン数 | `10000` |
+| completion_tokens | integer | 出力トークン数 | `5000` |
+| total_tokens | integer | 合計トークン数 | `15000` |
+| prompt_price | string | 入力トークン価格（小数点以下7桁） | `"0.0050000"` |
+| completion_price | string | 出力トークン価格（小数点以下7桁） | `"0.0150000"` |
+| total_price | string | 合計価格（小数点以下7桁） | `"0.0200000"` |
+| currency | string | 通貨コード | `"USD"` |
+| execution_count | integer | LLM実行回数 | `25` |
+
+**サンプル:**
+
+```json
+{
+  "period": "2025-11",
+  "period_type": "monthly",
+  "user_id": "841a3828-xyz789-abc123",
+  "user_type": "account",
+  "app_id": "abc123-def456-789",
+  "app_name": "FAQ検索システム",
+  "model_provider": "openai",
+  "model_name": "gpt-4o-mini",
+  "prompt_tokens": 10000,
+  "completion_tokens": 5000,
+  "total_tokens": 15000,
+  "prompt_price": "0.0050000",
+  "completion_price": "0.0150000",
+  "total_price": "0.0200000",
+  "currency": "USD",
+  "execution_count": 25
 }
 ```
 
@@ -238,7 +335,6 @@ POST {EXTERNAL_API_URL}
     "start": "2025-11-29T00:00:00.000Z",
     "end": "2025-11-29T23:59:59.999Z"
   },
-  "app_records": [],
   "workspace_records": [
     {
       "period": "2025-11-29",
@@ -247,6 +343,198 @@ POST {EXTERNAL_API_URL}
       "token_count": 10000,
       "total_price": "0.1000000",
       "currency": "USD"
+    }
+  ]
+}
+```
+
+### 4.4 月次・ユーザー別（output_mode: per_user）
+
+```json
+{
+  "aggregation_period": "monthly",
+  "output_mode": "per_user",
+  "fetch_period": {
+    "start": "2025-11-01T00:00:00.000Z",
+    "end": "2025-11-30T00:00:00.000Z"
+  },
+  "user_records": [
+    {
+      "period": "2025-11",
+      "period_type": "monthly",
+      "user_id": "17e91503-abc123-def456",
+      "user_type": "end_user",
+      "app_id": "abc123-def456-789",
+      "app_name": "顧客対応Bot",
+      "message_tokens": 5000,
+      "answer_tokens": 8000,
+      "total_tokens": 13000,
+      "message_count": 50,
+      "conversation_count": 10
+    },
+    {
+      "period": "2025-11",
+      "period_type": "monthly",
+      "user_id": "841a3828-xyz789-uvw456",
+      "user_type": "account",
+      "app_id": "abc123-def456-789",
+      "app_name": "顧客対応Bot",
+      "message_tokens": 12000,
+      "answer_tokens": 18000,
+      "total_tokens": 30000,
+      "message_count": 120,
+      "conversation_count": 25
+    }
+  ]
+}
+```
+
+### 4.5 月次・モデル別（output_mode: per_model）
+
+```json
+{
+  "aggregation_period": "monthly",
+  "output_mode": "per_model",
+  "fetch_period": {
+    "start": "2025-11-01T00:00:00.000Z",
+    "end": "2025-11-30T00:00:00.000Z"
+  },
+  "model_records": [
+    {
+      "period": "2025-11",
+      "period_type": "monthly",
+      "user_id": "841a3828-xyz789-abc123",
+      "user_type": "account",
+      "app_id": "abc123-def456-789",
+      "app_name": "FAQ検索システム",
+      "model_provider": "openai",
+      "model_name": "gpt-4o-mini",
+      "prompt_tokens": 10000,
+      "completion_tokens": 5000,
+      "total_tokens": 15000,
+      "prompt_price": "0.0050000",
+      "completion_price": "0.0150000",
+      "total_price": "0.0200000",
+      "currency": "USD",
+      "execution_count": 25
+    },
+    {
+      "period": "2025-11",
+      "period_type": "monthly",
+      "user_id": "841a3828-xyz789-abc123",
+      "user_type": "account",
+      "app_id": "abc123-def456-789",
+      "app_name": "FAQ検索システム",
+      "model_provider": "openai",
+      "model_name": "gpt-4.1",
+      "prompt_tokens": 50000,
+      "completion_tokens": 25000,
+      "total_tokens": 75000,
+      "prompt_price": "0.1000000",
+      "completion_price": "0.2000000",
+      "total_price": "0.3000000",
+      "currency": "USD",
+      "execution_count": 100
+    }
+  ]
+}
+```
+
+### 4.6 月次・全出力（output_mode: all）
+
+```json
+{
+  "aggregation_period": "monthly",
+  "output_mode": "all",
+  "fetch_period": {
+    "start": "2025-10-31T15:00:00.000Z",
+    "end": "2025-11-29T15:00:00.000Z"
+  },
+  "app_records": [
+    {
+      "period": "2025-11",
+      "period_type": "monthly",
+      "app_id": "dc279ec4-0860-46e2-a789-d4b4238443de",
+      "app_name": "DeepResearch + Word/PowerPoint",
+      "token_count": 21650,
+      "total_price": "0.0513628",
+      "currency": "USD"
+    }
+  ],
+  "workspace_records": [
+    {
+      "period": "2025-11",
+      "period_type": "monthly",
+      "type": "workspace_total",
+      "token_count": 21650,
+      "total_price": "0.0513628",
+      "currency": "USD"
+    }
+  ],
+  "user_records": [
+    {
+      "period": "2025-11",
+      "period_type": "monthly",
+      "user_id": "17e91503-c712-4fdb-bcf2-4cd3dbe354ac",
+      "user_type": "end_user",
+      "app_id": "dc279ec4-0860-46e2-a789-d4b4238443de",
+      "app_name": "DeepResearch + Word/PowerPoint",
+      "message_tokens": 6558,
+      "answer_tokens": 4970,
+      "total_tokens": 11528,
+      "message_count": 2,
+      "conversation_count": 2
+    },
+    {
+      "period": "2025-11",
+      "period_type": "monthly",
+      "user_id": "c7586f30-df79-4653-8e9e-9bdd54b7b20b",
+      "user_type": "end_user",
+      "app_id": "dc279ec4-0860-46e2-a789-d4b4238443de",
+      "app_name": "DeepResearch + Word/PowerPoint",
+      "message_tokens": 7126,
+      "answer_tokens": 2996,
+      "total_tokens": 10122,
+      "message_count": 1,
+      "conversation_count": 1
+    }
+  ],
+  "model_records": [
+    {
+      "period": "2025-11",
+      "period_type": "monthly",
+      "user_id": "841a3828-68db-48e5-aa4d-4da2c57d8a22",
+      "user_type": "account",
+      "app_id": "dc279ec4-0860-46e2-a789-d4b4238443de",
+      "app_name": "DeepResearch + Word/PowerPoint",
+      "model_provider": "langgenius/openai/openai",
+      "model_name": "gpt-4.1",
+      "prompt_tokens": 190,
+      "completion_tokens": 31,
+      "total_tokens": 221,
+      "prompt_price": "0.0003800",
+      "completion_price": "0.0002480",
+      "total_price": "0.0006280",
+      "currency": "USD",
+      "execution_count": 1
+    },
+    {
+      "period": "2025-11",
+      "period_type": "monthly",
+      "user_id": "841a3828-68db-48e5-aa4d-4da2c57d8a22",
+      "user_type": "account",
+      "app_id": "dc279ec4-0860-46e2-a789-d4b4238443de",
+      "app_name": "DeepResearch + Word/PowerPoint",
+      "model_provider": "langgenius/openai/openai",
+      "model_name": "o4-mini",
+      "prompt_tokens": 4959,
+      "completion_tokens": 2676,
+      "total_tokens": 7635,
+      "prompt_price": "0.0054549",
+      "completion_price": "0.0117744",
+      "total_price": "0.0172293",
+      "currency": "USD",
+      "execution_count": 1
     }
   ]
 }
@@ -403,6 +691,7 @@ Exporter側で設定可能なパラメータ：
 
 | バージョン | 日付 | 変更内容 |
 |-----------|------|----------|
+| 1.1.0 | 2025-11-29 | `per_user`、`per_model`、`all` 出力モードを追加。`user_records`、`model_records` フィールドを追加 |
 | 1.0.0 | 2025-11-29 | 初版作成 |
 
 ---
