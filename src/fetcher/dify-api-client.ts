@@ -12,7 +12,13 @@ import { wrapper } from 'axios-cookiejar-support'
 import axiosRetry from 'axios-retry'
 import { CookieJar } from 'tough-cookie'
 import type { Logger } from '../logger/winston-logger.js'
-import type { DifyAppTokenCostsResponse } from '../types/dify-usage.js'
+import type {
+  DifyAppTokenCostsResponse,
+  DifyConversation,
+  DifyConversationsResponse,
+  DifyMessage,
+  DifyMessagesResponse,
+} from '../types/dify-usage.js'
 import type { EnvConfig } from '../types/env.js'
 
 /**
@@ -56,6 +62,32 @@ export interface FetchAppTokenCostsParams {
 }
 
 /**
+ * 会話一覧取得パラメータ
+ */
+export interface FetchConversationsParams {
+  /** アプリID */
+  appId: string
+  /** 開始日時（Unix timestamp） */
+  start?: number
+  /** 終了日時（Unix timestamp） */
+  end?: number
+  /** 取得上限 */
+  limit?: number
+}
+
+/**
+ * メッセージ一覧取得パラメータ
+ */
+export interface FetchMessagesParams {
+  /** アプリID */
+  appId: string
+  /** 会話ID */
+  conversationId: string
+  /** 取得上限 */
+  limit?: number
+}
+
+/**
  * Difyログインレスポンス（レスポンスボディ用、実際はCookieで返される）
  */
 interface DifyLoginResponse {
@@ -79,6 +111,20 @@ export interface DifyApiClient {
    * @returns トークンコストレスポンス
    */
   fetchAppTokenCosts(params: FetchAppTokenCostsParams): Promise<DifyAppTokenCostsResponse>
+
+  /**
+   * 会話一覧を取得する（ユーザー別集計用）
+   * @param params 取得パラメータ
+   * @returns 会話一覧
+   */
+  fetchConversations(params: FetchConversationsParams): Promise<DifyConversation[]>
+
+  /**
+   * メッセージ一覧を取得する（トークン情報含む）
+   * @param params 取得パラメータ
+   * @returns メッセージ一覧
+   */
+  fetchMessages(params: FetchMessagesParams): Promise<DifyMessage[]>
 }
 
 /**
@@ -265,6 +311,83 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
         }
       )
       return response.data
+    },
+
+    async fetchConversations(params: FetchConversationsParams): Promise<DifyConversation[]> {
+      const authenticatedClient = await getAuthenticatedClient()
+      const conversations: DifyConversation[] = []
+      const limit = params.limit ?? 100
+      let lastId: string | undefined
+
+      // ページネーション（無限スクロール形式）
+      while (true) {
+        const queryParams: Record<string, string | number> = { limit }
+        if (lastId) {
+          queryParams.last_id = lastId
+        }
+        if (params.start) {
+          queryParams.start = params.start
+        }
+        if (params.end) {
+          queryParams.end = params.end
+        }
+
+        const response = await authenticatedClient.get<DifyConversationsResponse>(
+          `/console/api/apps/${params.appId}/chat-conversations`,
+          { params: queryParams }
+        )
+
+        conversations.push(...response.data.data)
+
+        if (!response.data.has_more || response.data.data.length === 0) {
+          break
+        }
+
+        // 次のページ用に最後のIDを保存
+        lastId = response.data.data[response.data.data.length - 1].id
+      }
+
+      logger.info('会話一覧取得完了', { appId: params.appId, count: conversations.length })
+      return conversations
+    },
+
+    async fetchMessages(params: FetchMessagesParams): Promise<DifyMessage[]> {
+      const authenticatedClient = await getAuthenticatedClient()
+      const messages: DifyMessage[] = []
+      const limit = params.limit ?? 100
+      let firstId: string | undefined
+
+      // ページネーション（first_id形式で遡る）
+      while (true) {
+        const queryParams: Record<string, string | number> = {
+          conversation_id: params.conversationId,
+          limit,
+        }
+        if (firstId) {
+          queryParams.first_id = firstId
+        }
+
+        const response = await authenticatedClient.get<DifyMessagesResponse>(
+          `/console/api/apps/${params.appId}/chat-messages`,
+          { params: queryParams }
+        )
+
+        messages.push(...response.data.data)
+
+        if (!response.data.has_more || response.data.data.length === 0) {
+          break
+        }
+
+        // 次のページ用に最初のIDを保存（古い方向に遡る）
+        firstId = response.data.data[0].id
+      }
+
+      logger.debug('メッセージ一覧取得完了', {
+        appId: params.appId,
+        conversationId: params.conversationId,
+        count: messages.length,
+      })
+      return messages
     },
   }
 }

@@ -46,41 +46,83 @@ export interface AggregatedWorkspaceRecord {
 }
 
 /**
+ * 集計後のレコード（ユーザー別）
+ */
+export interface AggregatedUserRecord {
+  period: string
+  period_type: AggregationPeriod
+  user_id: string
+  user_type: 'end_user' | 'account'
+  app_id: string
+  app_name: string
+  message_tokens: number
+  answer_tokens: number
+  total_tokens: number
+  message_count: number
+  conversation_count: number
+}
+
+/**
+ * ユーザー別集計用の入力レコード
+ */
+export interface RawUserUsageRecord {
+  date: string // YYYY-MM-DD
+  user_id: string
+  user_type: 'end_user' | 'account'
+  app_id: string
+  app_name: string
+  message_tokens: number
+  answer_tokens: number
+  total_tokens: number
+  conversation_id: string
+}
+
+/**
  * 集計結果
  */
 export interface AggregationResult {
   appRecords: AggregatedAppRecord[]
   workspaceRecords: AggregatedWorkspaceRecord[]
+  userRecords: AggregatedUserRecord[]
 }
 
 /**
  * 使用量データを集計する
  * @param records 日別のトークンコストレコード
  * @param aggregationPeriod 集計周期（monthly/weekly/daily）
- * @param outputMode 出力モード（per_app/workspace/both）
+ * @param outputMode 出力モード（per_app/workspace/both/per_user/all）
+ * @param userRecords ユーザー別レコード（per_user/allモードで使用）
  * @returns 集計結果
  */
 export function aggregateUsageData(
   records: RawTokenCostRecord[],
   aggregationPeriod: AggregationPeriod,
-  outputMode: OutputMode
+  outputMode: OutputMode,
+  userRecords?: RawUserUsageRecord[]
 ): AggregationResult {
   const result: AggregationResult = {
     appRecords: [],
     workspaceRecords: [],
-  }
-
-  if (records.length === 0) {
-    return result
+    userRecords: [],
   }
 
   // 出力モードに応じて集計を実行
-  if (outputMode === 'per_app' || outputMode === 'both') {
-    result.appRecords = aggregateByApp(records, aggregationPeriod)
+  if (outputMode === 'per_app' || outputMode === 'both' || outputMode === 'all') {
+    if (records.length > 0) {
+      result.appRecords = aggregateByApp(records, aggregationPeriod)
+    }
   }
 
-  if (outputMode === 'workspace' || outputMode === 'both') {
-    result.workspaceRecords = aggregateWorkspaceTotal(records, aggregationPeriod)
+  if (outputMode === 'workspace' || outputMode === 'both' || outputMode === 'all') {
+    if (records.length > 0) {
+      result.workspaceRecords = aggregateWorkspaceTotal(records, aggregationPeriod)
+    }
+  }
+
+  if (outputMode === 'per_user' || outputMode === 'all') {
+    if (userRecords && userRecords.length > 0) {
+      result.userRecords = aggregateByUser(userRecords, aggregationPeriod)
+    }
   }
 
   return result
@@ -185,6 +227,83 @@ function aggregateWorkspaceTotal(
 
   // 期間でソート
   result.sort((a, b) => a.period.localeCompare(b.period))
+
+  return result
+}
+
+/**
+ * ユーザー別に集計
+ * @param records ユーザー別レコード
+ * @param aggregationPeriod 集計周期
+ * @returns ユーザー別集計レコード
+ */
+function aggregateByUser(
+  records: RawUserUsageRecord[],
+  aggregationPeriod: AggregationPeriod
+): AggregatedUserRecord[] {
+  // キー: "period|user_id|app_id"
+  const aggregated = new Map<
+    string,
+    {
+      userType: 'end_user' | 'account'
+      appName: string
+      messageTokens: number
+      answerTokens: number
+      totalTokens: number
+      messageCount: number
+      conversationIds: Set<string>
+    }
+  >()
+
+  for (const record of records) {
+    const period = getPeriodKey(record.date, aggregationPeriod)
+    const key = `${period}|${record.user_id}|${record.app_id}`
+
+    const existing = aggregated.get(key) || {
+      userType: record.user_type,
+      appName: record.app_name,
+      messageTokens: 0,
+      answerTokens: 0,
+      totalTokens: 0,
+      messageCount: 0,
+      conversationIds: new Set<string>(),
+    }
+
+    existing.messageTokens += record.message_tokens
+    existing.answerTokens += record.answer_tokens
+    existing.totalTokens += record.total_tokens
+    existing.messageCount += 1
+    existing.conversationIds.add(record.conversation_id)
+    aggregated.set(key, existing)
+  }
+
+  // Mapを配列に変換
+  const result: AggregatedUserRecord[] = []
+  for (const [key, data] of aggregated) {
+    const [period, userId, appId] = key.split('|')
+    result.push({
+      period,
+      period_type: aggregationPeriod,
+      user_id: userId,
+      user_type: data.userType,
+      app_id: appId,
+      app_name: data.appName,
+      message_tokens: data.messageTokens,
+      answer_tokens: data.answerTokens,
+      total_tokens: data.totalTokens,
+      message_count: data.messageCount,
+      conversation_count: data.conversationIds.size,
+    })
+  }
+
+  // 期間、ユーザーID、アプリIDでソート
+  result.sort((a, b) => {
+    const periodCompare = a.period.localeCompare(b.period)
+    if (periodCompare !== 0) return periodCompare
+    const userCompare = a.user_id.localeCompare(b.user_id)
+    if (userCompare !== 0) return userCompare
+    return a.app_id.localeCompare(b.app_id)
+  })
 
   return result
 }

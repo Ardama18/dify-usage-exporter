@@ -22,7 +22,9 @@ export type AggregationPeriod = z.infer<typeof aggregationPeriodEnum>
 export const outputModeEnum = z.enum([
   'per_app', // アプリ毎
   'workspace', // ワークスペース全体
-  'both', // 両方
+  'both', // 両方（per_app + workspace）
+  'per_user', // ユーザー毎（ログAPIベース）
+  'all', // 全て（per_app + workspace + per_user）
 ])
 export type OutputMode = z.infer<typeof outputModeEnum>
 

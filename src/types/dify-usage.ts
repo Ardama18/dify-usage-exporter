@@ -76,3 +76,61 @@ export const difyUsageResponseSchema = z.object({
 
 export type DifyUsageRecord = z.infer<typeof difyUsageRecordSchema>
 export type DifyUsageResponse = z.infer<typeof difyUsageResponseSchema>
+
+/**
+ * /console/api/apps/{app_id}/chat-conversations のレスポンス形式
+ * 会話一覧を取得（ユーザー別集計用）
+ */
+export const difyConversationSchema = z.object({
+  id: z.string(),
+  name: z.string().optional(),
+  status: z.string().optional(),
+  from_source: z.string().optional(), // 'api' | 'console' など
+  from_end_user_id: z.string().nullable().optional(),
+  from_end_user_session_id: z.string().nullable().optional(),
+  from_account_id: z.string().nullable().optional(),
+  from_account_name: z.string().nullable().optional(),
+  read_at: z.string().nullable().optional(),
+  created_at: z.number(), // Unix timestamp
+  updated_at: z.number().optional(),
+  message_count: z.number().optional(),
+  annotation_reply_count: z.number().optional(),
+})
+
+export const difyConversationsResponseSchema = z.object({
+  data: z.array(difyConversationSchema),
+  has_more: z.boolean(),
+  limit: z.number(),
+})
+
+export type DifyConversation = z.infer<typeof difyConversationSchema>
+export type DifyConversationsResponse = z.infer<typeof difyConversationsResponseSchema>
+
+/**
+ * /console/api/apps/{app_id}/chat-messages のレスポンス形式
+ * メッセージ一覧を取得（トークン情報含む）
+ */
+export const difyMessageSchema = z.object({
+  id: z.string(),
+  conversation_id: z.string(),
+  query: z.string().optional(),
+  answer: z.string().optional(),
+  message_tokens: z.number().default(0), // 入力トークン数
+  answer_tokens: z.number().default(0), // 出力トークン数
+  provider_response_latency: z.number().optional(),
+  from_source: z.string().optional(),
+  from_end_user_id: z.string().nullable().optional(),
+  from_account_id: z.string().nullable().optional(),
+  created_at: z.number(), // Unix timestamp
+  status: z.string().optional(),
+  error: z.string().nullable().optional(),
+})
+
+export const difyMessagesResponseSchema = z.object({
+  data: z.array(difyMessageSchema),
+  has_more: z.boolean(),
+  limit: z.number(),
+})
+
+export type DifyMessage = z.infer<typeof difyMessageSchema>
+export type DifyMessagesResponse = z.infer<typeof difyMessagesResponseSchema>
