@@ -11,7 +11,10 @@ based_on: requirements analysis for API_Meter new specification
 
 ## ステータス
 
-Proposed
+Accepted
+
+- Date: 2025-12-06
+- Implemented in: v1.1.0
 
 ## コンテキスト
 

@@ -28,9 +28,9 @@ based_on: specs/stories/SPEC-CHANGE-001-api-meter-interface-update/plan.md
 
 ## 対象ファイル
 
-- [ ] README.md（更新）
-- [ ] specs/adr/013-019-*.md（ステータス更新）
-- [ ] CHANGELOG.md（更新）
+- [x] README.md（更新）
+- [x] specs/adr/013-019-*.md（ステータス更新）
+- [x] CHANGELOG.md（更新）
 
 ## 実施手順
 
@@ -96,10 +96,10 @@ npm run start -- --mode all --date 2025-12-05
 
 ## 完了条件
 
-- [ ] README.mdが更新され、最新の状態
-- [ ] ADRのステータスが `Accepted` に変更されている
-- [ ] CHANGELOG.mdが更新されている
-- [ ] ドキュメントの整合性が確認されている
+- [x] README.mdが更新され、最新の状態
+- [x] ADRのステータスが `Accepted` に変更されている
+- [x] CHANGELOG.mdが更新されている
+- [x] ドキュメントの整合性が確認されている
 
 ## 参考資料
 
