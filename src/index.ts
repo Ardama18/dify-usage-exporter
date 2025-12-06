@@ -14,6 +14,7 @@ import {
 } from './fetcher/dify-usage-fetcher.js'
 import { createModelUsageFetcher } from './fetcher/model-usage-fetcher.js'
 import { createUserUsageFetcher } from './fetcher/user-usage-fetcher.js'
+import type { FetchResult } from './interfaces/fetcher.js'
 import { createLogger } from './logger/winston-logger.js'
 import { createMetricsCollector } from './monitoring/metrics-collector.js'
 import { createMetricsReporter } from './monitoring/metrics-reporter.js'
@@ -31,6 +32,249 @@ import { createWatermarkManager } from './watermark/watermark-manager.js'
 const httpsAgent = new https.Agent({
   family: 4,
 })
+
+/**
+ * データ取得結果の型定義
+ */
+interface FetchDataResult {
+  allRecords: FetchedTokenCostRecord[]
+  rawUserRecords: RawUserUsageRecord[]
+  rawModelRecords: RawModelUsageRecord[]
+  fetchResult: FetchResult
+}
+
+/**
+ * Difyからデータを取得
+ * 1. トークンコストデータ取得
+ * 2. ユーザー別使用量取得（per_user/allモード）
+ * 3. モデル別使用量取得（per_model/allモード）
+ */
+async function fetchDataFromDify(
+  fetcher: ReturnType<typeof createDifyUsageFetcher>,
+  userUsageFetcher: ReturnType<typeof createUserUsageFetcher>,
+  modelUsageFetcher: ReturnType<typeof createModelUsageFetcher>,
+  config: ReturnType<typeof loadConfig>,
+  logger: ReturnType<typeof createLogger>,
+): Promise<FetchDataResult> {
+  // 1. Difyからトークンコストデータ取得
+  let allRecords: FetchedTokenCostRecord[] = []
+  const fetchResult = await fetcher.fetch(async (records) => {
+    allRecords = allRecords.concat(records)
+  })
+
+  if (!fetchResult.success) {
+    logger.error('データ取得失敗', { errors: fetchResult.errors })
+    return { allRecords: [], rawUserRecords: [], rawModelRecords: [], fetchResult }
+  }
+
+  if (allRecords.length === 0) {
+    logger.info('送信するデータがありません')
+    return { allRecords: [], rawUserRecords: [], rawModelRecords: [], fetchResult }
+  }
+
+  // 2. 期間計算（per_user/per_model/allモードで使用）
+  const periodRange = calculateDateRange(
+    config.DIFY_FETCH_PERIOD,
+    config.DIFY_FETCH_START_DATE,
+    config.DIFY_FETCH_END_DATE,
+  )
+
+  // 3. ユーザー別使用量を取得（per_user/allモードの場合）
+  let rawUserRecords: RawUserUsageRecord[] = []
+  if (config.DIFY_OUTPUT_MODE === 'per_user' || config.DIFY_OUTPUT_MODE === 'all') {
+    const userResult = await userUsageFetcher.fetch({
+      startTimestamp: Math.floor(periodRange.startDate.getTime() / 1000),
+      endTimestamp: Math.floor(periodRange.endDate.getTime() / 1000),
+    })
+
+    rawUserRecords = userResult.records.map((record) => ({
+      date: record.date,
+      user_id: record.user_id,
+      user_type: record.user_type,
+      app_id: record.app_id,
+      app_name: record.app_name,
+      message_tokens: record.message_tokens,
+      answer_tokens: record.answer_tokens,
+      total_tokens: record.total_tokens,
+      conversation_id: record.conversation_id,
+    }))
+
+    logger.info('ユーザー別使用量取得完了', { recordCount: rawUserRecords.length })
+  }
+
+  // 4. モデル別使用量を取得（per_model/allモードの場合）
+  let rawModelRecords: RawModelUsageRecord[] = []
+  if (config.DIFY_OUTPUT_MODE === 'per_model' || config.DIFY_OUTPUT_MODE === 'all') {
+    const modelResult = await modelUsageFetcher.fetch({
+      startTimestamp: Math.floor(periodRange.startDate.getTime() / 1000),
+      endTimestamp: Math.floor(periodRange.endDate.getTime() / 1000),
+    })
+
+    rawModelRecords = modelResult.records.map((record) => ({
+      date: record.date,
+      user_id: record.user_id,
+      user_type: record.user_type,
+      app_id: record.app_id,
+      app_name: record.app_name,
+      model_provider: record.model_provider,
+      model_name: record.model_name,
+      prompt_tokens: record.prompt_tokens,
+      completion_tokens: record.completion_tokens,
+      total_tokens: record.total_tokens,
+      prompt_price: record.prompt_price,
+      completion_price: record.completion_price,
+      total_price: record.total_price,
+      currency: record.currency,
+    }))
+
+    logger.info('モデル別使用量取得完了', { recordCount: rawModelRecords.length })
+  }
+
+  return { allRecords, rawUserRecords, rawModelRecords, fetchResult }
+}
+
+/**
+ * データ集計結果の型定義
+ */
+interface AggregateDataResult {
+  aggregationResult: ReturnType<typeof aggregateUsageData>
+  totalAggregatedRecords: number
+}
+
+/**
+ * 取得したデータを集計
+ * RawTokenCostRecordに変換し、アプリ/ワークスペース/ユーザー/モデル別に集計
+ */
+function aggregateData(
+  allRecords: FetchedTokenCostRecord[],
+  rawUserRecords: RawUserUsageRecord[],
+  rawModelRecords: RawModelUsageRecord[],
+  config: ReturnType<typeof loadConfig>,
+  logger: ReturnType<typeof createLogger>,
+): AggregateDataResult {
+  // データ集計（RawTokenCostRecordに変換してから集計）
+  const rawRecords: RawTokenCostRecord[] = allRecords.map((record) => ({
+    date: record.date,
+    app_id: record.app_id,
+    app_name: record.app_name,
+    token_count: record.token_count,
+    total_price: record.total_price,
+    currency: record.currency,
+  }))
+
+  const aggregationResult = aggregateUsageData(
+    rawRecords,
+    config.DIFY_AGGREGATION_PERIOD,
+    config.DIFY_OUTPUT_MODE,
+    rawUserRecords,
+    rawModelRecords,
+  )
+
+  const totalAggregatedRecords =
+    aggregationResult.appRecords.length +
+    aggregationResult.workspaceRecords.length +
+    aggregationResult.userRecords.length +
+    aggregationResult.modelRecords.length
+
+  logger.info('データ集計完了', {
+    aggregationPeriod: config.DIFY_AGGREGATION_PERIOD,
+    outputMode: config.DIFY_OUTPUT_MODE,
+    appRecords: aggregationResult.appRecords.length,
+    workspaceRecords: aggregationResult.workspaceRecords.length,
+    userRecords: aggregationResult.userRecords.length,
+    modelRecords: aggregationResult.modelRecords.length,
+  })
+
+  return { aggregationResult, totalAggregatedRecords }
+}
+
+/**
+ * API_Meterへデータ送信（per_model/allモードのみ）
+ * 正規化 → 変換 → バッチ分割 → 送信の流れ
+ */
+async function sendToApiMeter(
+  aggregationResult: ReturnType<typeof aggregateUsageData>,
+  config: ReturnType<typeof loadConfig>,
+  logger: ReturnType<typeof createLogger>,
+  metrics: ReturnType<ReturnType<typeof createMetricsCollector>['getMetrics']>,
+): Promise<void> {
+  // 日別データのフィルタリング（period_type === 'daily'のみ）
+  const dailyRecords = aggregationResult.modelRecords.filter(
+    (record) => record.period_type === 'daily',
+  )
+
+  if (dailyRecords.length === 0) {
+    logger.warn('No daily records for API_Meter', {
+      aggregationPeriod: config.DIFY_AGGREGATION_PERIOD,
+      totalModelRecords: aggregationResult.modelRecords.length,
+    })
+    return
+  }
+
+  // Normalize（プロバイダー/モデル名の正規化）
+  const normalizer = createNormalizer(logger)
+  const normalizedRecords = normalizer.normalize(dailyRecords)
+
+  logger.info('正規化完了', {
+    recordCount: normalizedRecords.length,
+  })
+
+  // バッチサイズ管理: 500レコード超の場合はバッチ分割
+  const BATCH_SIZE = 500
+  const batches: (typeof normalizedRecords)[] = []
+
+  if (normalizedRecords.length > BATCH_SIZE) {
+    logger.info('Splitting records into batches', {
+      totalRecords: normalizedRecords.length,
+      batchSize: BATCH_SIZE,
+      batchCount: Math.ceil(normalizedRecords.length / BATCH_SIZE),
+    })
+
+    for (let i = 0; i < normalizedRecords.length; i += BATCH_SIZE) {
+      batches.push(normalizedRecords.slice(i, i + BATCH_SIZE))
+    }
+  } else {
+    batches.push(normalizedRecords)
+  }
+
+  // 各バッチを順次送信
+  const httpClient = new HttpClient(logger, config)
+  const spoolManager = new SpoolManager(logger)
+  const sender = new ExternalApiSender(
+    httpClient,
+    spoolManager,
+    { sendErrorNotification: () => Promise.resolve() }, // INotifier: Phase 3-3で実装予定
+    logger,
+    config,
+    metrics,
+  )
+
+  let totalSent = 0
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i]
+    logger.info(`Sending batch ${i + 1}/${batches.length}`, {
+      batchRecordCount: batch.length,
+    })
+
+    // Transform（ApiMeterRequest形式への変換）
+    const transformer = createDataTransformer({ logger })
+    const transformResult = transformer.transform(batch)
+
+    // Send（API_Meterへ送信）
+    await sender.send(transformResult.request)
+
+    totalSent += batch.length
+    logger.info(`Batch ${i + 1}/${batches.length} sent successfully`, {
+      batchRecordCount: batch.length,
+      totalSent,
+    })
+  }
+
+  logger.info('API_Meter送信完了', {
+    recordCount: totalSent,
+    batchCount: batches.length,
+  })
+}
 
 export async function main(): Promise<void> {
   // 1. 環境変数を読み込み・検証
@@ -69,104 +313,27 @@ export async function main(): Promise<void> {
       // === 実際のエクスポート処理 ===
 
       // 1. Difyからデータ取得
-      let allRecords: FetchedTokenCostRecord[] = []
-      const fetchResult = await fetcher.fetch(async (records) => {
-        allRecords = allRecords.concat(records)
-      })
+      const fetchData = await fetchDataFromDify(
+        fetcher,
+        userUsageFetcher,
+        modelUsageFetcher,
+        config,
+        logger,
+      )
+      collector.getMetrics().fetchedRecords = fetchData.allRecords.length
 
-      collector.getMetrics().fetchedRecords = allRecords.length
-
-      if (!fetchResult.success) {
-        logger.error('データ取得失敗', { errors: fetchResult.errors })
+      if (!fetchData.fetchResult.success || fetchData.allRecords.length === 0) {
         return
       }
 
-      if (allRecords.length === 0) {
-        logger.info('送信するデータがありません')
-        return
-      }
-
-      // 2. 期間計算（per_user/per_model/allモードで使用）
-      const periodRange = calculateDateRange(
-        config.DIFY_FETCH_PERIOD,
-        config.DIFY_FETCH_START_DATE,
-        config.DIFY_FETCH_END_DATE,
+      // 2. データ集計
+      const { aggregationResult, totalAggregatedRecords } = aggregateData(
+        fetchData.allRecords,
+        fetchData.rawUserRecords,
+        fetchData.rawModelRecords,
+        config,
+        logger,
       )
-
-      // 3. ユーザー別使用量を取得（per_user/allモードの場合）
-      let rawUserRecords: RawUserUsageRecord[] = []
-      if (config.DIFY_OUTPUT_MODE === 'per_user' || config.DIFY_OUTPUT_MODE === 'all') {
-        const userResult = await userUsageFetcher.fetch({
-          startTimestamp: Math.floor(periodRange.startDate.getTime() / 1000),
-          endTimestamp: Math.floor(periodRange.endDate.getTime() / 1000),
-        })
-
-        rawUserRecords = userResult.records.map((record) => ({
-          date: record.date,
-          user_id: record.user_id,
-          user_type: record.user_type,
-          app_id: record.app_id,
-          app_name: record.app_name,
-          message_tokens: record.message_tokens,
-          answer_tokens: record.answer_tokens,
-          total_tokens: record.total_tokens,
-          conversation_id: record.conversation_id,
-        }))
-
-        logger.info('ユーザー別使用量取得完了', { recordCount: rawUserRecords.length })
-      }
-
-      // 4. モデル別使用量を取得（per_model/allモードの場合）
-      let rawModelRecords: RawModelUsageRecord[] = []
-      if (config.DIFY_OUTPUT_MODE === 'per_model' || config.DIFY_OUTPUT_MODE === 'all') {
-        const modelResult = await modelUsageFetcher.fetch({
-          startTimestamp: Math.floor(periodRange.startDate.getTime() / 1000),
-          endTimestamp: Math.floor(periodRange.endDate.getTime() / 1000),
-        })
-
-        rawModelRecords = modelResult.records.map((record) => ({
-          date: record.date,
-          user_id: record.user_id,
-          user_type: record.user_type,
-          app_id: record.app_id,
-          app_name: record.app_name,
-          model_provider: record.model_provider,
-          model_name: record.model_name,
-          prompt_tokens: record.prompt_tokens,
-          completion_tokens: record.completion_tokens,
-          total_tokens: record.total_tokens,
-          prompt_price: record.prompt_price,
-          completion_price: record.completion_price,
-          total_price: record.total_price,
-          currency: record.currency,
-        }))
-
-        logger.info('モデル別使用量取得完了', { recordCount: rawModelRecords.length })
-      }
-
-      // 5. データ集計（RawTokenCostRecordに変換してから集計）
-      const rawRecords: RawTokenCostRecord[] = allRecords.map((record) => ({
-        date: record.date,
-        app_id: record.app_id,
-        app_name: record.app_name,
-        token_count: record.token_count,
-        total_price: record.total_price,
-        currency: record.currency,
-      }))
-
-      const aggregationResult = aggregateUsageData(
-        rawRecords,
-        config.DIFY_AGGREGATION_PERIOD,
-        config.DIFY_OUTPUT_MODE,
-        rawUserRecords,
-        rawModelRecords,
-      )
-
-      const totalAggregatedRecords =
-        aggregationResult.appRecords.length +
-        aggregationResult.workspaceRecords.length +
-        aggregationResult.userRecords.length +
-        aggregationResult.modelRecords.length
       collector.getMetrics().transformedRecords = totalAggregatedRecords
 
       if (totalAggregatedRecords === 0) {
@@ -174,70 +341,16 @@ export async function main(): Promise<void> {
         return
       }
 
-      logger.info('データ集計完了', {
-        aggregationPeriod: config.DIFY_AGGREGATION_PERIOD,
-        outputMode: config.DIFY_OUTPUT_MODE,
-        appRecords: aggregationResult.appRecords.length,
-        workspaceRecords: aggregationResult.workspaceRecords.length,
-        userRecords: aggregationResult.userRecords.length,
-        modelRecords: aggregationResult.modelRecords.length,
-      })
-
-      // 4. per_model/allモードのみAPI_Meterへ送信（Design Doc 第6章: 集計モード統合方法）
+      // 3. per_model/allモードのみAPI_Meterへ送信
       if (config.DIFY_OUTPUT_MODE === 'per_model' || config.DIFY_OUTPUT_MODE === 'all') {
-        // 4-1. 日別データのフィルタリング（period_type === 'daily'のみ）
-        const dailyRecords = aggregationResult.modelRecords.filter(
-          (record) => record.period_type === 'daily',
-        )
-
-        if (dailyRecords.length === 0) {
-          logger.warn('No daily records for API_Meter', {
-            aggregationPeriod: config.DIFY_AGGREGATION_PERIOD,
-            totalModelRecords: aggregationResult.modelRecords.length,
+        try {
+          await sendToApiMeter(aggregationResult, config, logger, collector.getMetrics())
+        } catch (error) {
+          const err = error as Error
+          logger.error('API_Meter送信失敗', {
+            message: err.message,
           })
-        } else {
-          try {
-            // 4-2. Normalize（プロバイダー/モデル名の正規化）
-            const normalizer = createNormalizer()
-            const normalizedRecords = normalizer.normalize(dailyRecords)
-
-            logger.info('正規化完了', {
-              recordCount: normalizedRecords.length,
-            })
-
-            // 4-3. Transform（ApiMeterRequest形式への変換）
-            const transformer = createDataTransformer({ logger })
-            const transformResult = transformer.transform(normalizedRecords)
-
-            logger.info('変換完了', {
-              recordCount: transformResult.recordCount,
-            })
-
-            // 4-4. Send（API_Meterへ送信）
-            const httpClient = new HttpClient(logger, config)
-            const spoolManager = new SpoolManager(logger)
-            const sender = new ExternalApiSender(
-              httpClient,
-              spoolManager,
-              { sendErrorNotification: () => Promise.resolve() }, // INotifier: Phase 3-3で実装予定
-              logger,
-              config,
-              collector.getMetrics(),
-            )
-
-            await sender.send(transformResult.request)
-
-            logger.info('API_Meter送信完了', {
-              recordCount: transformResult.recordCount,
-            })
-          } catch (error) {
-            const err = error as Error
-            logger.error('API_Meter送信失敗', {
-              message: err.message,
-              recordCount: dailyRecords.length,
-            })
-            // エラーをスローせず、次回実行時にスプールファイルから再送
-          }
+          // エラーをスローせず、次回実行時にスプールファイルから再送
         }
       } else {
         logger.info('Skipping API_Meter send (per_user/per_app/workspace mode)', {
@@ -249,8 +362,8 @@ export async function main(): Promise<void> {
           aggregation_period: config.DIFY_AGGREGATION_PERIOD,
           output_mode: config.DIFY_OUTPUT_MODE,
           fetch_period: {
-            start: fetchResult.startDate,
-            end: fetchResult.endDate,
+            start: fetchData.fetchResult.startDate,
+            end: fetchData.fetchResult.endDate,
           },
         }
 

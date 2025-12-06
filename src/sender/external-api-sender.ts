@@ -54,8 +54,8 @@ export class ExternalApiSender implements ISender {
       // 2. 200 OKレスポンス: 成功（inserted/updated確認）
       this.handleSuccessResponse(response, request)
     } catch (error) {
-      // 3. エラー処理: メトリクス更新とエラースロー
-      this.handleSendError(error, request)
+      // 3. エラー処理: リトライ上限到達時はスプール保存
+      await this.handleSendErrorWithSpool(error, request)
       throw error
     }
   }
@@ -89,13 +89,13 @@ export class ExternalApiSender implements ISender {
   }
 
   /**
-   * 送信エラーのハンドリング
-   * ステータスコード別にエラーメッセージを詳細化
+   * 送信エラーのハンドリング（スプール保存付き）
+   * リトライ上限到達時はスプールファイルへ保存
    *
    * @param error - エラーオブジェクト
    * @param request - API_Meterリクエスト
    */
-  private handleSendError(error: unknown, request: ApiMeterRequest): void {
+  private async handleSendErrorWithSpool(error: unknown, request: ApiMeterRequest): Promise<void> {
     const recordCount = request.records.length
     this.metrics.sendFailed += 1
 
@@ -104,17 +104,46 @@ export class ExternalApiSender implements ISender {
         recordCount,
         error: error instanceof Error ? error.message : String(error),
       })
+
+      // リトライ上限到達時はスプール保存
+      await this.saveToSpoolOnError(request)
       return
     }
 
     const status = error.response?.status
     const errorMessage = error.message
+    const retryCount = error.config?.['axios-retry']?.retryCount
 
     this.logger.error(`Failed to send ${recordCount} records: ${errorMessage}`, {
       recordCount,
       status,
       message: errorMessage,
+      retryCount,
     })
+
+    // リトライ上限到達時はスプール保存
+    await this.saveToSpoolOnError(request)
+  }
+
+  /**
+   * リトライ上限到達時のスプール保存
+   * エラー時にスプールファイルへ保存し、次回実行時に再送を試行
+   *
+   * @param request - API_Meterリクエスト
+   */
+  private async saveToSpoolOnError(request: ApiMeterRequest): Promise<void> {
+    try {
+      const filename = await this._spoolManager.save(request)
+      this.logger.info('Saved to spool file for retry', {
+        filename,
+        recordCount: request.records.length,
+      })
+    } catch (spoolError) {
+      this.logger.error('Failed to save to spool file', {
+        error: spoolError instanceof Error ? spoolError.message : String(spoolError),
+        recordCount: request.records.length,
+      })
+    }
   }
 
   // Note: resendFailedFile(), resendSpooled(), calculateBatchKey(), etc.
