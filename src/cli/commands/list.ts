@@ -38,8 +38,26 @@ export function createListCommand(deps: CliDependencies): Command {
       // Note: SpoolManager returns SpoolFile[] but we cast to unknown for backward compatibility
       const files = (await spoolManager.listFailedFiles()) as unknown as Array<{
         batchIdempotencyKey?: string
-        records?: Array<{ date: string; app_id: string; app_name: string; token_count: number; total_price: string; currency: string; idempotency_key: string; transformed_at: string }>
-        data?: Array<{ date: string; app_id: string; app_name: string; token_count: number; total_price: string; currency: string; idempotency_key: string; transformed_at: string }>
+        records?: Array<{
+          date: string
+          app_id: string
+          app_name: string
+          token_count: number
+          total_price: string
+          currency: string
+          idempotency_key: string
+          transformed_at: string
+        }>
+        data?: Array<{
+          date: string
+          app_id: string
+          app_name: string
+          token_count: number
+          total_price: string
+          currency: string
+          idempotency_key: string
+          transformed_at: string
+        }>
         firstAttempt?: string
         createdAt: string
         retryCount: number

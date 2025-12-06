@@ -205,7 +205,10 @@ describe('listコマンド統合テスト (新形式)', { concurrent: false }, (
 
   describe('エラーハンドリング', () => {
     it('破損したJSONファイルはスキップされる', async () => {
-      await fs.writeFile(`${testFailedDir}/failed_20250120T100000000Z_corrupted.json`, 'invalid json {')
+      await fs.writeFile(
+        `${testFailedDir}/failed_20250120T100000000Z_corrupted.json`,
+        'invalid json {',
+      )
       const validFile = createTestSpoolFile()
       await saveTestFailedFile(validFile, 'failed_20250120T110000000Z_valid.json')
 

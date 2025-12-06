@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createDataTransformer,
-  type TransformerDeps,
   type TokenCostInputRecord,
+  type TransformerDeps,
 } from '../../../src/transformer/data-transformer.js'
 
 describe('createDataTransformer', () => {

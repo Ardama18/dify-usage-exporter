@@ -9,9 +9,9 @@ import type { AggregatedModelRecord } from '../../aggregator/usage-aggregator.js
 import { createLogger } from '../../logger/winston-logger.js'
 import type { INormalizer } from '../../normalizer/normalizer.js'
 import { createNormalizer } from '../../normalizer/normalizer.js'
-import type { ApiMeterRequest } from '../../types/api-meter-schema.js'
 import type { TransformResult } from '../../transformer/data-transformer.js'
 import { createDataTransformer } from '../../transformer/data-transformer.js'
+import type { ApiMeterRequest } from '../../types/api-meter-schema.js'
 
 describe('Data Flow Integration Test', () => {
   let normalizer: INormalizer

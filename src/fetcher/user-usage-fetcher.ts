@@ -5,9 +5,9 @@
  * アプリ → 会話 → メッセージ の階層でデータを取得し、ユーザー別に集計。
  */
 
-import type { DifyApiClient, DifyApp } from './dify-api-client.js'
 import type { Logger } from '../logger/winston-logger.js'
 import type { DifyConversation, DifyMessage } from '../types/dify-usage.js'
+import type { DifyApiClient, DifyApp } from './dify-api-client.js'
 
 /**
  * ユーザー別使用量レコード（メッセージ単位）

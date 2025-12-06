@@ -392,7 +392,8 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
         }
 
         // 期間外のデータが出始めたら早期終了（降順前提）
-        if (params.start && response.data.data.some((conv) => conv.created_at < params.start!)) {
+        const startTime = params.start
+        if (startTime && response.data.data.some((conv) => conv.created_at < startTime)) {
           break
         }
 
@@ -478,7 +479,8 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
         }
 
         // 期間外のデータが出始めたら早期終了（降順前提）
-        if (params.start && response.data.data.some((run) => run.created_at < params.start!)) {
+        const startTime = params.start
+        if (startTime && response.data.data.some((run) => run.created_at < startTime)) {
           break
         }
 

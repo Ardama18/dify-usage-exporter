@@ -9,7 +9,7 @@
  */
 
 import { promises as fs } from 'node:fs'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Logger } from '../../../logger/winston-logger.js'
 import { SpoolManager } from '../../../sender/spool-manager.js'
 import type { ApiMeterRequest } from '../../../types/api-meter-schema.js'

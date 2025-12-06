@@ -7,7 +7,6 @@
 import { promises as fs } from 'node:fs'
 import { Command } from 'commander'
 import type { CliDependencies } from '../bootstrap.js'
-import type { ResendResult, ResendSummary } from '../types.js'
 
 /**
  * resendコマンドを作成
@@ -16,7 +15,7 @@ import type { ResendResult, ResendSummary } from '../types.js'
  * @returns Commander Command
  */
 export function createResendCommand(deps: CliDependencies): Command {
-  const { spoolManager, externalApiSender } = deps
+  const { spoolManager } = deps
 
   const command = new Command('resend')
     .description('Resend failed files to external API')
@@ -28,8 +27,26 @@ export function createResendCommand(deps: CliDependencies): Command {
         // Note: SpoolManager returns SpoolFile[] but we cast to unknown for backward compatibility
         const files = (await spoolManager.listFailedFiles()) as unknown as Array<{
           batchIdempotencyKey?: string
-          records?: Array<{ date: string; app_id: string; app_name: string; token_count: number; total_price: string; currency: string; idempotency_key: string; transformed_at: string }>
-          data?: Array<{ date: string; app_id: string; app_name: string; token_count: number; total_price: string; currency: string; idempotency_key: string; transformed_at: string }>
+          records?: Array<{
+            date: string
+            app_id: string
+            app_name: string
+            token_count: number
+            total_price: string
+            currency: string
+            idempotency_key: string
+            transformed_at: string
+          }>
+          data?: Array<{
+            date: string
+            app_id: string
+            app_name: string
+            token_count: number
+            total_price: string
+            currency: string
+            idempotency_key: string
+            transformed_at: string
+          }>
           firstAttempt?: string
           createdAt: string
           retryCount: number
@@ -47,7 +64,9 @@ export function createResendCommand(deps: CliDependencies): Command {
         for (let i = 0; i < files.length; i++) {
           const file = files[i]
           const records = file.records ?? file.data ?? []
-          const firstAttempt = (file.firstAttempt ?? file.createdAt).substring(0, 19).replace('T', ' ')
+          const firstAttempt = (file.firstAttempt ?? file.createdAt)
+            .substring(0, 19)
+            .replace('T', ' ')
           const batchKey = file.batchIdempotencyKey ?? 'unknown'
           console.log(
             `  ${i + 1}. failed_*_${batchKey}.json (${records.length} records, first attempt: ${firstAttempt})`,
@@ -69,8 +88,26 @@ export function createResendCommand(deps: CliDependencies): Command {
         // Note: SpoolManager returns SpoolFile | null but we cast to unknown for backward compatibility
         const spoolFile = (await spoolManager.getFailedFile(filename)) as unknown as {
           batchIdempotencyKey?: string
-          records?: Array<{ date: string; app_id: string; app_name: string; token_count: number; total_price: string; currency: string; idempotency_key: string; transformed_at: string }>
-          data?: Array<{ date: string; app_id: string; app_name: string; token_count: number; total_price: string; currency: string; idempotency_key: string; transformed_at: string }>
+          records?: Array<{
+            date: string
+            app_id: string
+            app_name: string
+            token_count: number
+            total_price: string
+            currency: string
+            idempotency_key: string
+            transformed_at: string
+          }>
+          data?: Array<{
+            date: string
+            app_id: string
+            app_name: string
+            token_count: number
+            total_price: string
+            currency: string
+            idempotency_key: string
+            transformed_at: string
+          }>
           firstAttempt?: string
           createdAt: string
           retryCount: number
@@ -109,8 +146,26 @@ export function createResendCommand(deps: CliDependencies): Command {
         // Note: SpoolManager returns SpoolFile[] but we cast to unknown for backward compatibility
         const files = (await spoolManager.listFailedFiles()) as unknown as Array<{
           batchIdempotencyKey?: string
-          records?: Array<{ date: string; app_id: string; app_name: string; token_count: number; total_price: string; currency: string; idempotency_key: string; transformed_at: string }>
-          data?: Array<{ date: string; app_id: string; app_name: string; token_count: number; total_price: string; currency: string; idempotency_key: string; transformed_at: string }>
+          records?: Array<{
+            date: string
+            app_id: string
+            app_name: string
+            token_count: number
+            total_price: string
+            currency: string
+            idempotency_key: string
+            transformed_at: string
+          }>
+          data?: Array<{
+            date: string
+            app_id: string
+            app_name: string
+            token_count: number
+            total_price: string
+            currency: string
+            idempotency_key: string
+            transformed_at: string
+          }>
           firstAttempt?: string
           createdAt: string
           retryCount: number
@@ -124,17 +179,10 @@ export function createResendCommand(deps: CliDependencies): Command {
 
         console.log('Resending all failed files...')
 
-        const summary: ResendSummary = {
-          successful: [],
-          failed: [],
-          totalRecords: 0,
-        }
-
         // data/failed/ディレクトリ内のファイルを取得してマッピング
         const failedDir = 'data/failed'
-        let fileNames: string[] = []
         try {
-          fileNames = await fs.readdir(failedDir)
+          await fs.readdir(failedDir)
         } catch {
           console.log('No failed files directory')
           return

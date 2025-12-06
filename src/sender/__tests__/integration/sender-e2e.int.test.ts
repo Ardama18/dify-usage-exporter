@@ -177,9 +177,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
   describe('Happy Path: 送信成功', () => {
     it('should send records successfully with 200 response', async () => {
       // Arrange: モックAPI（200レスポンス）
-      nock(API_BASE_URL)
-        .post('/v1/usage')
-        .reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // Act: 送信実行
       await sender.send(testRequest)
@@ -191,9 +189,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
 
     it('should send records successfully with 201 response', async () => {
       // Arrange: モックAPI（201レスポンス）
-      nock(API_BASE_URL)
-        .post('/v1/usage')
-        .reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // Act: 送信実行
       await sender.send(testRequest)
@@ -225,9 +221,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
     it('should retry on 500 error and succeed', async () => {
       // Arrange: モックAPI（1回目: 500、2回目: 成功）
       nock(API_BASE_URL).post('/v1/usage').reply(500, { error: 'Internal Server Error' })
-      nock(API_BASE_URL)
-        .post('/v1/usage')
-        .reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // Act: 送信実行
       await sender.send(testRequest)
@@ -240,9 +234,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
     it('should retry on 429 error and succeed', async () => {
       // Arrange: モックAPI（1回目: 429、2回目: 成功）
       nock(API_BASE_URL).post('/v1/usage').reply(429, { error: 'Too Many Requests' })
-      nock(API_BASE_URL)
-        .post('/v1/usage')
-        .reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // Act: 送信実行
       await sender.send(testRequest)
@@ -298,10 +290,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
   describe.skip('スプール再送フロー: スプール保存 → 再送成功', () => {
     it('should resend spooled files successfully', async () => {
       // Step 1: スプール保存（リトライ上限）
-      nock(API_BASE_URL)
-        .post('/v1/usage')
-        .times(4)
-        .reply(500, { error: 'Internal Server Error' })
+      nock(API_BASE_URL).post('/v1/usage').times(4).reply(500, { error: 'Internal Server Error' })
 
       await sender.send(testRequest)
 
@@ -310,9 +299,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
       expect(spoolExists).toBe(true)
 
       // Step 2: 再送実行（成功）
-      nock(API_BASE_URL)
-        .post('/v1/usage')
-        .reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // biome-ignore lint/suspicious/noExplicitAny: スプール機能は未実装のためskip
       await (sender as any).resendSpooled()
@@ -324,18 +311,12 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
 
     it('should increment retryCount on resend failure', async () => {
       // Step 1: スプール保存
-      nock(API_BASE_URL)
-        .post('/v1/usage')
-        .times(4)
-        .reply(500, { error: 'Internal Server Error' })
+      nock(API_BASE_URL).post('/v1/usage').times(4).reply(500, { error: 'Internal Server Error' })
 
       await sender.send(testRequest)
 
       // Step 2: 再送失敗（retryCountインクリメント）
-      nock(API_BASE_URL)
-        .post('/v1/usage')
-        .times(4)
-        .reply(500, { error: 'Still failing' })
+      nock(API_BASE_URL).post('/v1/usage').times(4).reply(500, { error: 'Still failing' })
 
       // biome-ignore lint/suspicious/noExplicitAny: スプール機能は未実装のためskip
       await (sender as any).resendSpooled()
@@ -355,10 +336,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
 
     it('should move to failed after max spool retries', async () => {
       // Step 1: スプール保存
-      nock(API_BASE_URL)
-        .post('/v1/usage')
-        .times(4)
-        .reply(500, { error: 'Initial failure' })
+      nock(API_BASE_URL).post('/v1/usage').times(4).reply(500, { error: 'Initial failure' })
 
       await sender.send(testRequest)
 
@@ -370,7 +348,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
           .reply(500, { error: `Failure ${i + 1}` })
 
         // biome-ignore lint/suspicious/noExplicitAny: スプール機能は未実装のためskip
-      await (sender as any).resendSpooled()
+        await (sender as any).resendSpooled()
       }
 
       // スプールファイルが削除され、failedファイルが作成されている
@@ -392,10 +370,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
 
     it('should send notification when moved to failed', async () => {
       // Step 1: スプール保存
-      nock(API_BASE_URL)
-        .post('/v1/usage')
-        .times(4)
-        .reply(500, { error: 'Initial failure' })
+      nock(API_BASE_URL).post('/v1/usage').times(4).reply(500, { error: 'Initial failure' })
 
       await sender.send(testRequest)
 
@@ -407,7 +382,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
           .reply(500, { error: `Failure ${i + 1}` })
 
         // biome-ignore lint/suspicious/noExplicitAny: スプール機能は未実装のためskip
-      await (sender as any).resendSpooled()
+        await (sender as any).resendSpooled()
       }
 
       // 通知が送信されたことを確認
@@ -429,10 +404,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
       )
 
       // Step 1: スプール保存
-      nock(API_BASE_URL)
-        .post('/v1/usage')
-        .times(4)
-        .reply(500, { error: 'Initial failure' })
+      nock(API_BASE_URL).post('/v1/usage').times(4).reply(500, { error: 'Initial failure' })
 
       await sender.send(testRequest)
 
@@ -444,7 +416,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
           .reply(500, { error: `Failure ${i + 1}` })
 
         // biome-ignore lint/suspicious/noExplicitAny: スプール機能は未実装のためskip
-      await (sender as any).resendSpooled()
+        await (sender as any).resendSpooled()
       }
 
       // 通知送信は試行されている
@@ -486,15 +458,22 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
       const multipleRecords: ApiMeterRequest = {
         ...testRequest,
         records: [
-          { ...testRequest.records[0], metadata: { ...testRequest.records[0].metadata, source_event_id: 'key-1' } },
-          { ...testRequest.records[0], metadata: { ...testRequest.records[0].metadata, source_event_id: 'key-2' } },
-          { ...testRequest.records[0], metadata: { ...testRequest.records[0].metadata, source_event_id: 'key-3' } },
+          {
+            ...testRequest.records[0],
+            metadata: { ...testRequest.records[0].metadata, source_event_id: 'key-1' },
+          },
+          {
+            ...testRequest.records[0],
+            metadata: { ...testRequest.records[0].metadata, source_event_id: 'key-2' },
+          },
+          {
+            ...testRequest.records[0],
+            metadata: { ...testRequest.records[0].metadata, source_event_id: 'key-3' },
+          },
         ],
       }
 
-      nock(API_BASE_URL)
-        .post('/v1/usage')
-        .reply(200, { inserted: 3, updated: 0, total: 3 })
+      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 3, updated: 0, total: 3 })
 
       // Act: 送信実行
       await sender.send(multipleRecords)

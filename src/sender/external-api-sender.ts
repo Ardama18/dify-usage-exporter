@@ -37,7 +37,7 @@ export class ExternalApiSender implements ISender {
     private readonly _notifier: INotifier, // Task 3-3で使用予定
     private readonly logger: Logger,
     private readonly _config: EnvConfig, // Task 3-3で使用予定
-    private readonly metrics: ExecutionMetrics,
+    private readonly _metrics: ExecutionMetrics, // Task 3-3で使用予定
   ) {}
 
   /**
@@ -69,7 +69,7 @@ export class ExternalApiSender implements ISender {
    */
   private handleSuccessResponse(response: AxiosResponse, request: ApiMeterRequest): void {
     const recordCount = request.records.length
-    this.metrics.sendSuccess += recordCount
+    this._metrics.sendSuccess += recordCount
 
     // inserted/updatedが含まれる場合は詳細ログ
     const data = response.data as Partial<ApiMeterResponse>
@@ -97,7 +97,7 @@ export class ExternalApiSender implements ISender {
    */
   private async handleSendErrorWithSpool(error: unknown, request: ApiMeterRequest): Promise<void> {
     const recordCount = request.records.length
-    this.metrics.sendFailed += 1
+    this._metrics.sendFailed += 1
 
     if (!(error instanceof AxiosError)) {
       this.logger.error(`Failed to send ${recordCount} records: ${String(error)}`, {
