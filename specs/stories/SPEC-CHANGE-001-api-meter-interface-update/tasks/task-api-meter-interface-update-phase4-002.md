@@ -29,14 +29,14 @@ based_on: specs/stories/SPEC-CHANGE-001-api-meter-interface-update/plan.md
 
 ## 対象ファイル
 
-- [ ] test/integration/api-meter-integration.int.test.ts（新規作成）
+- [x] test/integration/api-meter-integration.int.test.ts（新規作成）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
-- [ ] モックAPIサーバーの準備
-- [ ] 統合テストファイル作成
-- [ ] テスト実行して失敗を確認
+- [x] モックAPIサーバーの準備
+- [x] 統合テストファイル作成
+- [x] テスト実行して失敗を確認
 
 ### 2. Green Phase
 
@@ -65,14 +65,14 @@ describe('API_Meter Integration', () => {
 ```
 
 ### 3. Refactor Phase
-- [ ] テストの可読性向上
+- [x] テストの可読性向上
 
 ## 完了条件
 
-- [ ] 統合テストが全てパス
-- [ ] per_model/allモードでのデータフローが正常動作
-- [ ] エラーハンドリングが正しく動作（リトライ、スプール保存）
-- [ ] L3（E2Eテスト）レベルの確認完了
+- [x] 統合テストが全てパス
+- [x] per_model/allモードでのデータフローが正常動作
+- [x] エラーハンドリングが正しく動作（リトライ、スプール保存）
+- [x] L3（E2Eテスト）レベルの確認完了
 
 ## 参考資料
 
