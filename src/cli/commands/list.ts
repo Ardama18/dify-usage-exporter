@@ -13,7 +13,10 @@ import type { FailedFileInfo } from '../types.js'
  *
  * ファイル名パターン: failed_{timestamp}_{batchKey}.json
  */
-function extractFilenameFromBatchKey(batchKey: string): string {
+function extractFilenameFromBatchKey(batchKey: string | undefined): string {
+  if (!batchKey) {
+    return 'failed_*.json'
+  }
   // 実際のファイル名は SpoolFile からは取得できないため、
   // batchIdempotencyKey を使って識別情報を提供
   return `failed_*_${batchKey}.json`
@@ -32,7 +35,16 @@ export function createListCommand(deps: CliDependencies): Command {
     .description('List failed files in data/failed/')
     .option('--json', 'Output as JSON')
     .action(async (options: { json?: boolean }) => {
-      const files = await spoolManager.listFailedFiles()
+      // Note: SpoolManager returns SpoolFile[] but we cast to unknown for backward compatibility
+      const files = (await spoolManager.listFailedFiles()) as unknown as Array<{
+        batchIdempotencyKey?: string
+        records?: Array<{ date: string; app_id: string; app_name: string; token_count: number; total_price: string; currency: string; idempotency_key: string; transformed_at: string }>
+        data?: Array<{ date: string; app_id: string; app_name: string; token_count: number; total_price: string; currency: string; idempotency_key: string; transformed_at: string }>
+        firstAttempt?: string
+        createdAt: string
+        retryCount: number
+        lastError?: string
+      }>
 
       if (files.length === 0) {
         if (options.json) {
@@ -50,15 +62,25 @@ export function createListCommand(deps: CliDependencies): Command {
       }
 
       // ファイル情報を整形
-      const fileInfoList: FailedFileInfo[] = files.map((file) => ({
-        filename: extractFilenameFromBatchKey(file.batchIdempotencyKey),
-        recordCount: file.records.length,
-        firstAttempt: file.firstAttempt,
-        lastError: file.lastError,
-      }))
+      const fileInfoList: FailedFileInfo[] = files.map((file) => {
+        // LegacySpoolFileからrecords配列を取得（recordsまたはdataフィールド）
+        const records = file.records ?? file.data ?? []
+        const firstAttempt = file.firstAttempt ?? file.createdAt
+        const lastError = file.lastError ?? 'Unknown error'
+
+        return {
+          filename: extractFilenameFromBatchKey(file.batchIdempotencyKey),
+          recordCount: records.length,
+          firstAttempt,
+          lastError,
+        }
+      })
 
       const totalFiles = files.length
-      const totalRecords = files.reduce((sum, file) => sum + file.records.length, 0)
+      const totalRecords = files.reduce((sum, file) => {
+        const records = file.records ?? file.data ?? []
+        return sum + records.length
+      }, 0)
 
       if (options.json) {
         // JSON出力モード

@@ -732,9 +732,7 @@ describe('DifyApiClient', () => {
 
       const getMock = vi.fn().mockResolvedValue({
         data: {
-          data: [
-            { date: '2024-01-15', token_count: 100, total_price: '0.001', currency: 'USD' },
-          ],
+          data: [{ date: '2024-01-15', token_count: 100, total_price: '0.001', currency: 'USD' }],
         },
       })
 

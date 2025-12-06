@@ -8,7 +8,10 @@ import {
 } from './aggregator/usage-aggregator.js'
 import { loadConfig } from './config/env-config.js'
 import { createDifyApiClient } from './fetcher/dify-api-client.js'
-import { createDifyUsageFetcher, type FetchedTokenCostRecord } from './fetcher/dify-usage-fetcher.js'
+import {
+  createDifyUsageFetcher,
+  type FetchedTokenCostRecord,
+} from './fetcher/dify-usage-fetcher.js'
 import { createModelUsageFetcher } from './fetcher/model-usage-fetcher.js'
 import { createUserUsageFetcher } from './fetcher/user-usage-fetcher.js'
 import { createLogger } from './logger/winston-logger.js'
@@ -82,7 +85,7 @@ export async function main(): Promise<void> {
       const periodRange = calculateDateRange(
         config.DIFY_FETCH_PERIOD,
         config.DIFY_FETCH_START_DATE,
-        config.DIFY_FETCH_END_DATE
+        config.DIFY_FETCH_END_DATE,
       )
 
       // 3. ユーザー別使用量を取得（per_user/allモードの場合）
@@ -151,7 +154,7 @@ export async function main(): Promise<void> {
         config.DIFY_AGGREGATION_PERIOD,
         config.DIFY_OUTPUT_MODE,
         rawUserRecords,
-        rawModelRecords
+        rawModelRecords,
       )
 
       const totalAggregatedRecords =

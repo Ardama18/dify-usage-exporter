@@ -80,7 +80,7 @@ function createTestConfig(overrides: Partial<EnvConfig> = {}): EnvConfig {
     DIFY_FETCH_RETRY_COUNT: 3,
     DIFY_FETCH_RETRY_DELAY_MS: 1000,
     WATERMARK_FILE_PATH: 'data/watermark.json',
-      WATERMARK_ENABLED: true,
+    WATERMARK_ENABLED: true,
     EXTERNAL_API_TIMEOUT_MS: 30000,
     MAX_RETRIES: 3,
     MAX_SPOOL_RETRIES: 10,
@@ -177,7 +177,7 @@ describe('FR-1: Dify API認証 統合テスト', () => {
       },
     }
     vi.mocked(axios.create).mockReturnValue(
-      axiosInstance as unknown as ReturnType<typeof axios.create>
+      axiosInstance as unknown as ReturnType<typeof axios.create>,
     )
 
     const client = createDifyApiClient({ config, logger })
@@ -257,7 +257,7 @@ describe('FR-2: アプリ一覧・トークンコスト取得 統合テスト', 
     expect(result.data).toHaveLength(1)
     expect(getMock).toHaveBeenCalledWith(
       '/console/api/apps/app-123/statistics/token-costs',
-      expect.any(Object)
+      expect.any(Object),
     )
   })
 
@@ -285,7 +285,7 @@ describe('FR-2: アプリ一覧・トークンコスト取得 統合テスト', 
     expect(axios.create).toHaveBeenCalledWith(
       expect.objectContaining({
         timeout: 30000,
-      })
+      }),
     )
   })
 
@@ -314,7 +314,7 @@ describe('FR-2: アプリ一覧・トークンコスト取得 統合テスト', 
     expect(axios.create).toHaveBeenCalledWith(
       expect.objectContaining({
         timeout: 60000,
-      })
+      }),
     )
   })
 })
@@ -637,7 +637,7 @@ describe('FR-5: エラーリトライ 統合テスト', () => {
       },
     }
     vi.mocked(axios.create).mockReturnValue(
-      axiosInstance as unknown as ReturnType<typeof axios.create>
+      axiosInstance as unknown as ReturnType<typeof axios.create>,
     )
 
     const client = createDifyApiClient({ config, logger })
@@ -664,7 +664,7 @@ describe('FR-5: エラーリトライ 統合テスト', () => {
       },
     }
     vi.mocked(axios.create).mockReturnValue(
-      axiosInstance as unknown as ReturnType<typeof axios.create>
+      axiosInstance as unknown as ReturnType<typeof axios.create>,
     )
 
     const client = createDifyApiClient({ config, logger })
@@ -688,7 +688,7 @@ describe('FR-5: エラーリトライ 統合テスト', () => {
       },
     }
     vi.mocked(axios.create).mockReturnValue(
-      axiosInstance as unknown as ReturnType<typeof axios.create>
+      axiosInstance as unknown as ReturnType<typeof axios.create>,
     )
 
     // Act - fetchAppsを呼ぶと内部でaxios-retryが設定される
@@ -840,7 +840,7 @@ describe('FR-6: バリデーション 統合テスト', () => {
     // Assert
     expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining('バリデーションエラー'),
-      expect.any(Object)
+      expect.any(Object),
     )
   })
 })
@@ -906,7 +906,7 @@ describe('FR-7: ログ出力 統合テスト', () => {
     // Assert
     expect(logger.info).toHaveBeenCalledWith(
       expect.stringContaining('取得開始'),
-      expect.any(Object)
+      expect.any(Object),
     )
   })
 
@@ -946,7 +946,7 @@ describe('FR-7: ログ出力 統合テスト', () => {
         success: expect.any(Boolean),
         totalRecords: expect.any(Number),
         durationMs: expect.any(Number),
-      })
+      }),
     )
   })
 

@@ -205,7 +205,7 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
       {
         headers: { 'Content-Type': 'application/json' },
         timeout: config.DIFY_FETCH_TIMEOUT_MS,
-      }
+      },
     )
 
     // Cookie JarからCSRFトークンを取得
@@ -249,7 +249,7 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
             'Content-Type': 'application/json',
             'User-Agent': 'dify-usage-exporter/1.0.0',
           },
-        })
+        }),
       )
 
       // リトライ設定（ADR 002, ADR 007準拠）
@@ -313,7 +313,7 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
             url: error.config?.url,
           })
           throw error
-        }
+        },
       )
     }
 
@@ -350,7 +350,7 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
             start: params.start,
             end: params.end,
           },
-        }
+        },
       )
       return response.data
     },
@@ -372,7 +372,7 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
 
         const response = await authenticatedClient.get<DifyConversationsResponse>(
           `/console/api/apps/${params.appId}/chat-conversations`,
-          { params: queryParams }
+          { params: queryParams },
         )
 
         // 期間フィルタ（start/endが指定されている場合）
@@ -422,7 +422,7 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
 
         const response = await authenticatedClient.get<DifyMessagesResponse>(
           `/console/api/apps/${params.appId}/chat-messages`,
-          { params: queryParams }
+          { params: queryParams },
         )
 
         messages.push(...response.data.data)
@@ -458,7 +458,7 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
 
         const response = await authenticatedClient.get<DifyWorkflowRunsResponse>(
           `/console/api/apps/${params.appId}/workflow-runs`,
-          { params: queryParams }
+          { params: queryParams },
         )
 
         // 期間フィルタ（start/endが指定されている場合）
@@ -486,7 +486,10 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
         lastId = response.data.data[response.data.data.length - 1].id
       }
 
-      logger.info('ワークフロー実行一覧取得完了', { appId: params.appId, count: workflowRuns.length })
+      logger.info('ワークフロー実行一覧取得完了', {
+        appId: params.appId,
+        count: workflowRuns.length,
+      })
       return workflowRuns
     },
 
@@ -494,13 +497,11 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
       const authenticatedClient = await getAuthenticatedClient()
 
       const response = await authenticatedClient.get<DifyNodeExecutionsResponse>(
-        `/console/api/apps/${params.appId}/workflow-runs/${params.workflowRunId}/node-executions`
+        `/console/api/apps/${params.appId}/workflow-runs/${params.workflowRunId}/node-executions`,
       )
 
       // レスポンス形式が配列の場合とdataプロパティの場合に対応
-      const nodeExecutions = Array.isArray(response.data)
-        ? response.data
-        : response.data.data || []
+      const nodeExecutions = Array.isArray(response.data) ? response.data : response.data.data || []
 
       logger.debug('ノード実行詳細取得完了', {
         appId: params.appId,

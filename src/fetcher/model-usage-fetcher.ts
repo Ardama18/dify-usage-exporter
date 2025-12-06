@@ -129,7 +129,7 @@ function extractModelUsageFromNodeExecution(
   node: DifyNodeExecution,
   appId: string,
   appName: string,
-  workflowRunId: string
+  workflowRunId: string,
 ): ModelUsageRecord | null {
   // LLMノード以外はスキップ
   if (node.node_type !== 'llm') {
@@ -247,7 +247,7 @@ export function createModelUsageFetcher(deps: ModelUsageFetcherDeps): ModelUsage
         // 2. ワークフロー対応アプリのみフィルタ
         const workflowApps = apps.filter(
           (app: DifyApp) =>
-            app.mode === 'workflow' || app.mode === 'advanced-chat' || app.mode === 'agent-chat'
+            app.mode === 'workflow' || app.mode === 'advanced-chat' || app.mode === 'agent-chat',
         )
         logger.info('ワークフローアプリ数', { count: workflowApps.length })
 

@@ -6,7 +6,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SpoolFile } from '../../../types/spool.js'
+import type { LegacySpoolFile } from '../../../types/spool.js'
 import type { CliDependencies } from '../../bootstrap.js'
 import { createListCommand } from '../../commands/list.js'
 
@@ -48,8 +48,8 @@ describe('createListCommand', () => {
   })
 
   it('listFailedFiles()を呼び出す', async () => {
-    const mockFiles: SpoolFile[] = []
-    vi.mocked(mockDeps.spoolManager.listFailedFiles).mockResolvedValue(mockFiles)
+    const mockFiles: LegacySpoolFile[] = []
+    vi.mocked(mockDeps.spoolManager.listFailedFiles).mockResolvedValue(mockFiles as never)
 
     const command = createListCommand(mockDeps)
     await command.parseAsync([], { from: 'user' })
@@ -67,8 +67,9 @@ describe('createListCommand', () => {
   })
 
   it('ファイル一覧をフォーマット表示', async () => {
-    const mockFiles: SpoolFile[] = [
+    const mockFiles: LegacySpoolFile[] = [
       {
+        version: '1.0.0',
         batchIdempotencyKey: 'abc123',
         records: [
           {
@@ -83,10 +84,12 @@ describe('createListCommand', () => {
           },
         ],
         firstAttempt: '2025-01-20T10:30:00.000Z',
+        createdAt: '2025-01-20T10:30:00.000Z',
         retryCount: 10,
         lastError: 'Timeout',
       },
       {
+        version: '1.0.0',
         batchIdempotencyKey: 'def456',
         records: [
           {
@@ -111,11 +114,12 @@ describe('createListCommand', () => {
           },
         ],
         firstAttempt: '2025-01-21T14:20:00.000Z',
+        createdAt: '2025-01-21T14:20:00.000Z',
         retryCount: 10,
         lastError: '500 Error',
       },
     ]
-    vi.mocked(mockDeps.spoolManager.listFailedFiles).mockResolvedValue(mockFiles)
+    vi.mocked(mockDeps.spoolManager.listFailedFiles).mockResolvedValue(mockFiles as never)
 
     const command = createListCommand(mockDeps)
     await command.parseAsync([], { from: 'user' })
@@ -127,8 +131,9 @@ describe('createListCommand', () => {
   })
 
   it('--jsonオプションでJSON出力', async () => {
-    const mockFiles: SpoolFile[] = [
+    const mockFiles: LegacySpoolFile[] = [
       {
+        version: '1.0.0',
         batchIdempotencyKey: 'abc123',
         records: [
           {
@@ -143,11 +148,12 @@ describe('createListCommand', () => {
           },
         ],
         firstAttempt: '2025-01-20T10:30:00.000Z',
+        createdAt: '2025-01-20T10:30:00.000Z',
         retryCount: 10,
         lastError: 'Timeout',
       },
     ]
-    vi.mocked(mockDeps.spoolManager.listFailedFiles).mockResolvedValue(mockFiles)
+    vi.mocked(mockDeps.spoolManager.listFailedFiles).mockResolvedValue(mockFiles as never)
 
     const command = createListCommand(mockDeps)
     await command.parseAsync(['--json'], { from: 'user' })

@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import type { NormalizedModelRecord } from '../normalizer/normalizer.js'
 
 /**
  * レコード単位の冪等キー生成パラメータ
@@ -37,4 +38,36 @@ export function generateBatchIdempotencyKey(recordKeys: string[]): string {
   const concatenated = sorted.join(',')
 
   return crypto.createHash('sha256').update(concatenated).digest('hex')
+}
+
+/**
+ * source_event_idを生成する
+ * フォーマット: dify-{usage_date}-{provider}-{model}-{hash12}
+ *
+ * ハッシュ対象データ:
+ * - usage_date: 使用日（YYYY-MM-DD）
+ * - provider: プロバイダー名（正規化済み）
+ * - model: モデル名（正規化済み）
+ * - app_id: DifyアプリケーションID（undefinedの場合は空文字列）
+ * - user_id: ユーザーID（undefinedの場合は空文字列）
+ *
+ * @param record - 正規化されたモデルレコード
+ * @returns source_event_id（例: dify-2025-11-29-anthropic-claude-3-5-sonnet-20241022-a3f2e1b9c4d5）
+ */
+export const generateSourceEventId = (record: NormalizedModelRecord): string => {
+  // ハッシュ計算用のデータを結合
+  // app_id/user_idがundefinedの場合は空文字列を使用
+  const hashInput = [
+    record.usageDate,
+    record.provider,
+    record.model,
+    record.appId ?? '',
+    record.userId ?? '',
+  ].join('|')
+
+  // SHA256ハッシュを生成
+  const hash = crypto.createHash('sha256').update(hashInput, 'utf8').digest('hex').substring(0, 12) // 最初の12文字を使用
+
+  // フォーマット: dify-{usage_date}-{provider}-{model}-{hash12}
+  return `dify-${record.usageDate}-${record.provider}-${record.model}-${hash}`
 }

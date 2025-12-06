@@ -25,7 +25,7 @@ export interface DateRange {
 export function calculateDateRange(
   period: FetchPeriod,
   customStartDate?: string,
-  customEndDate?: string
+  customEndDate?: string,
 ): DateRange {
   const now = new Date()
 
@@ -119,7 +119,9 @@ function getLastWeekRange(now: Date): DateRange {
  */
 function getCustomRange(startDateStr?: string, endDateStr?: string): DateRange {
   if (!startDateStr || !endDateStr) {
-    throw new Error('カスタム期間の場合はDIFY_FETCH_START_DATEとDIFY_FETCH_END_DATEを指定してください')
+    throw new Error(
+      'カスタム期間の場合はDIFY_FETCH_START_DATEとDIFY_FETCH_END_DATEを指定してください',
+    )
   }
 
   const startDate = parseDate(startDateStr)

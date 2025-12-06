@@ -61,7 +61,7 @@ export function createDifyUsageFetcher(deps: DifyUsageFetcherDeps): IFetcher {
         const dateRange = calculateDateRange(
           config.DIFY_FETCH_PERIOD,
           config.DIFY_FETCH_START_DATE,
-          config.DIFY_FETCH_END_DATE
+          config.DIFY_FETCH_END_DATE,
         )
         startDate = dateRange.startDate
         endDate = dateRange.endDate
@@ -199,7 +199,7 @@ function validateAndEnrichRecords(
   records: DifyAppTokenCost[],
   app: DifyApp,
   errors: FetchError[],
-  logger: Logger
+  logger: Logger,
 ): FetchedTokenCostRecord[] {
   const validRecords: FetchedTokenCostRecord[] = []
 

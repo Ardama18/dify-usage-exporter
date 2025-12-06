@@ -332,7 +332,7 @@ describe('DifyUsageFetcher E2Eテスト', () => {
           last_fetched_date: yesterday.toISOString(),
           last_updated_at: yesterday.toISOString(),
         }),
-        { mode: 0o600 }
+        { mode: 0o600 },
       )
 
       const apps = [createTestApp()]
@@ -358,7 +358,7 @@ describe('DifyUsageFetcher E2Eテスト', () => {
           last_fetched_date: oldDate.toISOString(),
           last_updated_at: oldDate.toISOString(),
         }),
-        { mode: 0o600 }
+        { mode: 0o600 },
       )
 
       const apps = [createTestApp()]

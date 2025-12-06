@@ -839,9 +839,11 @@ describe('定期実行スケジューラ - createScheduler()', () => {
   let mockExit: ReturnType<typeof vi.spyOn>
 
   beforeAll(() => {
-    mockExit = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null | undefined) => {
-      throw new Error(`process.exit called with ${code}`)
-    })
+    mockExit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((code?: string | number | null | undefined) => {
+        throw new Error(`process.exit called with ${code}`)
+      })
   })
 
   afterAll(() => {

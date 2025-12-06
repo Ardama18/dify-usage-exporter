@@ -176,10 +176,18 @@ describe('index.ts メトリクス統合', () => {
       }),
     }
 
-    vi.mocked(createDifyApiClient).mockReturnValue(mockDifyClient as ReturnType<typeof createDifyApiClient>)
-    vi.mocked(createWatermarkManager).mockReturnValue(mockWatermarkManager as ReturnType<typeof createWatermarkManager>)
-    vi.mocked(createDifyUsageFetcher).mockReturnValue(mockFetcher as unknown as ReturnType<typeof createDifyUsageFetcher>)
-    vi.mocked(createDataTransformer).mockReturnValue(mockTransformer as ReturnType<typeof createDataTransformer>)
+    vi.mocked(createDifyApiClient).mockReturnValue(
+      mockDifyClient as ReturnType<typeof createDifyApiClient>,
+    )
+    vi.mocked(createWatermarkManager).mockReturnValue(
+      mockWatermarkManager as ReturnType<typeof createWatermarkManager>,
+    )
+    vi.mocked(createDifyUsageFetcher).mockReturnValue(
+      mockFetcher as unknown as ReturnType<typeof createDifyUsageFetcher>,
+    )
+    vi.mocked(createDataTransformer).mockReturnValue(
+      mockTransformer as ReturnType<typeof createDataTransformer>,
+    )
     vi.mocked(axios.post).mockResolvedValue({ status: 200, data: {} })
   })
 

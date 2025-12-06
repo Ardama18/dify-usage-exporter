@@ -138,7 +138,8 @@ describe('DifyUsageFetcher', () => {
       // 順序の確認
       const loadCallOrder = vi.mocked(mockWatermarkManager.load).mock.invocationCallOrder[0]
       const fetchAppsCallOrder = vi.mocked(mockClient.fetchApps).mock.invocationCallOrder[0]
-      const fetchCostsCallOrder = vi.mocked(mockClient.fetchAppTokenCosts).mock.invocationCallOrder[0]
+      const fetchCostsCallOrder = vi.mocked(mockClient.fetchAppTokenCosts).mock
+        .invocationCallOrder[0]
       const updateCallOrder = vi.mocked(mockWatermarkManager.update).mock.invocationCallOrder[0]
 
       expect(loadCallOrder).toBeLessThan(fetchAppsCallOrder)
@@ -236,7 +237,9 @@ describe('DifyUsageFetcher', () => {
 
       vi.mocked(mockClient.fetchAppTokenCosts)
         .mockResolvedValueOnce(createMockTokenCostsResponse([createMockTokenCost()]))
-        .mockResolvedValueOnce(createMockTokenCostsResponse([createMockTokenCost(), createMockTokenCost()]))
+        .mockResolvedValueOnce(
+          createMockTokenCostsResponse([createMockTokenCost(), createMockTokenCost()]),
+        )
         .mockResolvedValueOnce(createMockTokenCostsResponse([createMockTokenCost()]))
 
       fetcher = createDifyUsageFetcher({

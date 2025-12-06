@@ -702,7 +702,7 @@ describe('CLI E2Eテスト', { concurrent: false }, () => {
               app_name: 'Test App',
               token_count: 100,
               currency: 'USD',
-            total_price: '0.001',
+              total_price: '0.001',
               idempotency_key: `key${i}`,
               transformed_at: '2025-01-20T10:30:00.000Z',
             },

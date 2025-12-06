@@ -272,4 +272,230 @@ describe('HttpClient', () => {
       )
     })
   })
+
+  describe('API_Meter新仕様対応（SPEC-CHANGE-001）', () => {
+    describe('Bearer Token認証', () => {
+      it('should use Bearer Token from API_METER_TOKEN', async () => {
+        const apiMeterConfig = {
+          ...mockConfig,
+          EXTERNAL_API_URL: 'https://api-meter.example.com',
+          EXTERNAL_API_TOKEN: 'api-meter-token-xyz',
+        }
+        const apiMeterClient = new HttpClient(mockLogger, apiMeterConfig)
+        const testData = { tenant_id: 'test-tenant', records: [] }
+
+        const scope = nock('https://api-meter.example.com')
+          .post('/v1/usage', testData)
+          .matchHeader('Authorization', 'Bearer api-meter-token-xyz')
+          .reply(200, { success: true })
+
+        await apiMeterClient.post('/v1/usage', testData)
+
+        expect(scope.isDone()).toBe(true)
+      })
+
+      it('should include User-Agent header', async () => {
+        const testData = { usage: 'test-data' }
+
+        const scope = nock('https://api.example.com')
+          .post('/usage', testData)
+          .matchHeader('User-Agent', /^dify-usage-exporter\//)
+          .reply(200, { success: true })
+
+        await httpClient.post('/usage', testData)
+
+        expect(scope.isDone()).toBe(true)
+      })
+    })
+
+    describe('成功ステータス（200, 201, 204）', () => {
+      it('should treat 200 OK as success', async () => {
+        const testData = { usage: 'test-data' }
+
+        nock('https://api.example.com')
+          .post('/usage', testData)
+          .reply(200, { success: true, inserted: 10, updated: 0 })
+
+        const response = await httpClient.post('/usage', testData)
+
+        expect(response.status).toBe(200)
+        expect(response.data).toEqual({ success: true, inserted: 10, updated: 0 })
+      })
+
+      it('should treat 201 Created as success', async () => {
+        const testData = { usage: 'test-data' }
+
+        nock('https://api.example.com').post('/usage', testData).reply(201, { success: true })
+
+        const response = await httpClient.post('/usage', testData)
+
+        expect(response.status).toBe(201)
+      })
+
+      it('should treat 204 No Content as success', async () => {
+        const testData = { usage: 'test-data' }
+
+        nock('https://api.example.com').post('/usage', testData).reply(204)
+
+        const response = await httpClient.post('/usage', testData)
+
+        expect(response.status).toBe(204)
+      })
+    })
+
+    describe('リトライ条件（429, 5xx）', () => {
+      it('should retry on 429 Too Many Requests', async () => {
+        const testData = { usage: 'test-data' }
+
+        nock('https://api.example.com')
+          .post('/usage', testData)
+          .reply(429, { error: 'Rate Limit Exceeded' })
+          .post('/usage', testData)
+          .reply(200, { success: true })
+
+        const response = await httpClient.post('/usage', testData)
+
+        expect(response.status).toBe(200)
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.stringContaining('Retrying'),
+          expect.objectContaining({ status: 429 }),
+        )
+      })
+
+      it('should retry on 500 Internal Server Error', async () => {
+        const testData = { usage: 'test-data' }
+
+        nock('https://api.example.com')
+          .post('/usage', testData)
+          .reply(500, { error: 'Internal Server Error' })
+          .post('/usage', testData)
+          .reply(200, { success: true })
+
+        const response = await httpClient.post('/usage', testData)
+
+        expect(response.status).toBe(200)
+      })
+
+      it('should retry on 503 Service Unavailable', async () => {
+        const testData = { usage: 'test-data' }
+
+        nock('https://api.example.com')
+          .post('/usage', testData)
+          .reply(503, { error: 'Service Unavailable' })
+          .post('/usage', testData)
+          .reply(200, { success: true })
+
+        const response = await httpClient.post('/usage', testData)
+
+        expect(response.status).toBe(200)
+      })
+
+      it('should retry on network error', async () => {
+        const testData = { usage: 'test-data' }
+
+        // 503でネットワークエラーをシミュレート
+        nock('https://api.example.com')
+          .post('/usage', testData)
+          .reply(503)
+          .post('/usage', testData)
+          .reply(200, { success: true })
+
+        const response = await httpClient.post('/usage', testData)
+
+        expect(response.status).toBe(200)
+      })
+    })
+
+    describe('リトライしないケース（400, 401, 403, 404, 422）', () => {
+      it('should not retry on 400 Bad Request', async () => {
+        const testData = { usage: 'test-data' }
+
+        nock('https://api.example.com')
+          .post('/usage', testData)
+          .reply(400, { error: 'Bad Request' })
+
+        await expect(httpClient.post('/usage', testData)).rejects.toThrow()
+        expect(mockLogger.warn).not.toHaveBeenCalled()
+      })
+
+      it('should not retry on 401 Unauthorized', async () => {
+        const testData = { usage: 'test-data' }
+
+        nock('https://api.example.com')
+          .post('/usage', testData)
+          .reply(401, { error: 'Unauthorized' })
+
+        await expect(httpClient.post('/usage', testData)).rejects.toThrow()
+        expect(mockLogger.warn).not.toHaveBeenCalled()
+      })
+
+      it('should not retry on 403 Forbidden', async () => {
+        const testData = { usage: 'test-data' }
+
+        nock('https://api.example.com').post('/usage', testData).reply(403, { error: 'Forbidden' })
+
+        await expect(httpClient.post('/usage', testData)).rejects.toThrow()
+        expect(mockLogger.warn).not.toHaveBeenCalled()
+      })
+
+      it('should not retry on 404 Not Found', async () => {
+        const testData = { usage: 'test-data' }
+
+        nock('https://api.example.com').post('/usage', testData).reply(404, { error: 'Not Found' })
+
+        await expect(httpClient.post('/usage', testData)).rejects.toThrow()
+        expect(mockLogger.warn).not.toHaveBeenCalled()
+      })
+
+      it('should not retry on 422 Unprocessable Entity', async () => {
+        const testData = { usage: 'test-data' }
+
+        nock('https://api.example.com')
+          .post('/usage', testData)
+          .reply(422, { error: 'Validation Error' })
+
+        await expect(httpClient.post('/usage', testData)).rejects.toThrow()
+        expect(mockLogger.warn).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('Retry-Afterヘッダーの尊重', () => {
+      it('should respect Retry-After header when present', async () => {
+        const testData = { usage: 'test-data' }
+        const retryAfterSeconds = 2
+
+        nock('https://api.example.com')
+          .post('/usage', testData)
+          .reply(429, { error: 'Rate Limit' }, { 'Retry-After': retryAfterSeconds.toString() })
+          .post('/usage', testData)
+          .reply(200, { success: true })
+
+        const response = await httpClient.post('/usage', testData)
+
+        expect(response.status).toBe(200)
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          expect.stringContaining('Retrying'),
+          expect.objectContaining({ status: 429 }),
+        )
+      })
+    })
+
+    describe('リトライ上限', () => {
+      it('should throw error after max retries', async () => {
+        const testData = { usage: 'test-data' }
+
+        // MAX_RETRIES=3回 + 初回 = 合計4回のリクエストが発生
+        for (let i = 0; i <= 3; i++) {
+          nock('https://api.example.com')
+            .post('/usage', testData)
+            .reply(500, { error: 'Internal Server Error' })
+        }
+
+        await expect(httpClient.post('/usage', testData)).rejects.toThrow()
+
+        // リトライは3回発生（初回失敗 + 3回リトライ = 合計4回リクエスト）
+        expect(mockLogger.warn).toHaveBeenCalledTimes(3)
+      })
+    })
+  })
 })

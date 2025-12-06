@@ -143,7 +143,7 @@ export function aggregateUsageData(
   aggregationPeriod: AggregationPeriod,
   outputMode: OutputMode,
   userRecords?: RawUserUsageRecord[],
-  modelRecords?: RawModelUsageRecord[]
+  modelRecords?: RawModelUsageRecord[],
 ): AggregationResult {
   const result: AggregationResult = {
     appRecords: [],
@@ -188,7 +188,7 @@ export function aggregateUsageData(
  */
 function aggregateByApp(
   records: RawTokenCostRecord[],
-  aggregationPeriod: AggregationPeriod
+  aggregationPeriod: AggregationPeriod,
 ): AggregatedAppRecord[] {
   // キー: "period|app_id"
   const aggregated = new Map<
@@ -245,7 +245,7 @@ function aggregateByApp(
  */
 function aggregateWorkspaceTotal(
   records: RawTokenCostRecord[],
-  aggregationPeriod: AggregationPeriod
+  aggregationPeriod: AggregationPeriod,
 ): AggregatedWorkspaceRecord[] {
   // キー: "period"
   const aggregated = new Map<string, { tokens: number; price: number; currency: string }>()
@@ -291,7 +291,7 @@ function aggregateWorkspaceTotal(
  */
 function aggregateByUser(
   records: RawUserUsageRecord[],
-  aggregationPeriod: AggregationPeriod
+  aggregationPeriod: AggregationPeriod,
 ): AggregatedUserRecord[] {
   // キー: "period|user_id|app_id"
   const aggregated = new Map<
@@ -368,7 +368,7 @@ function aggregateByUser(
  */
 function aggregateByModel(
   records: RawModelUsageRecord[],
-  aggregationPeriod: AggregationPeriod
+  aggregationPeriod: AggregationPeriod,
 ): AggregatedModelRecord[] {
   // キー: "period|user_id|app_id|model_provider|model_name"
   const aggregated = new Map<

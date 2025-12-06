@@ -38,6 +38,22 @@ export const envSchema = z
     EXTERNAL_API_URL: z.string().url(),
     EXTERNAL_API_TOKEN: z.string().min(1),
 
+    // API_Meter新仕様対応（SPEC-CHANGE-001）
+    API_METER_TENANT_ID: z.string().uuid({
+      message: 'API_METER_TENANT_ID must be a valid UUID',
+    }),
+    API_METER_TOKEN: z.string().min(1, {
+      message: 'API_METER_TOKEN must not be empty',
+    }),
+    API_METER_URL: z
+      .string()
+      .url({
+        message: 'API_METER_URL must be a valid URL',
+      })
+      .min(1, {
+        message: 'API_METER_URL must not be empty',
+      }),
+
     // オプション環境変数（デフォルト値あり）
     CRON_SCHEDULE: z.string().default('0 0 * * *'),
     LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
@@ -59,8 +75,14 @@ export const envSchema = z
 
     // 期間指定・集計・出力モード
     DIFY_FETCH_PERIOD: fetchPeriodEnum.default('current_month'), // 期間指定モード
-    DIFY_FETCH_START_DATE: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // カスタム開始日（YYYY-MM-DD）
-    DIFY_FETCH_END_DATE: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // カスタム終了日（YYYY-MM-DD）
+    DIFY_FETCH_START_DATE: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(), // カスタム開始日（YYYY-MM-DD）
+    DIFY_FETCH_END_DATE: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(), // カスタム終了日（YYYY-MM-DD）
     DIFY_AGGREGATION_PERIOD: aggregationPeriodEnum.default('monthly'), // 集計周期
     DIFY_OUTPUT_MODE: outputModeEnum.default('per_app'), // 出力モード
 

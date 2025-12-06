@@ -32,24 +32,52 @@ export class HttpClient {
       },
     })
 
-    // 2. axios-retry設定
+    // 2. axios-retry設定（API_Meter新仕様対応: ADR 017準拠）
     axiosRetry(this.client, {
       retries: config.MAX_RETRIES,
-      retryDelay: axiosRetry.exponentialDelay,
+      retryDelay: (retryCount, error) => {
+        // Retry-Afterヘッダーがある場合は尊重（ADR 017: Retry-Afterヘッダーの尊重）
+        const retryAfter = error.response?.headers['retry-after']
+        if (retryAfter) {
+          const delay = Number.parseInt(retryAfter, 10) * 1000 // 秒→ミリ秒
+          if (!Number.isNaN(delay) && delay > 0) {
+            this.logger.info('Respecting Retry-After header', { delayMs: delay })
+            return delay
+          }
+        }
+
+        // 指数バックオフ（デフォルト: 1s → 2s → 4s）
+        return axiosRetry.exponentialDelay(retryCount, error)
+      },
       retryCondition: (error: AxiosError) => {
-        // リトライ対象: ネットワークエラー、5xx、429
-        if (axiosRetry.isNetworkOrIdempotentRequestError(error)) {
+        const status = error.response?.status
+
+        // 成功扱い（リトライしない）: 200, 201, 204
+        if (status && [200, 201, 204].includes(status)) {
+          return false
+        }
+
+        // リトライ対象: 429（Rate Limit）, 5xx（Server Error）
+        if (status === 429 || (status && status >= 500)) {
           return true
         }
-        const status = error.response?.status
-        return status === 429 || (status !== undefined && status >= 500)
+
+        // ネットワークエラー（ECONNREFUSED, ETIMEDOUT等）: リトライ
+        if (axiosRetry.isNetworkError(error)) {
+          return true
+        }
+
+        // その他（400, 401, 403, 404, 422等）: リトライしない
+        return false
       },
       onRetry: (retryCount, error, requestConfig) => {
+        const delay = 2 ** retryCount // 1s, 2s, 4s
         this.logger.warn('Retrying request', {
           retryCount,
           url: requestConfig.url,
           status: error.response?.status,
           message: error.message,
+          nextDelaySeconds: delay,
         })
       },
     })
@@ -74,12 +102,21 @@ export class HttpClient {
         return response
       },
       (error: AxiosError) => {
-        this.logger.error('HTTP Error', {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          message: error.message,
-          retryCount: error.config?.['axios-retry']?.retryCount,
-        })
+        const status = error.response?.status
+        const retryCount = error.config?.['axios-retry']?.retryCount
+
+        // ステータスコード別のエラーメッセージ詳細化（ADR 017準拠）
+        if (status) {
+          this.logHttpError(status, error, retryCount)
+        } else {
+          // ネットワークエラー
+          this.logger.error('Network Error', {
+            message: error.message,
+            code: error.code,
+            retryCount,
+          })
+        }
+
         throw error
       },
     )
@@ -93,6 +130,71 @@ export class HttpClient {
    */
   async post(path: string, data: unknown): Promise<AxiosResponse> {
     return this.client.post(path, data)
+  }
+
+  /**
+   * HTTPエラーのログ出力（ステータスコード別）
+   * ADR 017: エラーハンドリング戦略に準拠
+   * @param status HTTPステータスコード
+   * @param error Axiosエラー
+   * @param retryCount リトライ回数
+   */
+  private logHttpError(status: number, error: AxiosError, retryCount?: number): void {
+    const data = error.response?.data
+
+    switch (status) {
+      case 400:
+        this.logger.error('Bad Request (400)', {
+          message: 'Invalid request format',
+          details: data,
+          retryCount,
+        })
+        break
+      case 401:
+        this.logger.error('Unauthorized (401)', {
+          message: 'Invalid API token',
+          hint: 'Check API_METER_TOKEN or EXTERNAL_API_TOKEN environment variable',
+          retryCount,
+        })
+        break
+      case 403:
+        this.logger.error('Forbidden (403)', {
+          message: 'Insufficient permissions',
+          details: data,
+          retryCount,
+        })
+        break
+      case 404:
+        this.logger.error('Not Found (404)', {
+          message: 'Endpoint not found',
+          url: error.config?.url,
+          retryCount,
+        })
+        break
+      case 422:
+        this.logger.error('Unprocessable Entity (422)', {
+          message: 'Validation error',
+          details: data,
+          retryCount,
+        })
+        break
+      case 429:
+        this.logger.warn('Rate Limit Exceeded (429)', {
+          message: 'Too many requests, will retry with exponential backoff',
+          retryAfter: error.response?.headers['retry-after'],
+          retryCount,
+        })
+        break
+      default:
+        // 5xx or その他
+        this.logger.error('HTTP Error', {
+          status,
+          statusText: error.response?.statusText,
+          message: error.message,
+          details: data,
+          retryCount,
+        })
+    }
   }
 
   /**

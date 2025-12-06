@@ -130,7 +130,7 @@ export function createUserUsageFetcher(deps: UserUsageFetcherDeps): UserUsageFet
    */
   function getUserInfo(
     message: DifyMessage,
-    conversation: DifyConversation
+    conversation: DifyConversation,
   ): { userId: string; userType: 'end_user' | 'account' } {
     // メッセージのユーザー情報を優先
     if (message.from_end_user_id) {
