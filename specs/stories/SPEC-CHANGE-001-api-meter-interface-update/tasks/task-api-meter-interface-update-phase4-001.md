@@ -29,13 +29,13 @@ based_on: specs/stories/SPEC-CHANGE-001-api-meter-interface-update/plan.md
 
 ## 対象ファイル
 
-- [ ] src/index.ts（更新）
+- [x] src/index.ts（更新）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
-- [ ] 依存成果物の確認: 全Phase 1-3のファイルが存在
-- [ ] データフロー全体の動作確認テストを追加
+- [x] 依存成果物の確認: 全Phase 1-3のファイルが存在
+- [x] データフロー全体の動作確認テストを追加
 
 ### 2. Green Phase
 
@@ -75,17 +75,17 @@ async function main() {
 ```
 
 ### 3. Refactor Phase
-- [ ] エラーハンドリングの充実化
-- [ ] ログ出力の改善
+- [x] エラーハンドリングの充実化
+- [x] ログ出力の改善
 
 ## 完了条件
 
-- [ ] データフロー全体が正常に動作
-- [ ] Normalizer層が正しく統合されている
-- [ ] 日別データのフィルタリングが動作
-- [ ] per_model/allモードで正しいデータがAPI_Meterへ送信される
-- [ ] TypeScript strict mode: エラー0件
-- [ ] Biome lint: エラー0件
+- [x] データフロー全体が正常に動作
+- [x] Normalizer層が正しく統合されている
+- [x] 日別データのフィルタリングが動作
+- [x] per_model/allモードで正しいデータがAPI_Meterへ送信される
+- [x] TypeScript strict mode: エラー0件
+- [x] Biome lint: エラー0件
 
 ## 参考資料
 

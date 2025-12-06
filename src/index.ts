@@ -17,8 +17,13 @@ import { createUserUsageFetcher } from './fetcher/user-usage-fetcher.js'
 import { createLogger } from './logger/winston-logger.js'
 import { createMetricsCollector } from './monitoring/metrics-collector.js'
 import { createMetricsReporter } from './monitoring/metrics-reporter.js'
+import { createNormalizer } from './normalizer/normalizer.js'
 import { createScheduler } from './scheduler/cron-scheduler.js'
+import { ExternalApiSender } from './sender/external-api-sender.js'
+import { HttpClient } from './sender/http-client.js'
+import { SpoolManager } from './sender/spool-manager.js'
 import { setupGracefulShutdown } from './shutdown/graceful-shutdown.js'
+import { createDataTransformer } from './transformer/data-transformer.js'
 import { calculateDateRange } from './utils/period-calculator.js'
 import { createWatermarkManager } from './watermark/watermark-manager.js'
 
@@ -178,56 +183,118 @@ export async function main(): Promise<void> {
         modelRecords: aggregationResult.modelRecords.length,
       })
 
-      // 4. 外部APIへ送信
-      const payload: Record<string, unknown> = {
-        aggregation_period: config.DIFY_AGGREGATION_PERIOD,
-        output_mode: config.DIFY_OUTPUT_MODE,
-        fetch_period: {
-          start: fetchResult.startDate,
-          end: fetchResult.endDate,
-        },
-      }
+      // 4. per_model/allモードのみAPI_Meterへ送信（Design Doc 第6章: 集計モード統合方法）
+      if (config.DIFY_OUTPUT_MODE === 'per_model' || config.DIFY_OUTPUT_MODE === 'all') {
+        // 4-1. 日別データのフィルタリング（period_type === 'daily'のみ）
+        const dailyRecords = aggregationResult.modelRecords.filter(
+          (record) => record.period_type === 'daily',
+        )
 
-      // 出力モードに応じてペイロードを構築
-      if (aggregationResult.appRecords.length > 0) {
-        payload.app_records = aggregationResult.appRecords
-      }
-      if (aggregationResult.workspaceRecords.length > 0) {
-        payload.workspace_records = aggregationResult.workspaceRecords
-      }
-      if (aggregationResult.userRecords.length > 0) {
-        payload.user_records = aggregationResult.userRecords
-      }
-      if (aggregationResult.modelRecords.length > 0) {
-        payload.model_records = aggregationResult.modelRecords
-      }
+        if (dailyRecords.length === 0) {
+          logger.warn('No daily records for API_Meter', {
+            aggregationPeriod: config.DIFY_AGGREGATION_PERIOD,
+            totalModelRecords: aggregationResult.modelRecords.length,
+          })
+        } else {
+          try {
+            // 4-2. Normalize（プロバイダー/モデル名の正規化）
+            const normalizer = createNormalizer()
+            const normalizedRecords = normalizer.normalize(dailyRecords)
 
-      logger.info('外部API送信開始', {
-        url: config.EXTERNAL_API_URL,
-        appRecordCount: aggregationResult.appRecords.length,
-        workspaceRecordCount: aggregationResult.workspaceRecords.length,
-        userRecordCount: aggregationResult.userRecords.length,
-        modelRecordCount: aggregationResult.modelRecords.length,
-      })
+            logger.info('正規化完了', {
+              recordCount: normalizedRecords.length,
+            })
 
-      const response = await axios.post(config.EXTERNAL_API_URL, payload, {
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${config.EXTERNAL_API_TOKEN}`,
-        },
-        timeout: config.EXTERNAL_API_TIMEOUT_MS,
-        httpsAgent,
-      })
+            // 4-3. Transform（ApiMeterRequest形式への変換）
+            const transformer = createDataTransformer({ logger })
+            const transformResult = transformer.transform(normalizedRecords)
 
-      collector.getMetrics().sendSuccess = totalAggregatedRecords
+            logger.info('変換完了', {
+              recordCount: transformResult.recordCount,
+            })
 
-      logger.info('外部API送信完了', {
-        status: response.status,
-        appRecordCount: aggregationResult.appRecords.length,
-        workspaceRecordCount: aggregationResult.workspaceRecords.length,
-        userRecordCount: aggregationResult.userRecords.length,
-        modelRecordCount: aggregationResult.modelRecords.length,
-      })
+            // 4-4. Send（API_Meterへ送信）
+            const httpClient = new HttpClient(logger, config)
+            const spoolManager = new SpoolManager(logger)
+            const sender = new ExternalApiSender(
+              httpClient,
+              spoolManager,
+              { sendErrorNotification: () => Promise.resolve() }, // INotifier: Phase 3-3で実装予定
+              logger,
+              config,
+              collector.getMetrics(),
+            )
+
+            await sender.send(transformResult.request)
+
+            logger.info('API_Meter送信完了', {
+              recordCount: transformResult.recordCount,
+            })
+          } catch (error) {
+            const err = error as Error
+            logger.error('API_Meter送信失敗', {
+              message: err.message,
+              recordCount: dailyRecords.length,
+            })
+            // エラーをスローせず、次回実行時にスプールファイルから再送
+          }
+        }
+      } else {
+        logger.info('Skipping API_Meter send (per_user/per_app/workspace mode)', {
+          outputMode: config.DIFY_OUTPUT_MODE,
+        })
+
+        // 旧形式の外部API送信（per_user/per_app/workspaceモード用）
+        const payload: Record<string, unknown> = {
+          aggregation_period: config.DIFY_AGGREGATION_PERIOD,
+          output_mode: config.DIFY_OUTPUT_MODE,
+          fetch_period: {
+            start: fetchResult.startDate,
+            end: fetchResult.endDate,
+          },
+        }
+
+        // 出力モードに応じてペイロードを構築
+        if (aggregationResult.appRecords.length > 0) {
+          payload.app_records = aggregationResult.appRecords
+        }
+        if (aggregationResult.workspaceRecords.length > 0) {
+          payload.workspace_records = aggregationResult.workspaceRecords
+        }
+        if (aggregationResult.userRecords.length > 0) {
+          payload.user_records = aggregationResult.userRecords
+        }
+        if (aggregationResult.modelRecords.length > 0) {
+          payload.model_records = aggregationResult.modelRecords
+        }
+
+        logger.info('外部API送信開始（旧形式）', {
+          url: config.EXTERNAL_API_URL,
+          appRecordCount: aggregationResult.appRecords.length,
+          workspaceRecordCount: aggregationResult.workspaceRecords.length,
+          userRecordCount: aggregationResult.userRecords.length,
+          modelRecordCount: aggregationResult.modelRecords.length,
+        })
+
+        const response = await axios.post(config.EXTERNAL_API_URL, payload, {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${config.EXTERNAL_API_TOKEN}`,
+          },
+          timeout: config.EXTERNAL_API_TIMEOUT_MS,
+          httpsAgent,
+        })
+
+        collector.getMetrics().sendSuccess = totalAggregatedRecords
+
+        logger.info('外部API送信完了（旧形式）', {
+          status: response.status,
+          appRecordCount: aggregationResult.appRecords.length,
+          workspaceRecordCount: aggregationResult.workspaceRecords.length,
+          userRecordCount: aggregationResult.userRecords.length,
+          modelRecordCount: aggregationResult.modelRecords.length,
+        })
+      }
     } catch (error) {
       const err = error as Error
       logger.error('エクスポートジョブ失敗', {
