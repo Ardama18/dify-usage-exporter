@@ -14,6 +14,7 @@
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run test/integration",
     "test:e2e": "vitest run test/e2e",
+    "test:performance": "npx tsx scripts/performance-test.ts",
     "check": "biome check .",
     "format": "biome format --write .",
     "lint:fix": "biome lint --write .",

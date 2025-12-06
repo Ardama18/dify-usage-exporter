@@ -33,7 +33,7 @@ based_on: specs/stories/SPEC-CHANGE-001-api-meter-interface-update/plan.md
 
 ## 対象ファイル
 
-- [ ] scripts/performance-test.ts（新規作成）
+- [x] scripts/performance-test.ts（新規作成）
 
 ## 実施手順
 
@@ -98,10 +98,10 @@ npm run test:performance
 
 ## 完了条件
 
-- [ ] パフォーマンステストが完了し、合格基準をクリア
-- [ ] 1000レコード/秒以上の処理速度を確保
-- [ ] 正規化層の処理時間が1ms未満
-- [ ] 結果をログに記録
+- [x] パフォーマンステストが完了し、合格基準をクリア
+- [x] 1000レコード/秒以上の処理速度を確保
+- [x] 正規化層の処理時間が1ms未満
+- [x] 結果をログに記録
 
 ## 参考資料
 
