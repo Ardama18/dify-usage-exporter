@@ -1,7 +1,8 @@
 /**
  * データフロー全体の統合テスト
  *
- * Aggregate → Normalize → Transform → Sendの全体フローを検証
+ * Aggregate → Cleanse → Transform → Sendの全体フローを検証
+ * ADR 020: Exporter正規化層の責務削減とデータ忠実性の確保
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -34,7 +35,7 @@ describe('Data Flow Integration Test', () => {
     vi.unstubAllEnvs()
   })
 
-  it('per_modelモード: Aggregate → Normalize → Transform の完全フロー', () => {
+  it('per_modelモード: Aggregate → Cleanse → Transform の完全フロー', () => {
     // Phase 1: Aggregated Data (from aggregator)
     const aggregatedRecords: AggregatedModelRecord[] = [
       {
@@ -44,8 +45,8 @@ describe('Data Flow Integration Test', () => {
         user_type: 'end_user',
         app_id: 'app-001',
         app_name: 'Test App',
-        model_provider: 'aws-bedrock', // 正規化前（Dify内部名）
-        model_name: 'claude-3-5-sonnet', // 正規化前（バージョン番号なし）
+        model_provider: 'aws-bedrock', // Difyの生データ
+        model_name: 'claude-3-5-sonnet', // Difyの生データ
         prompt_tokens: 10000,
         completion_tokens: 5000,
         total_tokens: 15000,
@@ -57,25 +58,26 @@ describe('Data Flow Integration Test', () => {
       },
     ]
 
-    // Phase 2: Normalize (provider/model正規化)
-    const normalizedRecords = normalizer.normalize(aggregatedRecords)
+    // Phase 2: Cleanse (小文字化・trimのみ、マッピングなし)
+    const cleansedRecords = normalizer.normalize(aggregatedRecords)
 
-    expect(normalizedRecords).toHaveLength(1)
-    expect(normalizedRecords[0]).toMatchObject({
-      provider: 'aws', // 正規化後
-      model: 'claude-3-5-sonnet-20241022', // 正規化後（バージョン番号付与）
+    expect(cleansedRecords).toHaveLength(1)
+    expect(cleansedRecords[0]).toMatchObject({
+      provider: 'aws-bedrock', // そのまま（マッピングなし）
+      model: 'claude-3-5-sonnet', // そのまま（マッピングなし）
       inputTokens: 10000,
       outputTokens: 5000,
       totalTokens: 15000,
       costActual: 0.018,
       usageDate: '2025-12-05',
       appId: 'app-001',
+      appName: 'Test App',
       userId: 'user-001',
     })
 
     // Phase 3: Transform (ApiMeterRequest形式へ変換)
     const transformer = createDataTransformer({ logger })
-    const transformResult: TransformResult = transformer.transform(normalizedRecords)
+    const transformResult: TransformResult = transformer.transform(cleansedRecords)
 
     expect(transformResult.recordCount).toBe(1)
 
@@ -87,8 +89,8 @@ describe('Data Flow Integration Test', () => {
 
     const record = request.records[0]
     expect(record.usage_date).toBe('2025-12-05')
-    expect(record.provider).toBe('aws')
-    expect(record.model).toBe('claude-3-5-sonnet-20241022')
+    expect(record.provider).toBe('aws-bedrock') // そのまま（マッピングなし）
+    expect(record.model).toBe('claude-3-5-sonnet') // そのまま（マッピングなし）
     expect(record.input_tokens).toBe(10000)
     expect(record.output_tokens).toBe(5000)
     expect(record.total_tokens).toBe(15000)
@@ -188,9 +190,9 @@ describe('Data Flow Integration Test', () => {
       },
     ]
 
-    const normalizedRecords = normalizer.normalize(aggregatedRecords)
+    const cleansedRecords = normalizer.normalize(aggregatedRecords)
     const transformer = createDataTransformer({ logger })
-    const transformResult = transformer.transform(normalizedRecords)
+    const transformResult = transformer.transform(cleansedRecords)
 
     const request = transformResult.request
 

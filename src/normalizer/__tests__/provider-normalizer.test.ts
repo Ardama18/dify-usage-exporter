@@ -2,58 +2,74 @@ import { describe, expect, it } from 'vitest'
 import { createProviderNormalizer } from '../provider-normalizer.js'
 
 describe('ProviderNormalizer', () => {
-  it('正規化: aws-bedrock → aws', () => {
-    const normalizer = createProviderNormalizer()
-    expect(normalizer.normalize('aws-bedrock')).toBe('aws')
+  describe('クレンジング処理', () => {
+    it('小文字化: OpenAI → openai', () => {
+      const normalizer = createProviderNormalizer()
+      expect(normalizer.normalize('OpenAI')).toBe('openai')
+    })
+
+    it('小文字化: ANTHROPIC → anthropic', () => {
+      const normalizer = createProviderNormalizer()
+      expect(normalizer.normalize('ANTHROPIC')).toBe('anthropic')
+    })
+
+    it('前後空白除去: " openai " → openai', () => {
+      const normalizer = createProviderNormalizer()
+      expect(normalizer.normalize(' openai ')).toBe('openai')
+    })
+
+    it('そのまま返す: openai → openai', () => {
+      const normalizer = createProviderNormalizer()
+      expect(normalizer.normalize('openai')).toBe('openai')
+    })
+
+    it('そのまま返す: anthropic → anthropic', () => {
+      const normalizer = createProviderNormalizer()
+      expect(normalizer.normalize('anthropic')).toBe('anthropic')
+    })
   })
 
-  it('大文字小文字統一: AWS-BEDROCK → aws', () => {
-    const normalizer = createProviderNormalizer()
-    expect(normalizer.normalize('AWS-BEDROCK')).toBe('aws')
+  describe('空文字・不正値の処理', () => {
+    it('空文字: "" → unknown', () => {
+      const normalizer = createProviderNormalizer()
+      expect(normalizer.normalize('')).toBe('unknown')
+    })
+
+    it('空白のみ: "   " → unknown', () => {
+      const normalizer = createProviderNormalizer()
+      expect(normalizer.normalize('   ')).toBe('unknown')
+    })
   })
 
-  it('前後空白除去: " aws-bedrock " → aws', () => {
-    const normalizer = createProviderNormalizer()
-    expect(normalizer.normalize(' aws-bedrock ')).toBe('aws')
-  })
+  describe('Difyデータの忠実な転送', () => {
+    it('aws-bedrockもそのまま: aws-bedrock → aws-bedrock', () => {
+      const normalizer = createProviderNormalizer()
+      expect(normalizer.normalize('aws-bedrock')).toBe('aws-bedrock')
+    })
 
-  it('不明なプロバイダー: unknown-provider → unknown', () => {
-    const normalizer = createProviderNormalizer()
-    expect(normalizer.normalize('unknown-provider')).toBe('unknown')
-  })
+    it('claudeもそのまま: claude → claude', () => {
+      const normalizer = createProviderNormalizer()
+      expect(normalizer.normalize('claude')).toBe('claude')
+    })
 
-  it('OpenAI: openai → openai', () => {
-    const normalizer = createProviderNormalizer()
-    expect(normalizer.normalize('openai')).toBe('openai')
-  })
+    it('geminiもそのまま: gemini → gemini', () => {
+      const normalizer = createProviderNormalizer()
+      expect(normalizer.normalize('gemini')).toBe('gemini')
+    })
 
-  it('Anthropic: anthropic → anthropic', () => {
-    const normalizer = createProviderNormalizer()
-    expect(normalizer.normalize('anthropic')).toBe('anthropic')
-  })
+    it('grokもそのまま: grok → grok', () => {
+      const normalizer = createProviderNormalizer()
+      expect(normalizer.normalize('grok')).toBe('grok')
+    })
 
-  it('Google: google → google', () => {
-    const normalizer = createProviderNormalizer()
-    expect(normalizer.normalize('google')).toBe('google')
-  })
+    it('x-aiもそのまま: x-ai → x-ai', () => {
+      const normalizer = createProviderNormalizer()
+      expect(normalizer.normalize('x-ai')).toBe('x-ai')
+    })
 
-  it('XAI統一: x-ai → xai', () => {
-    const normalizer = createProviderNormalizer()
-    expect(normalizer.normalize('x-ai')).toBe('xai')
-  })
-
-  it('XAI統一: xai → xai', () => {
-    const normalizer = createProviderNormalizer()
-    expect(normalizer.normalize('xai')).toBe('xai')
-  })
-
-  it('空文字: "" → unknown', () => {
-    const normalizer = createProviderNormalizer()
-    expect(normalizer.normalize('')).toBe('unknown')
-  })
-
-  it('空白のみ: "   " → unknown', () => {
-    const normalizer = createProviderNormalizer()
-    expect(normalizer.normalize('   ')).toBe('unknown')
+    it('未知のプロバイダーもそのまま: custom-provider → custom-provider', () => {
+      const normalizer = createProviderNormalizer()
+      expect(normalizer.normalize('custom-provider')).toBe('custom-provider')
+    })
   })
 })

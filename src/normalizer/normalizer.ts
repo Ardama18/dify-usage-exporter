@@ -1,8 +1,10 @@
 /**
- * 正規化層統合
+ * クレンジング層統合
  *
  * AggregatedModelRecordをNormalizedModelRecordに変換します。
- * プロバイダー名/モデル名を標準化し、API_Meter送信用のデータ構造に変換します。
+ * プロバイダー名/モデル名をクレンジング（小文字化・trim）し、API_Meter送信用のデータ構造に変換します。
+ *
+ * ADR 020: Exporter正規化層の責務削減とデータ忠実性の確保
  */
 
 import type { AggregatedModelRecord } from '../aggregator/usage-aggregator.js'
@@ -47,26 +49,26 @@ export const createNormalizer = (logger?: Logger): INormalizer => {
       return records.map((record) => {
         const originalProvider = record.model_provider
         const originalModel = record.model_name
-        const normalizedProvider = providerNormalizer.normalize(originalProvider)
-        const normalizedModel = modelNormalizer.normalize(originalModel)
+        const cleanedProvider = providerNormalizer.normalize(originalProvider)
+        const cleanedModel = modelNormalizer.normalize(originalModel)
 
-        // デバッグログ: 正規化前後の比較
+        // デバッグログ: クレンジング前後の比較
         if (logger) {
-          logger.debug('Normalizing model record', {
+          logger.debug('Cleansing model record', {
             original: {
               provider: originalProvider,
               model: originalModel,
             },
-            normalized: {
-              provider: normalizedProvider,
-              model: normalizedModel,
+            cleaned: {
+              provider: cleanedProvider,
+              model: cleanedModel,
             },
           })
         }
 
         return {
-          provider: normalizedProvider,
-          model: normalizedModel,
+          provider: cleanedProvider,
+          model: cleanedModel,
           inputTokens: record.prompt_tokens,
           outputTokens: record.completion_tokens,
           totalTokens: record.total_tokens,
