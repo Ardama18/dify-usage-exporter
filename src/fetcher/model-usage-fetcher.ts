@@ -1,12 +1,17 @@
 /**
  * モデル別使用量Fetcher
  *
- * ワークフロー実行のノード詳細からLLMノードのモデル別トークン・コスト情報を取得する。
- * ユーザー別・モデル別の詳細なコスト分析を可能にする。
+ * 全アプリモード（workflow, advanced-chat, agent-chat, chat, completion）から
+ * モデル別トークン・コスト情報を取得する。
+ *
+ * - workflow: /workflow-runs → /node-executions（LLMノードごとの詳細）
+ * - advanced-chat / agent-chat: /chat-conversations → /chat-messages → workflow_run_id → /node-executions
+ * - chat / completion: /apps/{id}（モデル設定）→ /statistics/token-costs（日次集計）
+ *   ※ ワークフローがないため、アプリ = モデルの1:1マッピング
  */
 
 import type { Logger } from '../logger/winston-logger.js'
-import type { DifyNodeExecution } from '../types/dify-usage.js'
+import type { DifyAppDetail, DifyMessage, DifyNodeExecution } from '../types/dify-usage.js'
 import type { DifyApiClient, DifyApp } from './dify-api-client.js'
 
 /**
@@ -123,13 +128,49 @@ export interface ModelUsageFetcher {
 }
 
 /**
+ * LLMノード実行からユーザー情報を取得するためのコンテキスト
+ */
+interface UserContext {
+  userId: string
+  userType: 'end_user' | 'account'
+  createdAt?: number
+}
+
+/**
+ * メッセージからユーザーコンテキストを取得
+ */
+function getUserContextFromMessage(message: DifyMessage): UserContext | null {
+  if (message.from_end_user_id) {
+    return {
+      userId: message.from_end_user_id,
+      userType: 'end_user',
+      createdAt: message.created_at,
+    }
+  }
+  if (message.from_account_id) {
+    return {
+      userId: message.from_account_id,
+      userType: 'account',
+      createdAt: message.created_at,
+    }
+  }
+  return null
+}
+
+/**
  * LLMノード実行からModelUsageRecordを抽出
+ * @param node ノード実行詳細
+ * @param appId アプリID
+ * @param appName アプリ名
+ * @param workflowRunId ワークフロー実行ID
+ * @param fallbackUserContext ノードにユーザー情報がない場合のフォールバック（メッセージから取得）
  */
 function extractModelUsageFromNodeExecution(
   node: DifyNodeExecution,
   appId: string,
   appName: string,
   workflowRunId: string,
+  fallbackUserContext?: UserContext | null,
 ): ModelUsageRecord | null {
   // LLMノード以外はスキップ
   if (node.node_type !== 'llm') {
@@ -144,7 +185,7 @@ function extractModelUsageFromNodeExecution(
 
   const usage = processData.usage
 
-  // ユーザー情報を取得
+  // ユーザー情報を取得（ノード → フォールバックの順）
   let userId: string
   let userType: 'end_user' | 'account'
 
@@ -154,15 +195,25 @@ function extractModelUsageFromNodeExecution(
   } else if (node.created_by_account?.id) {
     userId = node.created_by_account.id
     userType = 'account'
+  } else if (fallbackUserContext) {
+    // ノードにユーザー情報がない場合はフォールバックを使用
+    userId = fallbackUserContext.userId
+    userType = fallbackUserContext.userType
   } else {
-    // ユーザー情報がない場合はスキップ
-    return null
+    // ユーザー情報がない場合はunknownとして処理
+    userId = 'unknown'
+    userType = 'account'
   }
 
-  // 日付を変換
-  const date = node.created_at
-    ? new Date(node.created_at * 1000).toISOString().split('T')[0]
-    : new Date().toISOString().split('T')[0]
+  // 日付を変換（ノード → フォールバックの順）
+  let date: string
+  if (node.created_at) {
+    date = new Date(node.created_at * 1000).toISOString().split('T')[0]
+  } else if (fallbackUserContext?.createdAt) {
+    date = new Date(fallbackUserContext.createdAt * 1000).toISOString().split('T')[0]
+  } else {
+    date = new Date().toISOString().split('T')[0]
+  }
 
   return {
     date,
@@ -228,6 +279,302 @@ function summarizeByUserAndModel(records: ModelUsageRecord[]): ModelUsageSummary
 export function createModelUsageFetcher(deps: ModelUsageFetcherDeps): ModelUsageFetcher {
   const { difyClient, logger } = deps
 
+  /**
+   * workflowモードのアプリからモデル使用量を取得
+   * /workflow-runs → /node-executions
+   */
+  async function fetchFromWorkflowApp(
+    app: DifyApp,
+    startTimestamp: number,
+    endTimestamp: number,
+    records: ModelUsageRecord[],
+    errors: string[],
+  ): Promise<void> {
+    try {
+      const workflowRuns = await difyClient.fetchWorkflowRuns({
+        appId: app.id,
+        start: startTimestamp,
+        end: endTimestamp,
+      })
+
+      logger.info('ワークフロー実行一覧取得完了', {
+        appId: app.id,
+        count: workflowRuns.length,
+      })
+
+      for (const run of workflowRuns) {
+        try {
+          const nodeExecutions = await difyClient.fetchNodeExecutions({
+            appId: app.id,
+            workflowRunId: run.id,
+          })
+
+          for (const node of nodeExecutions) {
+            const record = extractModelUsageFromNodeExecution(node, app.id, app.name, run.id)
+            if (record) {
+              records.push(record)
+            }
+          }
+        } catch (error) {
+          const errorMsg = `ノード実行取得エラー: ${app.name} / ${run.id}`
+          logger.warn(errorMsg, { error })
+          errors.push(errorMsg)
+        }
+      }
+    } catch (error) {
+      const errorMsg = `ワークフロー実行取得エラー: ${app.name}`
+      logger.warn(errorMsg, { error })
+      errors.push(errorMsg)
+    }
+  }
+
+  /**
+   * advanced-chat / agent-chat モードのアプリからモデル使用量を取得
+   * /chat-conversations → /chat-messages → workflow_run_id → /node-executions
+   */
+  async function fetchFromChatApp(
+    app: DifyApp,
+    startTimestamp: number,
+    endTimestamp: number,
+    records: ModelUsageRecord[],
+    errors: string[],
+  ): Promise<void> {
+    try {
+      // 1. 会話一覧を取得
+      const conversations = await difyClient.fetchConversations({
+        appId: app.id,
+        start: startTimestamp,
+        end: endTimestamp,
+      })
+
+      logger.info('会話一覧取得完了', {
+        appId: app.id,
+        appName: app.name,
+        count: conversations.length,
+      })
+
+      // 2. 各会話のメッセージを取得
+      const processedWorkflowRunIds = new Set<string>()
+
+      for (const conv of conversations) {
+        try {
+          const messages = await difyClient.fetchMessages({
+            appId: app.id,
+            conversationId: conv.id,
+          })
+
+          // 3. 各メッセージのworkflow_run_idからノード詳細を取得
+          for (const message of messages) {
+            const workflowRunId = message.workflow_run_id
+            if (!workflowRunId) {
+              continue
+            }
+
+            // 同じworkflow_run_idを重複処理しない
+            if (processedWorkflowRunIds.has(workflowRunId)) {
+              continue
+            }
+            processedWorkflowRunIds.add(workflowRunId)
+
+            try {
+              const nodeExecutions = await difyClient.fetchNodeExecutions({
+                appId: app.id,
+                workflowRunId: workflowRunId,
+              })
+
+              // メッセージからユーザーコンテキストを取得
+              const userContext = getUserContextFromMessage(message)
+
+              for (const node of nodeExecutions) {
+                const record = extractModelUsageFromNodeExecution(
+                  node,
+                  app.id,
+                  app.name,
+                  workflowRunId,
+                  userContext,
+                )
+                if (record) {
+                  records.push(record)
+                }
+              }
+            } catch (error) {
+              const errorMsg = `ノード実行取得エラー: ${app.name} / ${workflowRunId}`
+              logger.warn(errorMsg, { error })
+              errors.push(errorMsg)
+            }
+          }
+        } catch (error) {
+          const errorMsg = `メッセージ取得エラー: ${app.name} / ${conv.id}`
+          logger.warn(errorMsg, { error })
+          errors.push(errorMsg)
+        }
+      }
+
+      logger.debug('チャットアプリ処理完了', {
+        appId: app.id,
+        appName: app.name,
+        workflowRunCount: processedWorkflowRunIds.size,
+      })
+    } catch (error) {
+      const errorMsg = `会話取得エラー: ${app.name}`
+      logger.warn(errorMsg, { error })
+      errors.push(errorMsg)
+    }
+  }
+
+  /**
+   * アプリ詳細からモデル情報を抽出
+   */
+  function extractModelInfo(appDetail: DifyAppDetail): { provider: string; model: string } | null {
+    // model_config 内のネストされた model オブジェクトを確認
+    // 構造: model_config.model.provider / model_config.model.name
+    const nestedModel = (appDetail.model_config as Record<string, unknown>)?.model as
+      | { provider?: string; name?: string; model?: string }
+      | undefined
+    if (nestedModel?.provider && (nestedModel?.name || nestedModel?.model)) {
+      // provider が "langgenius/openai/openai" のような形式の場合、最後の部分を使用
+      let provider = nestedModel.provider
+      if (provider.includes('/')) {
+        const parts = provider.split('/')
+        provider = parts[parts.length - 1]
+      }
+      return {
+        provider,
+        model: nestedModel.name || nestedModel.model || 'unknown',
+      }
+    }
+
+    // model_config.provider / model_config.model を確認（フラット構造）
+    if (appDetail.model_config?.provider && appDetail.model_config?.model) {
+      return {
+        provider: appDetail.model_config.provider,
+        model: appDetail.model_config.model,
+      }
+    }
+
+    // model_config.model_id がある場合（provider:model 形式の可能性）
+    if (appDetail.model_config?.model_id) {
+      const parts = appDetail.model_config.model_id.split('/')
+      if (parts.length >= 2) {
+        return {
+          provider: parts[0],
+          model: parts.slice(1).join('/'),
+        }
+      }
+      return {
+        provider: 'unknown',
+        model: appDetail.model_config.model_id,
+      }
+    }
+
+    // トップレベルの model オブジェクトから取得
+    if (appDetail.model?.provider && (appDetail.model?.name || appDetail.model?.model)) {
+      return {
+        provider: appDetail.model.provider,
+        model: appDetail.model.name || appDetail.model.model || 'unknown',
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * chat / completion モードのアプリからモデル使用量を取得
+   * ワークフローがないため、アプリ = モデルの1:1マッピング
+   * /apps/{id}（モデル設定）→ /statistics/token-costs（日次集計）
+   */
+  async function fetchFromSimpleChatApp(
+    app: DifyApp,
+    startTimestamp: number,
+    endTimestamp: number,
+    records: ModelUsageRecord[],
+    errors: string[],
+  ): Promise<void> {
+    try {
+      // 1. アプリ詳細を取得してモデル情報を取得
+      const appDetail = await difyClient.fetchAppDetails({ appId: app.id })
+      const modelInfo = extractModelInfo(appDetail)
+
+      if (!modelInfo) {
+        logger.warn('モデル情報が取得できません', {
+          appId: app.id,
+          appName: app.name,
+          mode: app.mode,
+        })
+        errors.push(`モデル情報取得不可: ${app.name}`)
+        return
+      }
+
+      logger.debug('アプリモデル情報取得', {
+        appId: app.id,
+        appName: app.name,
+        provider: modelInfo.provider,
+        model: modelInfo.model,
+      })
+
+      // 2. トークンコストを取得（日次集計）
+      const startDate = new Date(startTimestamp * 1000)
+      const endDate = new Date(endTimestamp * 1000)
+
+      // APIのstart/endパラメータ形式: YYYY-MM-DD HH:mm
+      const startStr = `${startDate.toISOString().split('T')[0]} 00:00`
+      const endStr = `${endDate.toISOString().split('T')[0]} 23:59`
+
+      const tokenCosts = await difyClient.fetchAppTokenCosts({
+        appId: app.id,
+        start: startStr,
+        end: endStr,
+      })
+
+      logger.debug('トークンコスト取得完了', {
+        appId: app.id,
+        appName: app.name,
+        count: tokenCosts.data.length,
+      })
+
+      // 3. 日次データからレコードを生成
+      for (const cost of tokenCosts.data) {
+        // chat/completionモードは入力/出力の内訳がないため、
+        // total_tokensを全てprompt_tokensとして扱う
+        // ※ API_Meter側のバリデーション（total = prompt + completion）を満たすため
+        const record: ModelUsageRecord = {
+          date: cost.date,
+          app_id: app.id,
+          app_name: app.name,
+          // chat/completionモードにはworkflow_run_idがないため、日次集計IDを生成
+          workflow_run_id: `daily-${app.id}-${cost.date}`,
+          node_id: 'direct-llm',
+          node_title: 'Direct LLM Call',
+          // chat/completionモードはユーザー単位の内訳がないため、アプリ全体として記録
+          user_id: 'app-aggregate',
+          user_type: 'account',
+          model_provider: modelInfo.provider,
+          model_name: modelInfo.model,
+          // DifyのAPIは入力/出力の内訳を提供しないため、全てprompt_tokensとして記録
+          prompt_tokens: cost.token_count,
+          completion_tokens: 0,
+          total_tokens: cost.token_count,
+          prompt_price: Number.parseFloat(cost.total_price),
+          completion_price: 0,
+          total_price: Number.parseFloat(cost.total_price),
+          currency: cost.currency,
+        }
+        records.push(record)
+      }
+
+      logger.info('chat/completionアプリ処理完了', {
+        appId: app.id,
+        appName: app.name,
+        mode: app.mode,
+        recordCount: tokenCosts.data.length,
+      })
+    } catch (error) {
+      const errorMsg = `chat/completionアプリ処理エラー: ${app.name}`
+      logger.warn(errorMsg, { error })
+      errors.push(errorMsg)
+    }
+  }
+
   return {
     async fetch(params: FetchModelUsageParams): Promise<ModelUsageFetchResult> {
       const { startTimestamp, endTimestamp } = params
@@ -244,54 +591,34 @@ export function createModelUsageFetcher(deps: ModelUsageFetcherDeps): ModelUsage
         const apps = await difyClient.fetchApps()
         logger.info('アプリ取得完了', { count: apps.length })
 
-        // 2. ワークフロー対応アプリのみフィルタ
-        const workflowApps = apps.filter(
-          (app: DifyApp) =>
-            app.mode === 'workflow' || app.mode === 'advanced-chat' || app.mode === 'agent-chat',
+        // 2. モード別にアプリを分類
+        const workflowApps = apps.filter((app: DifyApp) => app.mode === 'workflow')
+        const advancedChatApps = apps.filter(
+          (app: DifyApp) => app.mode === 'advanced-chat' || app.mode === 'agent-chat',
         )
-        logger.info('ワークフローアプリ数', { count: workflowApps.length })
+        const simpleChatApps = apps.filter(
+          (app: DifyApp) => app.mode === 'chat' || app.mode === 'completion',
+        )
 
-        // 3. 各アプリのワークフロー実行を取得
+        logger.info('アプリ分類完了', {
+          workflowApps: workflowApps.length,
+          advancedChatApps: advancedChatApps.length,
+          simpleChatApps: simpleChatApps.length,
+        })
+
+        // 3. workflowモードのアプリを処理
         for (const app of workflowApps) {
-          try {
-            const workflowRuns = await difyClient.fetchWorkflowRuns({
-              appId: app.id,
-              start: startTimestamp,
-              end: endTimestamp,
-            })
+          await fetchFromWorkflowApp(app, startTimestamp, endTimestamp, records, errors)
+        }
 
-            logger.debug('ワークフロー実行取得', {
-              appId: app.id,
-              appName: app.name,
-              count: workflowRuns.length,
-            })
+        // 4. advanced-chat / agent-chat モードのアプリを処理
+        for (const app of advancedChatApps) {
+          await fetchFromChatApp(app, startTimestamp, endTimestamp, records, errors)
+        }
 
-            // 4. 各ワークフロー実行のノード詳細を取得
-            for (const run of workflowRuns) {
-              try {
-                const nodeExecutions = await difyClient.fetchNodeExecutions({
-                  appId: app.id,
-                  workflowRunId: run.id,
-                })
-
-                // 5. LLMノードからモデル別使用量を抽出
-                for (const node of nodeExecutions) {
-                  const record = extractModelUsageFromNodeExecution(node, app.id, app.name, run.id)
-                  if (record) {
-                    records.push(record)
-                  }
-                }
-              } catch (error) {
-                const errorMsg = `ノード実行取得エラー: ${app.name} / ${run.id}`
-                logger.warn(errorMsg, { error })
-                errors.push(errorMsg)
-              }
-            }
-          } catch (error) {
-            const errorMsg = `ワークフロー実行取得エラー: ${app.name}`
-            logger.warn(errorMsg, { error })
-            errors.push(errorMsg)
-          }
+        // 5. chat / completion モードのアプリを処理（ワークフローなし）
+        for (const app of simpleChatApps) {
+          await fetchFromSimpleChatApp(app, startTimestamp, endTimestamp, records, errors)
         }
 
         // 6. サマリー化
@@ -304,7 +631,7 @@ export function createModelUsageFetcher(deps: ModelUsageFetcherDeps): ModelUsage
         })
 
         return {
-          success: errors.length === 0,
+          success: errors.length === 0 || records.length > 0,
           records,
           summaries,
           errors,

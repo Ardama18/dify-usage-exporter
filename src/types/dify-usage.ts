@@ -124,6 +124,8 @@ export const difyMessageSchema = z.object({
   created_at: z.number(), // Unix timestamp
   status: z.string().optional(),
   error: z.string().nullable().optional(),
+  // advanced-chat / agent-chat 用：メッセージ内のワークフロー実行ID
+  workflow_run_id: z.string().nullable().optional(),
 })
 
 export const difyMessagesResponseSchema = z.object({
@@ -244,3 +246,43 @@ export const difyNodeExecutionsResponseSchema = z.object({
 export type DifyLlmUsage = z.infer<typeof difyLlmUsageSchema>
 export type DifyNodeExecution = z.infer<typeof difyNodeExecutionSchema>
 export type DifyNodeExecutionsResponse = z.infer<typeof difyNodeExecutionsResponseSchema>
+
+/**
+ * /console/api/apps/{app_id} のレスポンス形式
+ * アプリ詳細を取得（モデル設定含む）
+ */
+export const difyAppModelConfigSchema = z.object({
+  provider: z.string().optional(),
+  model: z.string().optional(),
+  model_id: z.string().optional(),
+})
+
+export const difyAppDetailSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  mode: z.string(), // 'chat' | 'completion' | 'workflow' | 'advanced-chat' | 'agent-chat'
+  icon: z.string().optional(),
+  icon_background: z.string().optional(),
+  // chat/completion モードのモデル設定
+  model_config: z
+    .object({
+      provider: z.string().optional(),
+      model: z.string().optional(),
+      model_id: z.string().optional(),
+      configs: z.record(z.unknown()).optional(),
+    })
+    .optional(),
+  // 別の場所にモデル情報がある場合
+  model: z
+    .object({
+      provider: z.string().optional(),
+      name: z.string().optional(),
+      model: z.string().optional(),
+    })
+    .optional(),
+  created_at: z.number().optional(),
+  updated_at: z.number().optional(),
+})
+
+export type DifyAppModelConfig = z.infer<typeof difyAppModelConfigSchema>
+export type DifyAppDetail = z.infer<typeof difyAppDetailSchema>

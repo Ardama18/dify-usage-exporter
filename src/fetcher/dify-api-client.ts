@@ -13,6 +13,7 @@ import axiosRetry from 'axios-retry'
 import { CookieJar } from 'tough-cookie'
 import type { Logger } from '../logger/winston-logger.js'
 import type {
+  DifyAppDetail,
   DifyAppTokenCostsResponse,
   DifyConversation,
   DifyConversationsResponse,
@@ -116,6 +117,14 @@ export interface FetchNodeExecutionsParams {
 }
 
 /**
+ * アプリ詳細取得パラメータ
+ */
+export interface FetchAppDetailsParams {
+  /** アプリID */
+  appId: string
+}
+
+/**
  * Difyログインレスポンス（レスポンスボディ用、実際はCookieで返される）
  */
 interface DifyLoginResponse {
@@ -167,6 +176,14 @@ export interface DifyApiClient {
    * @returns ノード実行詳細一覧
    */
   fetchNodeExecutions(params: FetchNodeExecutionsParams): Promise<DifyNodeExecution[]>
+
+  /**
+   * アプリ詳細を取得する（モデル設定含む）
+   * chat/completionモードでモデル情報を取得するために使用
+   * @param params 取得パラメータ
+   * @returns アプリ詳細
+   */
+  fetchAppDetails(params: FetchAppDetailsParams): Promise<DifyAppDetail>
 }
 
 /**
@@ -511,6 +528,21 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
         count: nodeExecutions.length,
       })
       return nodeExecutions
+    },
+
+    async fetchAppDetails(params: FetchAppDetailsParams): Promise<DifyAppDetail> {
+      const authenticatedClient = await getAuthenticatedClient()
+
+      const response = await authenticatedClient.get<DifyAppDetail>(
+        `/console/api/apps/${params.appId}`,
+      )
+
+      logger.debug('アプリ詳細取得完了', {
+        appId: params.appId,
+        name: response.data.name,
+        mode: response.data.mode,
+      })
+      return response.data
     },
   }
 }
