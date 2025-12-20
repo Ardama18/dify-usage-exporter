@@ -2,92 +2,68 @@
 
 ## 概要
 
-本ドキュメントは、dify-usage-exporter を AWS EC2 インスタンス上で Docker を使用して運用するための手順を説明します。
+本ドキュメントは、**既存の Dify が動作している AWS EC2 インスタンス**に dify-usage-exporter を追加デプロイする手順を説明します。
+
+### システム構成
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  AWS EC2 インスタンス                                        │
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │     Dify        │    │    dify-usage-exporter          │ │
+│  │   (Docker)      │◄───│         (Docker)                │ │
+│  │                 │    │                                 │ │
+│  │  localhost:80   │    │  - Dify からデータ取得          │ │
+│  └─────────────────┘    │  - API_Meter へ送信             │ │
+│                         └─────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼ HTTPS
+                    ┌───────────────────────────────┐
+                    │  API_Meter (Vercel)           │
+                    │  v0-cloud-api-meter.vercel.app│
+                    └───────────────────────────────┘
+```
+
+### 接続情報
+
+| サービス | URL | 備考 |
+|----------|-----|------|
+| Dify | `http://localhost` または `http://host.docker.internal` | EC2 内部アクセス |
+| API_Meter ダッシュボード | https://v0-cloud-api-meter.vercel.app/dashboard | 外部サービス |
+| API_Meter エンドポイント | https://v0-cloud-api-meter.vercel.app/api/integrations/dify/usage-data/receive | データ送信先 |
 
 ---
 
 ## 1. 前提条件
 
-### 1.1 AWS EC2 インスタンス要件
+### 1.1 既存環境の確認
 
-| 項目 | 推奨値 | 備考 |
-|------|--------|------|
-| インスタンスタイプ | t3.micro 以上 | 軽量なバッチ処理のため最小構成で可 |
-| OS | Amazon Linux 2023 | または Ubuntu 22.04 LTS |
-| ストレージ | 8GB 以上 | Docker イメージ + ログ用 |
-| セキュリティグループ | アウトバウンド 443 許可 | Dify API、API_Meter への HTTPS 通信 |
-
-### 1.2 ネットワーク要件
-
-- **Dify API**: インスタンスから Dify サーバーへの HTTPS アクセス
-- **API_Meter**: インスタンスから API_Meter サーバーへの HTTPS アクセス
-- **SSH**: 管理用（ポート 22）
-
----
-
-## 2. EC2 インスタンスのセットアップ
-
-### 2.1 インスタンス作成
-
-1. AWS コンソールで EC2 インスタンスを起動
-2. Amazon Linux 2023 AMI を選択
-3. t3.micro インスタンスタイプを選択
-4. セキュリティグループ設定:
-   - インバウンド: SSH (22) - 管理用IP からのみ許可
-   - アウトバウンド: HTTPS (443) - 0.0.0.0/0
-
-### 2.2 SSH 接続
+EC2 に SSH 接続して以下を確認:
 
 ```bash
-ssh -i your-key.pem ec2-user@<EC2_PUBLIC_IP>
-```
-
-### 2.3 Docker のインストール（Amazon Linux 2023）
-
-```bash
-# パッケージ更新
-sudo dnf update -y
-
-# Docker インストール
-sudo dnf install -y docker
-
-# Docker サービス開始・自動起動設定
-sudo systemctl start docker
-sudo systemctl enable docker
-
-# ec2-user を docker グループに追加
-sudo usermod -aG docker ec2-user
-
-# グループ変更を反映（再ログインまたは以下を実行）
-newgrp docker
-
-# 動作確認
+# Docker が動作していることを確認
 docker --version
-docker run hello-world
-```
-
-### 2.4 Docker Compose のインストール
-
-```bash
-# Docker Compose プラグインのインストール
-sudo dnf install -y docker-compose-plugin
-
-# 動作確認
 docker compose version
+
+# Dify コンテナが動作していることを確認
+docker ps | grep -i dify
 ```
 
-### 2.5 Git のインストール
+### 1.2 Dify への接続確認
 
 ```bash
-sudo dnf install -y git
-git --version
+# Dify が localhost でアクセス可能か確認
+curl -I http://localhost
+# または
+curl -I http://localhost:80
 ```
 
 ---
 
-## 3. プロジェクトのデプロイ
+## 2. Exporter のデプロイ
 
-### 3.1 リポジトリのクローン
+### 2.1 リポジトリのクローン
 
 ```bash
 # 作業ディレクトリ作成
@@ -99,7 +75,7 @@ git clone https://github.com/Ardama18/dify-usage-exporter.git
 cd dify-usage-exporter
 ```
 
-### 3.2 環境変数の設定
+### 2.2 環境変数の設定
 
 ```bash
 # .env ファイルを作成
@@ -112,63 +88,97 @@ nano .env
 **.env ファイルの設定内容:**
 
 ```bash
-# === 必須設定 ===
+# ============================================
+# Dify API 接続情報（同一EC2内のDify）
+# ============================================
+# Docker コンテナから EC2 ホストの Dify にアクセス
+DIFY_API_BASE_URL=http://host.docker.internal
 
-# Dify API 接続情報
-DIFY_API_BASE_URL=https://your-dify-instance.com
-DIFY_EMAIL=your-dify-email@example.com
-DIFY_PASSWORD=your-dify-password
+# Dify の管理者アカウント
+DIFY_EMAIL=your-dify-admin-email@example.com
+DIFY_PASSWORD=your-dify-admin-password
 
-# API_Meter 接続情報
-EXTERNAL_API_URL=https://api-meter.example.com/api/integrations/dify/usage-data/receive
-EXTERNAL_API_TOKEN=your-bearer-token
-API_METER_TENANT_ID=00000000-0000-0000-0000-000000000001
+# ============================================
+# API_Meter 接続情報（Vercel）
+# ============================================
+EXTERNAL_API_URL=https://v0-cloud-api-meter.vercel.app/api/integrations/dify/usage-data/receive
+EXTERNAL_API_TOKEN=your-api-meter-bearer-token
+API_METER_TENANT_ID=your-tenant-uuid
 
-# === スケジュール設定 ===
-
-# Cron 形式: 分 時 日 月 曜日
-# 例: 毎日 AM 1:00 (JST) に実行 → UTC で 16:00
+# ============================================
+# スケジュール設定（UTC）
+# ============================================
+# 毎日 AM 1:00 JST = UTC 16:00
 CRON_SCHEDULE=0 16 * * *
 
-# === 取得期間設定 ===
-
-# today: 本日のみ
-# yesterday: 昨日のみ
-# current_month: 今月全体（デフォルト）
-# last_month: 先月全体
+# ============================================
+# 取得期間設定
+# ============================================
+# today / yesterday / current_month / last_month
 DIFY_FETCH_PERIOD=current_month
 
-# === オプション設定 ===
-
+# ============================================
+# オプション設定
+# ============================================
 LOG_LEVEL=info
 NODE_ENV=production
 MAX_RETRY=3
 ```
 
-> **注意**: CRON_SCHEDULE は UTC で設定します。JST の場合は -9 時間してください。
+> **重要**:
+> - `DIFY_API_BASE_URL=http://host.docker.internal` は Docker コンテナから EC2 ホストにアクセスするための特殊なホスト名です
+> - `CRON_SCHEDULE` は **UTC** で設定します（JST -9時間）
 
-### 3.3 環境変数の確認
+### 2.3 docker-compose.yml の確認
 
-```bash
-# 設定内容を確認（パスワード等は伏せて表示）
-grep -E "^[A-Z]" .env | sed 's/PASSWORD=.*/PASSWORD=***/' | sed 's/TOKEN=.*/TOKEN=***/'
+既存の `docker-compose.yml` に `extra_hosts` 設定があることを確認:
+
+```yaml
+services:
+  dify-usage-exporter:
+    # ...
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # ← この設定が必要
 ```
 
 ---
 
-## 4. Docker での起動
+## 3. 起動とテスト
 
-### 4.1 イメージのビルド
+### 3.1 イメージのビルド
 
 ```bash
+cd ~/apps/dify-usage-exporter
+
 # イメージをビルド
 docker compose build
-
-# ビルド結果を確認
-docker images | grep dify-usage-exporter
 ```
 
-### 4.2 コンテナの起動
+### 3.2 手動実行でテスト
+
+まずスケジュール起動せずに手動でテストします:
+
+```bash
+# 一回限りの実行でテスト
+docker compose run --rm dify-usage-exporter node dist/index.js
+```
+
+**成功時の出力例:**
+
+```
+{"level":"info","message":"実行開始",...}
+{"level":"info","message":"Difyログイン成功",...}
+{"level":"info","message":"アプリ一覧取得完了","count":4,...}
+{"level":"info","message":"外部API送信完了","status":200,...}
+```
+
+### 3.3 API_Meter ダッシュボードで確認
+
+ブラウザで https://v0-cloud-api-meter.vercel.app/dashboard にアクセスし、データが送信されていることを確認します。
+
+### 3.4 コンテナの起動（スケジュール実行）
+
+テストが成功したら、バックグラウンドで起動:
 
 ```bash
 # バックグラウンドで起動
@@ -176,99 +186,114 @@ docker compose up -d
 
 # 起動状態を確認
 docker compose ps
-```
 
-**期待される出力:**
-
-```
-NAME                    STATUS              PORTS
-dify-usage-exporter     Up X minutes (healthy)
-```
-
-### 4.3 ログの確認
-
-```bash
-# リアルタイムでログを表示
+# ログを確認
 docker compose logs -f
-
-# 直近100行を表示
-docker compose logs --tail=100
-```
-
-### 4.4 手動実行（テスト）
-
-スケジュール実行前に手動でテストする場合:
-
-```bash
-# コンテナ内でスクリプトを実行
-docker compose exec dify-usage-exporter node dist/index.js --run-once
-
-# または新しいコンテナで実行
-docker compose run --rm dify-usage-exporter node dist/index.js --run-once
 ```
 
 ---
 
-## 5. 運用管理
+## 4. 運用コマンド
 
-### 5.1 コンテナの管理
+### 4.1 基本操作
 
 ```bash
-# 停止
-docker compose stop
+cd ~/apps/dify-usage-exporter
+
+# ステータス確認
+docker compose ps
+
+# ログ確認（リアルタイム）
+docker compose logs -f
+
+# ログ確認（直近100行）
+docker compose logs --tail=100
 
 # 再起動
 docker compose restart
 
+# 停止
+docker compose stop
+
 # 完全停止・削除
 docker compose down
-
-# ボリュームも含めて削除（データ消失注意）
-docker compose down -v
 ```
 
-### 5.2 ログの管理
+### 4.2 手動でデータ送信
 
-ログは JSON 形式で保存され、自動ローテーションされます（10MB × 3ファイル）。
+スケジュール外で即時実行したい場合:
 
 ```bash
-# ログファイルの場所を確認
-docker inspect dify-usage-exporter | grep LogPath
+# 実行中のコンテナ内で実行
+docker compose exec dify-usage-exporter node dist/index.js
 
-# 特定の日付のログを検索
-docker compose logs | grep "2025-12-15"
-
-# エラーログのみ表示
-docker compose logs | grep '"level":"error"'
+# または新しいコンテナで実行
+docker compose run --rm dify-usage-exporter node dist/index.js
 ```
 
-### 5.3 ヘルスチェック
+### 4.3 CLI コマンド
 
 ```bash
-# ヘルスステータス確認
-docker inspect dify-usage-exporter --format='{{.State.Health.Status}}'
+# 失敗ファイル一覧
+docker compose exec dify-usage-exporter node dist/cli/index.js list
 
-# ヘルスチェック履歴
-docker inspect dify-usage-exporter --format='{{json .State.Health}}' | jq
+# ヘルプ
+docker compose exec dify-usage-exporter node dist/cli/index.js --help
 ```
 
-### 5.4 データの永続化
+---
 
-ウォーターマークやスプールファイルは Docker ボリュームに保存されます。
+## 5. トラブルシューティング
+
+### 5.1 Dify に接続できない
+
+**エラー:** `connect ECONNREFUSED` または `ETIMEDOUT`
 
 ```bash
-# ボリュームの確認
-docker volume ls | grep exporter
+# コンテナ内から Dify への接続テスト
+docker compose run --rm dify-usage-exporter sh -c 'wget -q --spider http://host.docker.internal && echo "OK" || echo "NG"'
+```
 
-# ボリュームの詳細
-docker volume inspect dify-usage-exporter_exporter-data
+**対処法:**
+1. Dify コンテナが起動しているか確認: `docker ps | grep dify`
+2. Dify のポートを確認: `curl http://localhost:80`
+3. `extra_hosts` 設定を確認
+
+### 5.2 Dify ログイン失敗
+
+**エラー:** `401 Unauthorized` または `Invalid credentials`
+
+**対処法:**
+1. `.env` の `DIFY_EMAIL` と `DIFY_PASSWORD` を確認
+2. Dify 管理画面でログインできるか確認
+3. パスワードに特殊文字がある場合はクォートで囲む
+
+### 5.3 API_Meter 送信エラー
+
+**エラー:** `401 AUTH_TOKEN_INVALID`
+
+**対処法:**
+1. `EXTERNAL_API_TOKEN` が正しいか確認
+2. `API_METER_TENANT_ID` が正しい UUID 形式か確認
+
+```bash
+# 設定値を確認
+docker compose exec dify-usage-exporter printenv | grep -E "(EXTERNAL_API|API_METER)"
+```
+
+### 5.4 スケジュールが動作しない
+
+```bash
+# Cron 設定を確認
+docker compose exec dify-usage-exporter printenv | grep CRON
+
+# コンテナの時刻を確認（UTC）
+docker compose exec dify-usage-exporter date
 ```
 
 ---
 
 ## 6. アップデート手順
-
-### 6.1 アプリケーションの更新
 
 ```bash
 cd ~/apps/dify-usage-exporter
@@ -289,194 +314,76 @@ docker compose up -d
 docker compose logs -f
 ```
 
-### 6.2 環境変数の変更
-
-```bash
-# .env を編集
-nano .env
-
-# コンテナを再起動（再ビルド不要）
-docker compose down
-docker compose up -d
-```
-
 ---
 
-## 7. トラブルシューティング
+## 7. Dify ネットワークへの参加（オプション）
 
-### 7.1 コンテナが起動しない
+Dify と同じ Docker ネットワークで動作させる場合:
 
-```bash
-# エラーログを確認
-docker compose logs
-
-# コンテナの詳細状態を確認
-docker inspect dify-usage-exporter
-```
-
-**よくある原因:**
-- 環境変数の設定ミス
-- Dify API への接続エラー
-- 認証情報の誤り
-
-### 7.2 Dify API 接続エラー
+### 7.1 Dify のネットワーク名を確認
 
 ```bash
-# コンテナ内から接続テスト
-docker compose exec dify-usage-exporter wget -q --spider https://your-dify-instance.com
-echo $?  # 0 なら接続成功
+# Dify コンテナのネットワークを確認
+docker inspect $(docker ps -q --filter name=dify) --format='{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}'
 ```
 
-**確認事項:**
-- `DIFY_API_BASE_URL` が正しいか
-- セキュリティグループでアウトバウンド 443 が許可されているか
-- Dify サーバーが稼働しているか
+### 7.2 docker-compose.yml を修正
 
-### 7.3 API_Meter 送信エラー
+```yaml
+services:
+  dify-usage-exporter:
+    # ... 既存の設定 ...
+    networks:
+      - dify_default  # Dify のネットワーク名に合わせる
+    environment:
+      - DIFY_API_BASE_URL=http://nginx  # Dify の nginx コンテナ名
 
-```bash
-# 認証テスト
-docker compose exec dify-usage-exporter sh -c 'wget -q -O- --header="Authorization: Bearer $EXTERNAL_API_TOKEN" $EXTERNAL_API_URL'
-```
-
-**確認事項:**
-- `EXTERNAL_API_TOKEN` が正しいか
-- `API_METER_TENANT_ID` が正しいか
-- API_Meter サーバーが稼働しているか
-
-### 7.4 スケジュール実行されない
-
-```bash
-# 現在のスケジュール設定を確認
-docker compose exec dify-usage-exporter printenv | grep CRON
-
-# タイムゾーンを確認（UTC）
-docker compose exec dify-usage-exporter date
-```
-
-**確認事項:**
-- `CRON_SCHEDULE` が UTC で正しく設定されているか
-- コンテナが正常に稼働しているか
-
-### 7.5 メモリ不足
-
-```bash
-# コンテナのリソース使用状況
-docker stats dify-usage-exporter --no-stream
-```
-
-必要に応じて EC2 インスタンスタイプをアップグレードしてください。
-
----
-
-## 8. セキュリティ考慮事項
-
-### 8.1 認証情報の管理
-
-- `.env` ファイルのパーミッションを制限: `chmod 600 .env`
-- 本番環境では AWS Secrets Manager の利用を検討
-- Git に `.env` をコミットしない（`.gitignore` で除外済み）
-
-### 8.2 ネットワークセキュリティ
-
-- セキュリティグループで必要最小限のポートのみ許可
-- SSH は管理用 IP からのみアクセス可能に制限
-- VPC 内で運用する場合は Private Subnet の利用を検討
-
-### 8.3 ログの取り扱い
-
-- ログには認証情報が含まれないことを確認
-- 長期保存が必要な場合は CloudWatch Logs への転送を検討
-
----
-
-## 9. 監視・アラート（オプション）
-
-### 9.1 CloudWatch との連携
-
-```bash
-# CloudWatch Logs エージェントのインストール
-sudo dnf install -y amazon-cloudwatch-agent
-
-# 設定ファイルの作成
-sudo nano /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
-```
-
-### 9.2 ヘルスチェック監視
-
-外部監視サービス（UptimeRobot 等）でヘルスチェックエンドポイントを監視:
-
-```
-http://<EC2_PUBLIC_IP>:8080/health
-```
-
-> **注意**: ヘルスチェックポートを外部公開する場合はセキュリティグループの設定が必要です。
-
----
-
-## 10. バックアップ・リストア
-
-### 10.1 データのバックアップ
-
-```bash
-# ボリュームデータをバックアップ
-docker run --rm -v dify-usage-exporter_exporter-data:/data -v $(pwd):/backup alpine tar czf /backup/exporter-data-backup.tar.gz -C /data .
-```
-
-### 10.2 リストア
-
-```bash
-# バックアップからリストア
-docker run --rm -v dify-usage-exporter_exporter-data:/data -v $(pwd):/backup alpine tar xzf /backup/exporter-data-backup.tar.gz -C /data
+networks:
+  dify_default:
+    external: true
 ```
 
 ---
 
 ## 付録
 
-### A. クイックスタートコマンド一覧
+### A. クイックスタート
 
 ```bash
-# 初回セットアップ
-sudo dnf update -y
-sudo dnf install -y docker git
-sudo systemctl start docker && sudo systemctl enable docker
-sudo usermod -aG docker ec2-user && newgrp docker
-sudo dnf install -y docker-compose-plugin
-
 # デプロイ
-cd ~/apps && git clone https://github.com/Ardama18/dify-usage-exporter.git
-cd dify-usage-exporter && cp .env.example .env && nano .env
-docker compose build && docker compose up -d
+cd ~/apps
+git clone https://github.com/Ardama18/dify-usage-exporter.git
+cd dify-usage-exporter
+cp .env.example .env
+nano .env  # 環境変数を設定
 
-# 運用
-docker compose ps          # ステータス確認
-docker compose logs -f     # ログ確認
-docker compose restart     # 再起動
-docker compose down        # 停止
+# テスト実行
+docker compose build
+docker compose run --rm dify-usage-exporter node dist/index.js
+
+# スケジュール起動
+docker compose up -d
 ```
 
-### B. 推奨 Cron スケジュール例
+### B. 環境変数一覧
 
-| 用途 | CRON_SCHEDULE (UTC) | 説明 |
-|------|---------------------|------|
-| 毎日 AM 1:00 JST | `0 16 * * *` | 日次バッチ |
-| 毎日 AM 6:00 JST | `0 21 * * *` | 早朝バッチ |
-| 毎月 1日 AM 0:00 JST | `0 15 1 * *` | 月次バッチ |
-| 毎週月曜 AM 9:00 JST | `0 0 * * 1` | 週次バッチ |
-
-### C. 環境変数一覧
-
-| 変数名 | 必須 | デフォルト | 説明 |
-|--------|------|-----------|------|
-| DIFY_API_BASE_URL | ○ | - | Dify API の URL |
-| DIFY_EMAIL | ○ | - | Dify ログインメール |
-| DIFY_PASSWORD | ○ | - | Dify ログインパスワード |
-| EXTERNAL_API_URL | ○ | - | API_Meter の URL |
-| EXTERNAL_API_TOKEN | ○ | - | API_Meter の Bearer トークン |
-| API_METER_TENANT_ID | ○ | - | テナント ID (UUID) |
-| CRON_SCHEDULE | - | `0 0 1 * *` | 実行スケジュール (UTC) |
+| 変数名 | 必須 | 設定例 | 説明 |
+|--------|------|--------|------|
+| DIFY_API_BASE_URL | ○ | `http://host.docker.internal` | Dify API URL |
+| DIFY_EMAIL | ○ | `admin@example.com` | Dify 管理者メール |
+| DIFY_PASSWORD | ○ | `your-password` | Dify パスワード |
+| EXTERNAL_API_URL | ○ | `https://v0-cloud-api-meter.vercel.app/api/integrations/dify/usage-data/receive` | API_Meter エンドポイント |
+| EXTERNAL_API_TOKEN | ○ | `Bearer-token` | API_Meter 認証トークン |
+| API_METER_TENANT_ID | ○ | `uuid-format` | テナント ID |
+| CRON_SCHEDULE | - | `0 16 * * *` | 実行スケジュール (UTC) |
 | DIFY_FETCH_PERIOD | - | `current_month` | 取得期間 |
 | LOG_LEVEL | - | `info` | ログレベル |
-| NODE_ENV | - | `production` | 実行環境 |
-| MAX_RETRY | - | `3` | リトライ回数 |
+
+### C. Cron スケジュール例（UTC）
+
+| JST | UTC (CRON_SCHEDULE) |
+|-----|---------------------|
+| 毎日 AM 1:00 | `0 16 * * *` |
+| 毎日 AM 6:00 | `0 21 * * *` |
+| 毎日 AM 9:00 | `0 0 * * *` |
+| 毎月 1日 AM 0:00 | `0 15 1 * *` |
