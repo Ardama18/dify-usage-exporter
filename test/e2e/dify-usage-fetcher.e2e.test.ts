@@ -115,6 +115,10 @@ function getTestEnv(): Record<string, string> {
     DIFY_PASSWORD: 'test-password',
     EXTERNAL_API_URL: 'https://external.api.com',
     EXTERNAL_API_TOKEN: 'test-external-token',
+    // API_Meter新仕様対応（SPEC-CHANGE-001）
+    API_METER_TENANT_ID: '550e8400-e29b-41d4-a716-446655440000',
+    API_METER_TOKEN: 'test-api-meter-token',
+    API_METER_URL: 'https://api-meter.example.com',
     NODE_ENV: 'test',
     LOG_LEVEL: 'error',
     CRON_SCHEDULE: '0 0 * * *',

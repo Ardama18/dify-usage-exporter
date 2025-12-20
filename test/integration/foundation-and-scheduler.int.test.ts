@@ -38,6 +38,10 @@ describe('環境変数管理 - loadConfig()', () => {
       process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
+      // API_Meter新仕様対応（SPEC-CHANGE-001）
+      process.env.API_METER_TENANT_ID = '550e8400-e29b-41d4-a716-446655440000'
+      process.env.API_METER_TOKEN = 'test-api-meter-token'
+      process.env.API_METER_URL = 'https://api-meter.example.com'
 
       // Act
       const { loadConfig } = await import('../../src/config/env-config.js')
@@ -61,6 +65,10 @@ describe('環境変数管理 - loadConfig()', () => {
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
       process.env.LOG_LEVEL = 'debug'
       process.env.MAX_RETRY = '5'
+      // API_Meter新仕様対応（SPEC-CHANGE-001）
+      process.env.API_METER_TENANT_ID = '550e8400-e29b-41d4-a716-446655440000'
+      process.env.API_METER_TOKEN = 'test-api-meter-token'
+      process.env.API_METER_URL = 'https://api-meter.example.com'
 
       // Act
       const { loadConfig } = await import('../../src/config/env-config.js')
@@ -280,6 +288,10 @@ describe('環境変数管理 - loadConfig()', () => {
       process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
+      // API_Meter新仕様対応（SPEC-CHANGE-001）
+      process.env.API_METER_TENANT_ID = '550e8400-e29b-41d4-a716-446655440000'
+      process.env.API_METER_TOKEN = 'test-api-meter-token'
+      process.env.API_METER_URL = 'https://api-meter.example.com'
     })
 
     it('CRON_SCHEDULEのデフォルト値は"0 0 * * *"である', async () => {
@@ -341,6 +353,10 @@ describe('環境変数管理 - loadConfig()', () => {
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
       process.env.LOG_LEVEL = 'debug'
+      // API_Meter新仕様対応（SPEC-CHANGE-001）
+      process.env.API_METER_TENANT_ID = '550e8400-e29b-41d4-a716-446655440000'
+      process.env.API_METER_TOKEN = 'test-api-meter-token'
+      process.env.API_METER_URL = 'https://api-meter.example.com'
 
       // Act
       const { loadConfig } = await import('../../src/config/env-config.js')
@@ -361,6 +377,10 @@ describe('環境変数管理 - loadConfig()', () => {
       process.env.DIFY_PASSWORD = 'test-password'
       process.env.EXTERNAL_API_URL = 'https://external.api.com'
       process.env.EXTERNAL_API_TOKEN = 'external-token-456'
+      // API_Meter新仕様対応（SPEC-CHANGE-001）
+      process.env.API_METER_TENANT_ID = '550e8400-e29b-41d4-a716-446655440000'
+      process.env.API_METER_TOKEN = 'test-api-meter-token'
+      process.env.API_METER_URL = 'https://api-meter.example.com'
 
       // Act
       const { loadConfig } = await import('../../src/config/env-config.js')
@@ -403,6 +423,10 @@ describe('ログ出力基盤 - createLogger()', () => {
     process.env.EXTERNAL_API_URL = 'https://external.api.com'
     process.env.EXTERNAL_API_TOKEN = 'external-token-456'
     process.env.NODE_ENV = 'test'
+    // API_Meter新仕様対応（SPEC-CHANGE-001）
+    process.env.API_METER_TENANT_ID = '550e8400-e29b-41d4-a716-446655440000'
+    process.env.API_METER_TOKEN = 'test-api-meter-token'
+    process.env.API_METER_URL = 'https://api-meter.example.com'
 
     // カスタムストリームでログ出力をキャプチャ
     capturedOutput = []
@@ -861,6 +885,10 @@ describe('定期実行スケジューラ - createScheduler()', () => {
     process.env.EXTERNAL_API_TOKEN = 'external-token-456'
     process.env.NODE_ENV = 'test'
     process.env.CRON_SCHEDULE = '* * * * * *' // 毎秒実行（テスト用）
+    // API_Meter新仕様対応（SPEC-CHANGE-001）
+    process.env.API_METER_TENANT_ID = '550e8400-e29b-41d4-a716-446655440000'
+    process.env.API_METER_TOKEN = 'test-api-meter-token'
+    process.env.API_METER_URL = 'https://api-meter.example.com'
 
     // カスタムストリームでログ出力をキャプチャ
     capturedOutput = []
@@ -1621,6 +1649,10 @@ describe('Graceful Shutdown - setupGracefulShutdown()', () => {
     process.env.EXTERNAL_API_URL = 'https://external.api.com'
     process.env.EXTERNAL_API_TOKEN = 'external-token-456'
     process.env.NODE_ENV = 'test'
+    // API_Meter新仕様対応（SPEC-CHANGE-001）
+    process.env.API_METER_TENANT_ID = '550e8400-e29b-41d4-a716-446655440000'
+    process.env.API_METER_TOKEN = 'test-api-meter-token'
+    process.env.API_METER_URL = 'https://api-meter.example.com'
 
     // カスタムストリームでログ出力をキャプチャ
     capturedOutput = []
@@ -2337,6 +2369,10 @@ describe('エントリーポイント - main()', () => {
     process.env.EXTERNAL_API_TOKEN = 'external-token-456'
     process.env.NODE_ENV = 'test'
     process.env.CRON_SCHEDULE = '0 0 * * *'
+    // API_Meter新仕様対応（SPEC-CHANGE-001）
+    process.env.API_METER_TENANT_ID = '550e8400-e29b-41d4-a716-446655440000'
+    process.env.API_METER_TOKEN = 'test-api-meter-token'
+    process.env.API_METER_URL = 'https://api-meter.example.com'
   })
 
   afterEach(() => {

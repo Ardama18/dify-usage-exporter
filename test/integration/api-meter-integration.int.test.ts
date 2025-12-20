@@ -212,16 +212,16 @@ describe('API_Meter Integration Test', { concurrent: false }, () => {
       const spoolExists = await spoolFilesExist()
       expect(spoolExists).toBe(false)
 
-      // Assert: 正規化が正しく行われている
+      // Assert: 正規化が正しく行われている（小文字化のみ、マッピングなし）
       expect(normalizedRecords[0].provider).toBe('anthropic')
-      expect(normalizedRecords[0].model).toBe('claude-3-5-sonnet-20241022') // 正規化済み
+      expect(normalizedRecords[0].model).toBe('claude-3-5-sonnet')
 
       // Assert: 変換結果が正しい
       expect(transformResult.recordCount).toBe(1)
       expect(transformResult.request.tenant_id).toBe(config.API_METER_TENANT_ID)
       expect(transformResult.request.records).toHaveLength(1)
       expect(transformResult.request.records[0].provider).toBe('anthropic')
-      expect(transformResult.request.records[0].model).toBe('claude-3-5-sonnet-20241022')
+      expect(transformResult.request.records[0].model).toBe('claude-3-5-sonnet')
       expect(transformResult.request.records[0].input_tokens).toBe(100)
       expect(transformResult.request.records[0].output_tokens).toBe(50)
       expect(transformResult.request.records[0].total_tokens).toBe(150)
@@ -274,9 +274,9 @@ describe('API_Meter Integration Test', { concurrent: false }, () => {
 
       await sender.send(transformResult.request)
 
-      // Assert: プロバイダー名が正規化されている（aws-bedrock → aws）
-      expect(normalizedRecords[0].provider).toBe('aws')
-      expect(transformResult.request.records[0].provider).toBe('aws')
+      // Assert: プロバイダー名は小文字化のみ（マッピングなし）
+      expect(normalizedRecords[0].provider).toBe('aws-bedrock')
+      expect(transformResult.request.records[0].provider).toBe('aws-bedrock')
     })
   })
 
@@ -346,11 +346,11 @@ describe('API_Meter Integration Test', { concurrent: false }, () => {
 
       await sender.send(transformResult.request)
 
-      // Assert: 複数レコードが正しく送信される
+      // Assert: 複数レコードが正しく送信される（モデル名は小文字化のみ）
       expect(transformResult.recordCount).toBe(2)
       expect(transformResult.request.records).toHaveLength(2)
-      expect(transformResult.request.records[0].model).toBe('claude-3-5-sonnet-20241022')
-      expect(transformResult.request.records[1].model).toBe('gpt-4-0613')
+      expect(transformResult.request.records[0].model).toBe('claude-3-5-sonnet')
+      expect(transformResult.request.records[1].model).toBe('gpt-4')
     })
   })
 

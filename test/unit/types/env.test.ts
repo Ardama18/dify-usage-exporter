@@ -9,6 +9,10 @@ describe('envSchema', () => {
     DIFY_PASSWORD: 'test-password',
     EXTERNAL_API_URL: 'https://external-api.example.com',
     EXTERNAL_API_TOKEN: 'external-token',
+    // API_Meter新仕様対応（SPEC-CHANGE-001）
+    API_METER_TENANT_ID: '550e8400-e29b-41d4-a716-446655440000',
+    API_METER_TOKEN: 'test-api-meter-token',
+    API_METER_URL: 'https://api-meter.example.com',
   }
 
   describe('既存環境変数の検証', () => {
@@ -353,12 +357,16 @@ describe('envSchema', () => {
 
 describe('型エクスポートの確認', () => {
   it('EnvConfig型にDify Fetcher関連のフィールドが含まれている', () => {
-    const config: EnvConfig = {
+    const config: Partial<EnvConfig> = {
       DIFY_API_BASE_URL: 'https://api.dify.ai',
       DIFY_EMAIL: 'test@example.com',
       DIFY_PASSWORD: 'test-password',
       EXTERNAL_API_URL: 'https://external-api.example.com',
       EXTERNAL_API_TOKEN: 'external-token',
+      // API_Meter新仕様対応（SPEC-CHANGE-001）
+      API_METER_TENANT_ID: '550e8400-e29b-41d4-a716-446655440000',
+      API_METER_TOKEN: 'test-api-meter-token',
+      API_METER_URL: 'https://api-meter.example.com',
       CRON_SCHEDULE: '0 0 * * *',
       LOG_LEVEL: 'info',
       GRACEFUL_SHUTDOWN_TIMEOUT: 30,
