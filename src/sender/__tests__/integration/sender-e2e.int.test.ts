@@ -33,6 +33,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
       exporter_version: '1.1.0',
       export_timestamp: '2025-01-21T00:00:00Z',
       aggregation_period: 'daily',
+      source_system: 'dify',
       date_range: {
         start: '2025-01-21T00:00:00Z',
         end: '2025-01-21T23:59:59Z',

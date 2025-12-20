@@ -175,6 +175,7 @@ describe('ApiMeterRequest Schema', () => {
           exporter_version: '1.1.0',
           export_timestamp: '2025-12-05T10:30:00.000Z',
           aggregation_period: 'daily' as const,
+          source_system: 'dify' as const,
           date_range: {
             start: '2025-11-29T00:00:00.000Z',
             end: '2025-11-29T23:59:59.999Z',
@@ -217,6 +218,7 @@ describe('ApiMeterRequest Schema', () => {
           exporter_version: '1.1.0',
           export_timestamp: '2025-12-05T10:30:00.000Z',
           aggregation_period: 'daily' as const,
+          source_system: 'dify' as const,
           date_range: {
             start: '2025-11-29T00:00:00.000Z',
             end: '2025-11-29T23:59:59.999Z',
@@ -274,6 +276,7 @@ describe('ApiMeterRequest Schema', () => {
           exporter_version: '1.1.0',
           export_timestamp: '2025-12-05T10:30:00.000Z',
           aggregation_period: 'daily' as const,
+          source_system: 'dify' as const,
           date_range: {
             start: '2025-11-29T00:00:00.000Z',
             end: '2025-11-29T23:59:59.999Z',
@@ -310,6 +313,7 @@ describe('ApiMeterRequest Schema', () => {
           exporter_version: '1.1.0',
           export_timestamp: '2025-12-05T10:30:00.000Z',
           aggregation_period: 'daily' as const,
+          source_system: 'dify' as const,
           date_range: {
             start: '2025-11-29T00:00:00.000Z',
             end: '2025-11-29T23:59:59.999Z',
@@ -329,6 +333,7 @@ describe('ApiMeterRequest Schema', () => {
           exporter_version: '1.1.0',
           export_timestamp: '2025-12-05T10:30:00.000Z',
           aggregation_period: 'invalid', // 無効な値
+          source_system: 'dify' as const,
           date_range: {
             start: '2025-11-29T00:00:00.000Z',
             end: '2025-11-29T23:59:59.999Z',

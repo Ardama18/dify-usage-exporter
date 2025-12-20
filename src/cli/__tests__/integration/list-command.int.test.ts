@@ -27,6 +27,7 @@ describe('listコマンド統合テスト (新形式)', { concurrent: false }, (
         exporter_version: '1.1.0',
         export_timestamp: '2025-01-20T10:30:00.000Z',
         aggregation_period: 'daily',
+        source_system: 'dify',
         date_range: {
           start: '2025-01-20T00:00:00.000Z',
           end: '2025-01-20T23:59:59.999Z',

@@ -42,17 +42,6 @@ export const envSchema = z
     API_METER_TENANT_ID: z.string().uuid({
       message: 'API_METER_TENANT_ID must be a valid UUID',
     }),
-    API_METER_TOKEN: z.string().min(1, {
-      message: 'API_METER_TOKEN must not be empty',
-    }),
-    API_METER_URL: z
-      .string()
-      .url({
-        message: 'API_METER_URL must be a valid URL',
-      })
-      .min(1, {
-        message: 'API_METER_URL must not be empty',
-      }),
 
     // オプション環境変数（デフォルト値あり）
     CRON_SCHEDULE: z.string().default('0 0 * * *'),
@@ -102,9 +91,19 @@ export const envSchema = z
       .default('true')
       .transform((val) => val.toLowerCase() === 'true'),
   })
-  .refine((data) => data.EXTERNAL_API_URL.startsWith('https://'), {
-    message: 'EXTERNAL_API_URL must use HTTPS protocol',
-    path: ['EXTERNAL_API_URL'],
-  })
+  .refine(
+    (data) => {
+      // 開発/テスト環境ではHTTPも許可
+      if (data.NODE_ENV === 'development' || data.NODE_ENV === 'test') {
+        return true
+      }
+      return data.EXTERNAL_API_URL.startsWith('https://')
+    },
+    {
+      message:
+        'EXTERNAL_API_URL must use HTTPS protocol (HTTP is only allowed in development/test)',
+      path: ['EXTERNAL_API_URL'],
+    },
+  )
 
 export type EnvConfig = z.infer<typeof envSchema>

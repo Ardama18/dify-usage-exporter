@@ -20,8 +20,6 @@ describe('envSchema', () => {
       EXTERNAL_API_URL: 'https://api.example.com',
       EXTERNAL_API_TOKEN: 'test-token',
       API_METER_TENANT_ID: '00000000-0000-0000-0000-000000000000',
-      API_METER_TOKEN: 'test-api-meter-token',
-      API_METER_URL: 'https://api-meter.example.com',
     }
   })
 
@@ -33,8 +31,6 @@ describe('envSchema', () => {
     describe('API_METER_TENANT_ID', () => {
       it('should accept valid UUID', () => {
         process.env.API_METER_TENANT_ID = '12345678-1234-1234-1234-123456789012'
-        process.env.API_METER_TOKEN = 'test-token'
-        process.env.API_METER_URL = 'https://api-meter.example.com'
 
         const result = envSchema.parse(process.env)
         expect(result.API_METER_TENANT_ID).toBe('12345678-1234-1234-1234-123456789012')
@@ -42,86 +38,18 @@ describe('envSchema', () => {
 
       it('should reject non-UUID format', () => {
         process.env.API_METER_TENANT_ID = 'not-a-uuid'
-        process.env.API_METER_TOKEN = 'test-token'
-        process.env.API_METER_URL = 'https://api-meter.example.com'
 
         expect(() => envSchema.parse(process.env)).toThrow()
       })
 
       it('should reject empty string', () => {
         process.env.API_METER_TENANT_ID = ''
-        process.env.API_METER_TOKEN = 'test-token'
-        process.env.API_METER_URL = 'https://api-meter.example.com'
 
         expect(() => envSchema.parse(process.env)).toThrow()
       })
 
       it('should fail when undefined', () => {
         delete process.env.API_METER_TENANT_ID
-        process.env.API_METER_TOKEN = 'test-token'
-        process.env.API_METER_URL = 'https://api-meter.example.com'
-
-        expect(() => envSchema.parse(process.env)).toThrow()
-      })
-    })
-
-    describe('API_METER_TOKEN', () => {
-      it('should accept non-empty string', () => {
-        process.env.API_METER_TENANT_ID = '12345678-1234-1234-1234-123456789012'
-        process.env.API_METER_TOKEN = 'bearer-token-12345'
-        process.env.API_METER_URL = 'https://api-meter.example.com'
-
-        const result = envSchema.parse(process.env)
-        expect(result.API_METER_TOKEN).toBe('bearer-token-12345')
-      })
-
-      it('should reject empty string', () => {
-        process.env.API_METER_TENANT_ID = '12345678-1234-1234-1234-123456789012'
-        process.env.API_METER_TOKEN = ''
-        process.env.API_METER_URL = 'https://api-meter.example.com'
-
-        expect(() => envSchema.parse(process.env)).toThrow()
-      })
-
-      it('should fail when undefined', () => {
-        process.env.API_METER_TENANT_ID = '12345678-1234-1234-1234-123456789012'
-        delete process.env.API_METER_TOKEN
-        process.env.API_METER_URL = 'https://api-meter.example.com'
-
-        expect(() => envSchema.parse(process.env)).toThrow()
-      })
-    })
-
-    describe('API_METER_URL', () => {
-      it('should accept valid URL', () => {
-        process.env.API_METER_TENANT_ID = '12345678-1234-1234-1234-123456789012'
-        process.env.API_METER_TOKEN = 'test-token'
-        process.env.API_METER_URL = 'https://api-meter.example.com'
-
-        const result = envSchema.parse(process.env)
-        expect(result.API_METER_URL).toBe('https://api-meter.example.com')
-      })
-
-      it('should reject non-URL format', () => {
-        process.env.API_METER_TENANT_ID = '12345678-1234-1234-1234-123456789012'
-        process.env.API_METER_TOKEN = 'test-token'
-        process.env.API_METER_URL = 'not-a-url'
-
-        expect(() => envSchema.parse(process.env)).toThrow()
-      })
-
-      it('should reject empty string', () => {
-        process.env.API_METER_TENANT_ID = '12345678-1234-1234-1234-123456789012'
-        process.env.API_METER_TOKEN = 'test-token'
-        process.env.API_METER_URL = ''
-
-        expect(() => envSchema.parse(process.env)).toThrow()
-      })
-
-      it('should fail when undefined', () => {
-        process.env.API_METER_TENANT_ID = '12345678-1234-1234-1234-123456789012'
-        process.env.API_METER_TOKEN = 'test-token'
-        delete process.env.API_METER_URL
 
         expect(() => envSchema.parse(process.env)).toThrow()
       })

@@ -72,6 +72,7 @@ export class SpoolManager {
         exporter_version: '1.1.0',
         export_timestamp: new Date().toISOString(),
         aggregation_period: 'daily',
+        source_system: 'dify',
         date_range: {
           start: minDate.toISOString(),
           end: maxDate.toISOString(),

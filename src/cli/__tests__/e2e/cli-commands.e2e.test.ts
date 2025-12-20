@@ -24,6 +24,10 @@ const testEnv = {
   DIFY_PASSWORD: 'test-password',
   EXTERNAL_API_URL: 'https://external-api.example.com',
   EXTERNAL_API_TOKEN: 'test-external-token',
+  // API_Meter新仕様対応（SPEC-CHANGE-001）
+  API_METER_TENANT_ID: '550e8400-e29b-41d4-a716-446655440000',
+  API_METER_TOKEN: 'test-api-meter-token',
+  API_METER_URL: 'https://api-meter.example.com',
 }
 
 /**
@@ -84,6 +88,70 @@ function runCli(
 const testFailedDir = 'data/failed'
 const testDataDir = 'data'
 
+/**
+ * v2.0.0形式のテスト用スプールファイルを作成するヘルパー関数
+ */
+function createV2SpoolFile(
+  batchId: string,
+  records: Array<{
+    usage_date: string
+    provider: string
+    model: string
+    input_tokens: number
+    output_tokens: number
+    total_tokens: number
+    request_count: number
+    cost_actual: number
+    app_id?: string
+    app_name?: string
+  }>,
+  options: {
+    retryCount?: number
+    createdAt?: string
+  } = {},
+) {
+  return {
+    version: '2.0.0' as const,
+    data: {
+      tenant_id: testEnv.API_METER_TENANT_ID,
+      export_metadata: {
+        exporter_version: '1.1.0',
+        export_timestamp: options.createdAt || new Date().toISOString(),
+        aggregation_period: 'daily' as const,
+        source_system: 'dify' as const,
+        date_range: {
+          start: records[0]?.usage_date
+            ? `${records[0].usage_date}T00:00:00.000Z`
+            : new Date().toISOString(),
+          end: records[0]?.usage_date
+            ? `${records[0].usage_date}T23:59:59.999Z`
+            : new Date().toISOString(),
+        },
+      },
+      records: records.map((r) => ({
+        usage_date: r.usage_date,
+        provider: r.provider,
+        model: r.model,
+        input_tokens: r.input_tokens,
+        output_tokens: r.output_tokens,
+        total_tokens: r.total_tokens,
+        request_count: r.request_count,
+        cost_actual: r.cost_actual,
+        currency: 'USD',
+        metadata: {
+          source_system: 'dify' as const,
+          source_event_id: `${batchId}-${r.usage_date}`,
+          source_app_id: r.app_id || 'test-app',
+          source_app_name: r.app_name || 'Test App',
+          aggregation_method: 'daily_sum',
+        },
+      })),
+    },
+    createdAt: options.createdAt || new Date().toISOString(),
+    retryCount: options.retryCount ?? 0,
+  }
+}
+
 describe('CLI E2Eテスト', { concurrent: false }, () => {
   // テスト前にディレクトリを準備
   beforeEach(async () => {
@@ -100,25 +168,25 @@ describe('CLI E2Eテスト', { concurrent: false }, () => {
   // ======================
   describe('listコマンド全体疎通', () => {
     it('E2E: npm run cli -- list コマンドが正常に実行され一覧が表示される', async () => {
-      // Arrange: テスト用失敗ファイルを作成
-      const testFile = {
-        batchIdempotencyKey: 'test123',
-        records: [
+      // Arrange: テスト用失敗ファイルを作成（v2.0.0形式）
+      const testFile = createV2SpoolFile(
+        'test123',
+        [
           {
-            date: '2025-01-20',
+            usage_date: '2025-01-20',
+            provider: 'anthropic',
+            model: 'claude-3-5-sonnet',
+            input_tokens: 100,
+            output_tokens: 50,
+            total_tokens: 150,
+            request_count: 1,
+            cost_actual: 0.001,
             app_id: 'app1',
             app_name: 'Test App',
-            token_count: 100,
-            currency: 'USD',
-            total_price: '0.001',
-            idempotency_key: 'key1',
-            transformed_at: '2025-01-20T10:30:00.000Z',
           },
         ],
-        firstAttempt: '2025-01-20T10:30:00.000Z',
-        retryCount: 10,
-        lastError: 'Test error',
-      }
+        { createdAt: '2025-01-20T10:30:00.000Z', retryCount: 10 },
+      )
       await fs.writeFile(
         `${testFailedDir}/failed_20250120T103000000Z_test123.json`,
         JSON.stringify(testFile),
@@ -130,47 +198,48 @@ describe('CLI E2Eテスト', { concurrent: false }, () => {
       // Assert
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toContain('Failed files')
-      expect(result.stdout).toContain('test123')
+      // v2.0.0: 識別子はタイムスタンプベース（2025-01-20T103000）
+      expect(result.stdout).toContain('2025-01-20')
     })
 
     it('E2E: 複数の失敗ファイルが存在する場合の一覧表示', async () => {
-      // Arrange: 複数のテストファイルを作成
-      const file1 = {
-        batchIdempotencyKey: 'batch1',
-        records: [
+      // Arrange: 複数のテストファイルを作成（v2.0.0形式）
+      const file1 = createV2SpoolFile(
+        'batch1',
+        [
           {
-            date: '2025-01-20',
+            usage_date: '2025-01-20',
+            provider: 'anthropic',
+            model: 'claude-3-5-sonnet',
+            input_tokens: 100,
+            output_tokens: 50,
+            total_tokens: 150,
+            request_count: 1,
+            cost_actual: 0.001,
             app_id: 'app1',
             app_name: 'Test App',
-            token_count: 100,
-            currency: 'USD',
-            total_price: '0.001',
-            idempotency_key: 'key1',
-            transformed_at: '2025-01-20T10:30:00.000Z',
           },
         ],
-        firstAttempt: '2025-01-20T10:30:00.000Z',
-        retryCount: 5,
-        lastError: 'Error 1',
-      }
-      const file2 = {
-        batchIdempotencyKey: 'batch2',
-        records: [
+        { createdAt: '2025-01-20T10:30:00.000Z', retryCount: 5 },
+      )
+      const file2 = createV2SpoolFile(
+        'batch2',
+        [
           {
-            date: '2025-01-21',
+            usage_date: '2025-01-21',
+            provider: 'openai',
+            model: 'gpt-4',
+            input_tokens: 200,
+            output_tokens: 100,
+            total_tokens: 300,
+            request_count: 1,
+            cost_actual: 0.002,
             app_id: 'app2',
-            app_name: 'Test App',
-            token_count: 100,
-            currency: 'USD',
-            total_price: '0.001',
-            idempotency_key: 'key2',
-            transformed_at: '2025-01-21T14:20:00.000Z',
+            app_name: 'Test App 2',
           },
         ],
-        firstAttempt: '2025-01-21T14:20:00.000Z',
-        retryCount: 3,
-        lastError: 'Error 2',
-      }
+        { createdAt: '2025-01-21T14:20:00.000Z', retryCount: 3 },
+      )
 
       await fs.writeFile(
         `${testFailedDir}/failed_20250120T103000000Z_batch1.json`,
@@ -186,41 +255,44 @@ describe('CLI E2Eテスト', { concurrent: false }, () => {
 
       // Assert
       expect(result.exitCode).toBe(0)
-      expect(result.stdout).toContain('batch1')
-      expect(result.stdout).toContain('batch2')
+      // v2.0.0: 識別子はタイムスタンプベース
+      expect(result.stdout).toContain('2025-01-20')
+      expect(result.stdout).toContain('2025-01-21')
       expect(result.stdout).toContain('Total: 2 files')
     })
 
     it('E2E: ファイル詳細（レコード数、初回試行日時、最終エラー）が正しく表示される', async () => {
-      // Arrange
-      const testFile = {
-        batchIdempotencyKey: 'detail-test',
-        records: [
+      // Arrange（v2.0.0形式）
+      const testFile = createV2SpoolFile(
+        'detail-test',
+        [
           {
-            date: '2025-01-20',
+            usage_date: '2025-01-20',
+            provider: 'anthropic',
+            model: 'claude-3-5-sonnet',
+            input_tokens: 100,
+            output_tokens: 50,
+            total_tokens: 150,
+            request_count: 1,
+            cost_actual: 0.001,
             app_id: 'app1',
             app_name: 'Test App',
-            token_count: 100,
-            currency: 'USD',
-            total_price: '0.001',
-            idempotency_key: 'key1',
-            transformed_at: '2025-01-20T10:30:00.000Z',
           },
           {
-            date: '2025-01-20',
+            usage_date: '2025-01-20',
+            provider: 'openai',
+            model: 'gpt-4',
+            input_tokens: 200,
+            output_tokens: 100,
+            total_tokens: 300,
+            request_count: 1,
+            cost_actual: 0.002,
             app_id: 'app2',
-            app_name: 'Test App',
-            token_count: 100,
-            currency: 'USD',
-            total_price: '0.001',
-            idempotency_key: 'key2',
-            transformed_at: '2025-01-20T10:31:00.000Z',
+            app_name: 'Test App 2',
           },
         ],
-        firstAttempt: '2025-01-20T10:30:00.000Z',
-        retryCount: 10,
-        lastError: 'Network timeout',
-      }
+        { createdAt: '2025-01-20T10:30:00.000Z', retryCount: 10 },
+      )
       await fs.writeFile(
         `${testFailedDir}/failed_20250120T103000000Z_detail-test.json`,
         JSON.stringify(testFile),
@@ -232,8 +304,7 @@ describe('CLI E2Eテスト', { concurrent: false }, () => {
       // Assert
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toContain('2') // レコード数
-      expect(result.stdout).toContain('2025-01-20') // 初回試行日時
-      expect(result.stdout).toContain('Network') // 最終エラー（truncated）
+      expect(result.stdout).toContain('2025-01-20') // 日付
     })
 
     it('E2E-edge: data/failed/が空の場合に「No failed files」が表示される', async () => {
@@ -253,25 +324,25 @@ describe('CLI E2Eテスト', { concurrent: false }, () => {
   // ======================
   describe('resendコマンド全体疎通', () => {
     it('E2E: npm run cli -- resend --file <filename> でファイル読み込みと再送試行が行われる', async () => {
-      // Arrange: テスト用失敗ファイルを作成
-      const testFile = {
-        batchIdempotencyKey: 'resend-test',
-        records: [
+      // Arrange: テスト用失敗ファイルを作成（v2.0.0形式）
+      const testFile = createV2SpoolFile(
+        'resend-test',
+        [
           {
-            date: '2025-01-20',
+            usage_date: '2025-01-20',
+            provider: 'anthropic',
+            model: 'claude-3-5-sonnet',
+            input_tokens: 100,
+            output_tokens: 50,
+            total_tokens: 150,
+            request_count: 1,
+            cost_actual: 0.001,
             app_id: 'app1',
             app_name: 'Test App',
-            token_count: 100,
-            currency: 'USD',
-            total_price: '0.001',
-            idempotency_key: 'key1',
-            transformed_at: '2025-01-20T10:30:00.000Z',
           },
         ],
-        firstAttempt: '2025-01-20T10:30:00.000Z',
-        retryCount: 10,
-        lastError: 'Test error',
-      }
+        { createdAt: '2025-01-20T10:30:00.000Z', retryCount: 10 },
+      )
       const filename = 'failed_20250120T103000000Z_resend-test.json'
       await fs.writeFile(`${testFailedDir}/${filename}`, JSON.stringify(testFile))
 
@@ -285,25 +356,25 @@ describe('CLI E2Eテスト', { concurrent: false }, () => {
     })
 
     it('E2E: npm run cli -- resend 引数なしでファイル一覧が表示される', async () => {
-      // Arrange
-      const testFile = {
-        batchIdempotencyKey: 'noargs-test',
-        records: [
+      // Arrange（v2.0.0形式）
+      const testFile = createV2SpoolFile(
+        'noargs-test',
+        [
           {
-            date: '2025-01-20',
+            usage_date: '2025-01-20',
+            provider: 'anthropic',
+            model: 'claude-3-5-sonnet',
+            input_tokens: 100,
+            output_tokens: 50,
+            total_tokens: 150,
+            request_count: 1,
+            cost_actual: 0.001,
             app_id: 'app1',
             app_name: 'Test App',
-            token_count: 100,
-            currency: 'USD',
-            total_price: '0.001',
-            idempotency_key: 'key1',
-            transformed_at: '2025-01-20T10:30:00.000Z',
           },
         ],
-        firstAttempt: '2025-01-20T10:30:00.000Z',
-        retryCount: 10,
-        lastError: 'Test error',
-      }
+        { createdAt: '2025-01-20T10:30:00.000Z', retryCount: 10 },
+      )
       await fs.writeFile(
         `${testFailedDir}/failed_20250120T103000000Z_noargs-test.json`,
         JSON.stringify(testFile),
@@ -315,7 +386,8 @@ describe('CLI E2Eテスト', { concurrent: false }, () => {
       // Assert
       expect(result.exitCode).toBe(0)
       expect(result.stdout).toContain('Failed files')
-      expect(result.stdout).toContain('noargs-test')
+      // v2.0.0: 識別子はタイムスタンプベース
+      expect(result.stdout).toContain('2025-01-20')
     })
 
     it('E2E: ファイルが存在しない場合にエラーが表示される', async () => {
@@ -498,38 +570,39 @@ describe('CLI E2Eテスト', { concurrent: false }, () => {
   // ======================
   describe('複合シナリオ', () => {
     it('E2E: list -> list の一連のフローが正常に動作', async () => {
-      // Arrange: テストファイルを作成
-      const testFile = {
-        batchIdempotencyKey: 'flow-test',
-        records: [
+      // Arrange: テストファイルを作成（v2.0.0形式）
+      const testFile = createV2SpoolFile(
+        'flow-test',
+        [
           {
-            date: '2025-01-20',
+            usage_date: '2025-01-20',
+            provider: 'anthropic',
+            model: 'claude-3-5-sonnet',
+            input_tokens: 100,
+            output_tokens: 50,
+            total_tokens: 150,
+            request_count: 1,
+            cost_actual: 0.001,
             app_id: 'app1',
             app_name: 'Test App',
-            token_count: 100,
-            currency: 'USD',
-            total_price: '0.001',
-            idempotency_key: 'key1',
-            transformed_at: '2025-01-20T10:30:00.000Z',
           },
         ],
-        firstAttempt: '2025-01-20T10:30:00.000Z',
-        retryCount: 10,
-        lastError: 'Test error',
-      }
+        { createdAt: '2025-01-20T10:30:00.000Z', retryCount: 10 },
+      )
       const filename = 'failed_20250120T103000000Z_flow-test.json'
       await fs.writeFile(`${testFailedDir}/${filename}`, JSON.stringify(testFile))
 
       // Step 1: list - ファイルが存在することを確認
       const listResult1 = await runCli(['list'])
       expect(listResult1.exitCode).toBe(0)
-      expect(listResult1.stdout).toContain('flow-test')
+      // v2.0.0: 識別子はタイムスタンプベース
+      expect(listResult1.stdout).toContain('2025-01-20')
       expect(listResult1.stdout).toContain('Total: 1 files')
 
       // Step 2: list again - ファイルがまだ存在することを確認
       const listResult2 = await runCli(['list'])
       expect(listResult2.exitCode).toBe(0)
-      expect(listResult2.stdout).toContain('flow-test')
+      expect(listResult2.stdout).toContain('2025-01-20')
     })
 
     it('E2E: watermark show -> watermark reset -> watermark show の一連のフローが正常に動作', async () => {
@@ -575,24 +648,25 @@ describe('CLI E2Eテスト', { concurrent: false }, () => {
       }
       await fs.writeFile(watermarkPath, JSON.stringify(initialWatermark, null, 2))
 
-      const testFile = {
-        batchIdempotencyKey: 'all-cmds-test',
-        records: [
+      // v2.0.0形式
+      const testFile = createV2SpoolFile(
+        'all-cmds-test',
+        [
           {
-            date: '2025-01-20',
+            usage_date: '2025-01-20',
+            provider: 'anthropic',
+            model: 'claude-3-5-sonnet',
+            input_tokens: 100,
+            output_tokens: 50,
+            total_tokens: 150,
+            request_count: 1,
+            cost_actual: 0.001,
             app_id: 'app1',
             app_name: 'Test App',
-            token_count: 100,
-            currency: 'USD',
-            total_price: '0.001',
-            idempotency_key: 'key1',
-            transformed_at: '2025-01-20T10:30:00.000Z',
           },
         ],
-        firstAttempt: '2025-01-20T10:30:00.000Z',
-        retryCount: 10,
-        lastError: 'Test error',
-      }
+        { createdAt: '2025-01-20T10:30:00.000Z', retryCount: 10 },
+      )
       await fs.writeFile(
         `${testFailedDir}/failed_20250120T103000000Z_all-cmds-test.json`,
         JSON.stringify(testFile),
@@ -628,25 +702,25 @@ describe('CLI E2Eテスト', { concurrent: false }, () => {
   // ======================
   describe('ファイルシステム操作', () => {
     it('E2E: 実際のテスト用失敗ファイルが正しく作成される', async () => {
-      // Arrange
-      const testFile = {
-        batchIdempotencyKey: 'fs-create-test',
-        records: [
+      // Arrange（v2.0.0形式）
+      const testFile = createV2SpoolFile(
+        'fs-create-test',
+        [
           {
-            date: '2025-01-20',
+            usage_date: '2025-01-20',
+            provider: 'anthropic',
+            model: 'claude-3-5-sonnet',
+            input_tokens: 100,
+            output_tokens: 50,
+            total_tokens: 150,
+            request_count: 1,
+            cost_actual: 0.001,
             app_id: 'app1',
             app_name: 'Test App',
-            token_count: 100,
-            currency: 'USD',
-            total_price: '0.001',
-            idempotency_key: 'key1',
-            transformed_at: '2025-01-20T10:30:00.000Z',
           },
         ],
-        firstAttempt: '2025-01-20T10:30:00.000Z',
-        retryCount: 10,
-        lastError: 'Test error',
-      }
+        { createdAt: '2025-01-20T10:30:00.000Z', retryCount: 10 },
+      )
       const filename = 'failed_20250120T103000000Z_fs-create-test.json'
       const filePath = `${testFailedDir}/${filename}`
 
@@ -656,8 +730,8 @@ describe('CLI E2Eテスト', { concurrent: false }, () => {
       // Assert: ファイルが存在し、内容が正しいこと
       const content = await fs.readFile(filePath, 'utf-8')
       const parsed = JSON.parse(content)
-      expect(parsed.batchIdempotencyKey).toBe('fs-create-test')
-      expect(parsed.records).toHaveLength(1)
+      expect(parsed.version).toBe('2.0.0')
+      expect(parsed.data.records).toHaveLength(1)
     })
 
     it('E2E: watermark.jsonが正しく読み書きされる', async () => {
@@ -690,27 +764,27 @@ describe('CLI E2Eテスト', { concurrent: false }, () => {
   // ======================
   describe('パフォーマンス', () => {
     it('E2E-perf: listコマンドが10ファイル以下で合理的な時間内に完了', async () => {
-      // Arrange: 複数のテストファイルを作成
+      // Arrange: 複数のテストファイルを作成（v2.0.0形式）
       const promises = []
       for (let i = 0; i < 10; i++) {
-        const testFile = {
-          batchIdempotencyKey: `perf-test-${i}`,
-          records: [
+        const testFile = createV2SpoolFile(
+          `perf-test-${i}`,
+          [
             {
-              date: '2025-01-20',
+              usage_date: '2025-01-20',
+              provider: 'anthropic',
+              model: 'claude-3-5-sonnet',
+              input_tokens: 100,
+              output_tokens: 50,
+              total_tokens: 150,
+              request_count: 1,
+              cost_actual: 0.001,
               app_id: `app${i}`,
               app_name: 'Test App',
-              token_count: 100,
-              currency: 'USD',
-              total_price: '0.001',
-              idempotency_key: `key${i}`,
-              transformed_at: '2025-01-20T10:30:00.000Z',
             },
           ],
-          firstAttempt: '2025-01-20T10:30:00.000Z',
-          retryCount: 10,
-          lastError: 'Test error',
-        }
+          { createdAt: '2025-01-20T10:30:00.000Z', retryCount: 10 },
+        )
         promises.push(
           fs.writeFile(
             `${testFailedDir}/failed_2025012${i}T103000000Z_perf-test-${i}.json`,

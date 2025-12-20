@@ -5,21 +5,24 @@
  */
 
 import { Command } from 'commander'
+import type { SpoolFile } from '../../types/spool.js'
 import type { CliDependencies } from '../bootstrap.js'
 import type { FailedFileInfo } from '../types.js'
 
 /**
- * ファイル名からファイル情報を抽出するヘルパー関数
- *
- * ファイル名パターン: failed_{timestamp}_{batchKey}.json
+ * SpoolFile (v2.0.0) からレコード数を取得するヘルパー関数
  */
-function extractFilenameFromBatchKey(batchKey: string | undefined): string {
-  if (!batchKey) {
-    return 'failed_*.json'
-  }
-  // 実際のファイル名は SpoolFile からは取得できないため、
-  // batchIdempotencyKey を使って識別情報を提供
-  return `failed_*_${batchKey}.json`
+function getRecordCount(file: SpoolFile): number {
+  return file.data.records?.length ?? 0
+}
+
+/**
+ * SpoolFileから識別情報を取得するヘルパー関数
+ * export_timestamp をベースに識別子を生成
+ */
+function getFileIdentifier(file: SpoolFile): string {
+  const timestamp = file.data.export_metadata?.export_timestamp ?? file.createdAt
+  return timestamp.replace(/[:.]/g, '').substring(0, 15)
 }
 
 /**
@@ -35,34 +38,8 @@ export function createListCommand(deps: CliDependencies): Command {
     .description('List failed files in data/failed/')
     .option('--json', 'Output as JSON')
     .action(async (options: { json?: boolean }) => {
-      // Note: SpoolManager returns SpoolFile[] but we cast to unknown for backward compatibility
-      const files = (await spoolManager.listFailedFiles()) as unknown as Array<{
-        batchIdempotencyKey?: string
-        records?: Array<{
-          date: string
-          app_id: string
-          app_name: string
-          token_count: number
-          total_price: string
-          currency: string
-          idempotency_key: string
-          transformed_at: string
-        }>
-        data?: Array<{
-          date: string
-          app_id: string
-          app_name: string
-          token_count: number
-          total_price: string
-          currency: string
-          idempotency_key: string
-          transformed_at: string
-        }>
-        firstAttempt?: string
-        createdAt: string
-        retryCount: number
-        lastError?: string
-      }>
+      // SpoolManagerは SpoolFile[] (v2.0.0形式のみ) を返す
+      const files = await spoolManager.listFailedFiles()
 
       if (files.length === 0) {
         if (options.json) {
@@ -81,24 +58,21 @@ export function createListCommand(deps: CliDependencies): Command {
 
       // ファイル情報を整形
       const fileInfoList: FailedFileInfo[] = files.map((file) => {
-        // LegacySpoolFileからrecords配列を取得（recordsまたはdataフィールド）
-        const records = file.records ?? file.data ?? []
-        const firstAttempt = file.firstAttempt ?? file.createdAt
-        const lastError = file.lastError ?? 'Unknown error'
+        const recordCount = getRecordCount(file)
+        const firstAttempt = file.createdAt
+        const lastError = 'See logs' // v2.0.0 ではlastErrorフィールドがないため
+        const identifier = getFileIdentifier(file)
 
         return {
-          filename: extractFilenameFromBatchKey(file.batchIdempotencyKey),
-          recordCount: records.length,
+          filename: `failed_*_${identifier}.json`,
+          recordCount,
           firstAttempt,
           lastError,
         }
       })
 
       const totalFiles = files.length
-      const totalRecords = files.reduce((sum, file) => {
-        const records = file.records ?? file.data ?? []
-        return sum + records.length
-      }, 0)
+      const totalRecords = files.reduce((sum, file) => sum + getRecordCount(file), 0)
 
       if (options.json) {
         // JSON出力モード

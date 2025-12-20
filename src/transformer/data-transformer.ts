@@ -62,13 +62,16 @@ export function createDataTransformer(deps: TransformerDeps) {
 
       // NormalizedModelRecord → ApiMeterUsageRecord への変換
       const usageRecords: ApiMeterUsageRecord[] = records.map((record) => {
-        // トークン計算検証
+        // トークン計算検証（REQ-003: トークン計算の検証）
         const totalTokens = record.inputTokens + record.outputTokens
         if (totalTokens !== record.totalTokens) {
           throw new Error(
             `Token mismatch: ${record.totalTokens} !== ${totalTokens} (${record.inputTokens} + ${record.outputTokens})`,
           )
         }
+
+        // コスト精度の正規化（REQ-010: 小数点以下7桁まで）
+        const costActualRounded = Math.round(record.costActual * 10_000_000) / 10_000_000
 
         return {
           usage_date: record.usageDate,
@@ -78,7 +81,7 @@ export function createDataTransformer(deps: TransformerDeps) {
           output_tokens: record.outputTokens,
           total_tokens: record.totalTokens,
           request_count: 1, // 日別集計のため1固定
-          cost_actual: record.costActual,
+          cost_actual: costActualRounded,
           currency: 'USD',
           metadata: {
             source_system: 'dify' as const,
@@ -96,6 +99,7 @@ export function createDataTransformer(deps: TransformerDeps) {
           exporter_version: '1.1.0',
           export_timestamp: new Date().toISOString(),
           aggregation_period: 'daily' as const,
+          source_system: 'dify' as const,
           date_range: {
             start: getDateRangeStart(records),
             end: getDateRangeEnd(records),

@@ -13,6 +13,10 @@ describe('loadConfig - Story 4 Extensions', () => {
       DIFY_PASSWORD: 'test-password',
       EXTERNAL_API_URL: 'https://api.example.com',
       EXTERNAL_API_TOKEN: 'test-token',
+      // API_Meter新仕様対応（SPEC-CHANGE-001）
+      API_METER_TENANT_ID: '550e8400-e29b-41d4-a716-446655440000',
+      API_METER_TOKEN: 'test-api-meter-token',
+      API_METER_URL: 'https://api-meter.example.com',
     }
   })
 
@@ -21,10 +25,19 @@ describe('loadConfig - Story 4 Extensions', () => {
   })
 
   describe('HTTPS必須チェック', () => {
-    it('should reject EXTERNAL_API_URL starting with http://', () => {
+    it('should reject EXTERNAL_API_URL starting with http:// in production', () => {
+      process.env.NODE_ENV = 'production'
       process.env.EXTERNAL_API_URL = 'http://api.example.com'
 
       expect(() => loadConfig()).toThrow()
+    })
+
+    it('should accept EXTERNAL_API_URL starting with http:// in development/test', () => {
+      process.env.NODE_ENV = 'test'
+      process.env.EXTERNAL_API_URL = 'http://api.example.com'
+
+      const config = loadConfig()
+      expect(config.EXTERNAL_API_URL).toBe('http://api.example.com')
     })
 
     it('should accept EXTERNAL_API_URL starting with https://', () => {

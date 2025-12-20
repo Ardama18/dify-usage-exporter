@@ -46,6 +46,7 @@ export const apiMeterRequestSchema = z.object({
     exporter_version: z.string().default('1.1.0'),
     export_timestamp: z.string().datetime(),
     aggregation_period: z.enum(['daily', 'weekly', 'monthly']),
+    source_system: z.literal('dify'),
     date_range: z.object({
       start: z.string().datetime(),
       end: z.string().datetime(),

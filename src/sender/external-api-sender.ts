@@ -33,11 +33,14 @@ interface ApiMeterResponse {
 export class ExternalApiSender implements ISender {
   constructor(
     private readonly httpClient: HttpClient,
-    private readonly _spoolManager: SpoolManager, // Task 3-3で使用予定
-    private readonly _notifier: INotifier, // Task 3-3で使用予定
+    private readonly _spoolManager: SpoolManager,
+    // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Task 3-3で使用予定
+    private readonly _notifier: INotifier,
     private readonly logger: Logger,
-    private readonly _config: EnvConfig, // Task 3-3で使用予定
-    private readonly _metrics: ExecutionMetrics, // Task 3-3で使用予定
+    // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Task 3-3で使用予定
+    private readonly _config: EnvConfig,
+    // biome-ignore lint/correctness/noUnusedPrivateClassMembers: _metrics is used in handleSuccessResponse/handleSendErrorWithSpool
+    private readonly _metrics: ExecutionMetrics,
   ) {}
 
   /**
