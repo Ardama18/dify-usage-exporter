@@ -141,7 +141,7 @@ export class ExternalApiSender {
 ## 完了条件
 
 - [x] 追加したテストが全てパス
-- [ ] TypeScript strict mode: エラー0件（※Task 3-3で統合テスト・CLIコマンド更新後に達成）
+- [x] TypeScript strict mode: エラー0件（※Task 3-3で統合テスト・CLIコマンド更新後に達成）
   ```bash
   npm run build
   ```
@@ -160,19 +160,19 @@ export class ExternalApiSender {
 ## テストケース
 
 ### 正常系
-- [ ] `ApiMeterRequest` 送信成功
-- [ ] 200 OKレスポンスが正しく処理される（inserted/updated確認）
-- [ ] メトリクスが正しく更新される（sendSuccess）
+- [x] `ApiMeterRequest` 送信成功
+- [x] 200 OKレスポンスが正しく処理される（inserted/updated確認）
+- [x] メトリクスが正しく更新される（sendSuccess）
 
 ### 異常系
-- [ ] 400 Bad Request → エラーメッセージ詳細化
-- [ ] 401 Unauthorized → エラーメッセージ詳細化
-- [ ] 403 Forbidden → エラーメッセージ詳細化
-- [ ] 404 Not Found → エラーメッセージ詳細化
-- [ ] 422 Unprocessable Entity → エラーメッセージ詳細化
-- [ ] 429 Too Many Requests → リトライ後エラー
-- [ ] 5xx系 → リトライ後エラー
-- [ ] メトリクスが正しく更新される（sendFailure）
+- [x] 400 Bad Request → エラーメッセージ詳細化
+- [x] 401 Unauthorized → エラーメッセージ詳細化
+- [x] 403 Forbidden → エラーメッセージ詳細化
+- [x] 404 Not Found → エラーメッセージ詳細化
+- [x] 422 Unprocessable Entity → エラーメッセージ詳細化
+- [x] 429 Too Many Requests → リトライ後エラー
+- [x] 5xx系 → リトライ後エラー
+- [x] メトリクスが正しく更新される（sendFailure）
 
 ## 注意事項
 

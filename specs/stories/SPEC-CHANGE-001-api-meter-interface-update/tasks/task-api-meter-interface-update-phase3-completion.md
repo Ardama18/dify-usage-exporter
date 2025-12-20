@@ -25,12 +25,12 @@ based_on: specs/stories/SPEC-CHANGE-001-api-meter-interface-update/plan.md
 
 ## Phase完了基準
 
-- [ ] HTTPクライアントがBearer Token認証で送信する
-- [ ] 200 OKレスポンスが正しく処理される
-- [ ] 旧形式スプールファイルが新形式へ変換される
-- [ ] 送信層のユニットテストが全てパスする
-- [ ] **動作確認**: `npm test src/sender/` でパス
-- [ ] **型チェック**: `npm run build` でエラーなし
+- [x] HTTPクライアントがBearer Token認証で送信する
+- [x] 200 OKレスポンスが正しく処理される
+- [x] 旧形式スプールファイルが新形式へ変換される
+- [x] 送信層のユニットテストが全てパスする
+- [x] **動作確認**: `npm test src/sender/` でパス
+- [x] **型チェック**: `npm run build` でエラーなし
 
 ## 次フェーズへの引き継ぎ事項
 
@@ -39,4 +39,4 @@ based_on: specs/stories/SPEC-CHANGE-001-api-meter-interface-update/plan.md
 
 ---
 
-**Phase 3完了日**: ___________
+**Phase 3完了日**: 2025-12-06

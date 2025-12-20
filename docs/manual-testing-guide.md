@@ -2,7 +2,10 @@
 
 ## 概要
 
-本ドキュメントは、dify-usage-exporter の API_Meter 新仕様対応（v1.1.0）について、人の手で実施する機能テストの仕様と手順を定義します。
+本ドキュメントは、dify-usage-exporter（v1.2.0）について、人の手で実施する機能テストの仕様と手順を定義します。
+
+**v1.2.0 の主な更新**:
+- chat / completion モードのサポート追加（全5モードに対応）
 
 ---
 
@@ -14,15 +17,17 @@
 
 ```bash
 # Dify API 設定
-DIFY_API_URL=https://your-dify-instance.example.com
-DIFY_CONSOLE_USER_EMAIL=your-email@example.com
-DIFY_CONSOLE_USER_PASSWORD=your-password
-DIFY_WORKSPACE_ID=your-workspace-id
+DIFY_API_BASE_URL=http://localhost
+DIFY_EMAIL=your-email@example.com
+DIFY_PASSWORD=your-password
 
 # API_Meter 設定
-API_METER_TENANT_ID=12345678-1234-1234-1234-123456789abc
-API_METER_TOKEN=your-bearer-token
-API_METER_URL=https://api.meter.example.com
+API_METER_TENANT_ID=00000000-0000-0000-0000-000000000001
+EXTERNAL_API_TOKEN=your-api-token
+EXTERNAL_API_URL=http://localhost:3000/api/integrations/dify/usage-data/receive
+
+# 取得期間設定
+DIFY_FETCH_PERIOD=current_month  # today, yesterday, current_month, last_month
 
 # オプション
 LOG_LEVEL=debug
@@ -50,7 +55,7 @@ echo $?  # 0 であること
 # 全テスト実行
 npm run test
 
-# 品質チェック
+# 品質チェック（lint + build + test）
 npm run check:all
 ```
 
@@ -58,56 +63,99 @@ npm run check:all
 
 ---
 
-## 2. テスト項目一覧
+## 2. 実行方法
+
+### 2.1 データ取得・送信（run-once.ts）
+
+Difyからデータを取得してAPI_Meterに送信するには、以下のスクリプトを使用します。
+
+```bash
+# 手動実行スクリプト
+npx tsx scripts/run-once.ts
+```
+
+取得期間は環境変数 `DIFY_FETCH_PERIOD` で制御します。
+
+| 値 | 説明 |
+|---|-----|
+| `today` | 本日のデータのみ |
+| `yesterday` | 昨日のデータのみ |
+| `current_month` | 今月のデータ（デフォルト） |
+| `last_month` | 先月のデータ |
+
+### 2.2 CLI コマンド
+
+CLIは以下のコマンドを提供します。
+
+```bash
+# ヘルプ表示
+npm run cli -- --help
+
+# 失敗ファイル一覧表示
+npm run cli -- list
+
+# 失敗ファイル再送
+npm run cli -- resend --file <filename>
+npm run cli -- resend --all
+
+# ウォーターマーク管理
+npm run cli -- watermark show
+npm run cli -- watermark reset --date <ISO8601>
+```
+
+---
+
+## 3. テスト項目一覧
 
 | No. | カテゴリ | テスト項目 | 優先度 | 確認レベル |
 |-----|---------|----------|-------|----------|
-| T-01 | 基本動作 | per_model モードでの送信 | 必須 | L3（実機） |
-| T-02 | 基本動作 | all モードでの送信 | 必須 | L3（実機） |
-| T-03 | 正規化 | プロバイダー名の正規化 | 必須 | L2（ログ確認） |
-| T-04 | 正規化 | モデル名の標準化 | 必須 | L2（ログ確認） |
-| T-05 | 認証 | Bearer Token 認証 | 必須 | L3（実機） |
-| T-06 | エラー | 認証エラー（401） | 必須 | L2（ログ確認） |
+| T-01 | 基本動作 | データ取得・送信 | 必須 | L3（実機） |
+| T-02 | 正規化 | プロバイダー名のクレンジング | 必須 | L2（ログ確認） |
+| T-03 | 正規化 | モデル名のクレンジング | 必須 | L2（ログ確認） |
+| T-04 | 認証 | Bearer Token 認証 | 必須 | L3（実機） |
+| T-05 | エラー | 認証エラー（401） | 必須 | L2（ログ確認） |
+| T-06 | 冪等性 | 同一データの再送（重複防止） | 必須 | L3（実機） |
 | T-07 | エラー | バリデーションエラー（400） | 推奨 | L2（ログ確認） |
 | T-08 | エラー | リトライ動作 | 推奨 | L2（ログ確認） |
 | T-09 | スプール | 送信失敗時のスプール保存 | 推奨 | L1（ファイル確認） |
 | T-10 | スプール | スプールファイルの再送 | 推奨 | L2（ログ確認） |
-| T-11 | 冪等性 | 同一データの再送（重複防止） | 必須 | L3（実機） |
-| T-12 | CLI | --dry-run オプション | 推奨 | L1（ログ確認） |
-| T-13 | CLI | --date オプション | 必須 | L2（ログ確認） |
-| T-14 | 非対応モード | per_user モードのスキップ | 推奨 | L2（ログ確認） |
+| T-11 | CLI | list コマンド | 推奨 | L1（出力確認） |
+| T-12 | CLI | resend コマンド | 推奨 | L2（ログ確認） |
+| T-13 | CLI | watermark コマンド | 推奨 | L1（ファイル確認） |
 
 ---
 
-## 3. テスト手順
+## 4. テスト手順
 
-### T-01: per_model モードでの送信
+### T-01: データ取得・送信
 
-**目的**: モデル別使用量が API_Meter に正常に送信されることを確認
+**目的**: Difyからモデル別使用量を取得し、API_Meterに正常に送信されることを確認
 
 **前提条件**:
-- Dify に使用量データが存在する日付を指定
-- API_Meter の認証情報が正しく設定されている
+- Dify に使用量データが存在すること
+- API_Meter の認証情報が正しく設定されていること
 
 **手順**:
 
-1. テスト対象日を決定（例: 2025-12-06）
+1. 環境変数を設定
    ```bash
-   # Dify にデータがある日付を確認
-   npm run cli -- --mode per_model --date 2025-12-06 --dry-run
+   export DIFY_FETCH_PERIOD=current_month
+   export LOG_LEVEL=info
    ```
 
-2. 実際に送信を実行
+2. 実行
    ```bash
-   npm run cli -- --mode per_model --date 2025-12-06
+   npx tsx scripts/run-once.ts
    ```
 
 3. ログ出力を確認
    ```
    期待するログ:
-   - "[Sender] Sending X records to API_Meter"
-   - "[Sender] API_Meter response: 200 OK"
-   - "inserted: X, updated: Y"
+   - "実行開始"
+   - "データ取得完了" (recordCount: X)
+   - "データ集計完了"
+   - "データ正規化完了"
+   - "外部API送信完了" (status: 200)
    ```
 
 4. API_Meter 管理画面で確認
@@ -123,7 +171,7 @@ npm run check:all
 | 項目 | 結果 | 備考 |
 |------|------|------|
 | 実行日時 | | |
-| 対象日 | | |
+| 取得期間 | | |
 | レコード数 | | |
 | レスポンス | | |
 | inserted | | |
@@ -132,44 +180,7 @@ npm run check:all
 
 ---
 
-### T-02: all モードでの送信
-
-**目的**: 全集計モード（per_model + per_user + per_app + workspace）が正常に動作することを確認
-
-**手順**:
-
-1. all モードで実行
-   ```bash
-   npm run cli -- --mode all --date 2025-12-06
-   ```
-
-2. ログ出力を確認
-   ```
-   期待するログ:
-   - "Starting aggregation in 'all' mode"
-   - "per_model: X records"
-   - "[Sender] Sending X records to API_Meter"
-   - "per_user mode is not supported for API_Meter - skipping"
-   - "per_app mode is not supported for API_Meter - skipping"
-   - "workspace mode is not supported for API_Meter - skipping"
-   ```
-
-**合格基準**:
-- [ ] per_model のデータが API_Meter に送信される
-- [ ] per_user/per_app/workspace はスキップログが出力される
-- [ ] エラーなく完了する
-
-**結果記録**:
-| 項目 | 結果 | 備考 |
-|------|------|------|
-| 実行日時 | | |
-| per_model 送信数 | | |
-| スキップ確認 | | |
-| 確認者 | | |
-
----
-
-### T-03: プロバイダー名のクレンジング
+### T-02: プロバイダー名のクレンジング
 
 **目的**: Dify のプロバイダー名がクレンジング（小文字化・trim）されてそのまま転送されることを確認
 
@@ -198,14 +209,15 @@ npm run check:all
 
 2. 実行してログを確認
    ```bash
-   npm run cli -- --mode per_model --date 2025-12-06 2>&1 | tee test-log.txt
+   npx tsx scripts/run-once.ts 2>&1 | tee test-log.txt
    ```
 
 3. ログからクレンジングを確認
    ```bash
    grep -i "provider" test-log.txt
-   grep -i "cleansing" test-log.txt
    ```
+
+4. API_Meter 管理画面で provider フィールドを確認
 
 **合格基準**:
 - [ ] aws-bedrock がそのまま aws-bedrock で送信されている（マッピングなし）
@@ -219,7 +231,7 @@ npm run check:all
 
 ---
 
-### T-04: モデル名のクレンジング
+### T-03: モデル名のクレンジング
 
 **目的**: モデル名がクレンジング（小文字化・trim）されてそのまま転送されることを確認
 
@@ -241,7 +253,7 @@ npm run check:all
 
 1. 実行してログを確認
    ```bash
-   npm run cli -- --mode per_model --date 2025-12-06 2>&1 | grep -i "model"
+   npx tsx scripts/run-once.ts 2>&1 | grep -i "model"
    ```
 
 2. API_Meter 管理画面で model フィールドを確認
@@ -253,7 +265,7 @@ npm run check:all
 
 ---
 
-### T-05: Bearer Token 認証
+### T-04: Bearer Token 認証
 
 **目的**: API_Meter への送信が Bearer Token 認証で行われることを確認
 
@@ -261,7 +273,7 @@ npm run check:all
 
 1. 正しいトークンで送信
    ```bash
-   npm run cli -- --mode per_model --date 2025-12-06
+   npx tsx scripts/run-once.ts
    ```
 
 2. 200 OK が返ることを確認
@@ -272,7 +284,7 @@ npm run check:all
 
 ---
 
-### T-06: 認証エラー（401）
+### T-05: 認証エラー（401）
 
 **目的**: 不正なトークンで 401 エラーが正しくハンドリングされることを確認
 
@@ -280,31 +292,59 @@ npm run check:all
 
 1. 一時的に不正なトークンを設定
    ```bash
-   export API_METER_TOKEN=invalid-token
+   export EXTERNAL_API_TOKEN=invalid-token
    ```
 
 2. 送信を実行
    ```bash
-   npm run cli -- --mode per_model --date 2025-12-06
+   npx tsx scripts/run-once.ts
    ```
 
 3. ログを確認
    ```
    期待するログ:
-   - "401 Unauthorized"
-   - "Authentication failed"
-   - スプールファイルが保存される
+   - "401" または "Unauthorized"
+   - エラーメッセージが出力される
    ```
 
 4. 元のトークンに戻す
    ```bash
-   export API_METER_TOKEN=correct-token
+   export EXTERNAL_API_TOKEN=correct-token
    ```
 
 **合格基準**:
 - [ ] 401 エラーがログに出力される
-- [ ] スプールファイルが data/spool/ に保存される
-- [ ] プロセスがクラッシュしない
+- [ ] プロセスがクラッシュしない（適切にエラーハンドリングされる）
+
+---
+
+### T-06: 冪等性（同一データの再送）
+
+**目的**: 同じデータを複数回送信しても重複が発生しないことを確認
+
+**手順**:
+
+1. 同じデータを2回送信
+   ```bash
+   npx tsx scripts/run-once.ts
+   npx tsx scripts/run-once.ts
+   ```
+
+2. ログを確認
+   ```
+   期待するログ（2回目）:
+   - "200 OK" または status: 200
+   - "inserted: 0, updated: X" または同等の表示
+   ```
+
+3. API_Meter 管理画面で確認
+   - レコード数が増えていないこと
+   - updated_at が更新されていること
+
+**合格基準**:
+- [ ] 2回目の送信で inserted: 0 となる（または updated のみ）
+- [ ] API_Meter 上のレコード数が増えない
+- [ ] source_event_id が同一であること
 
 ---
 
@@ -314,21 +354,21 @@ npm run check:all
 
 **手順**:
 
-1. テストデータを人為的に不正にする（開発者モード）
+1. API_Meter 側でバリデーションエラーが発生する状況を作成
+   （例：tenant_id を不正な形式に変更）
 
 2. 送信を実行
 
 3. ログを確認
    ```
    期待するログ:
-   - "400 Bad Request"
-   - "Validation error"
-   - スプールファイルが保存される
+   - "400" または "Bad Request"
+   - エラー詳細が出力される
    ```
 
 **合格基準**:
 - [ ] 400 エラーがログに出力される
-- [ ] スプールファイルが data/spool/ に保存される
+- [ ] エラー詳細が確認できる
 
 ---
 
@@ -338,25 +378,24 @@ npm run check:all
 
 **手順**:
 
-1. API_Meter が 5xx を返す状況を作成（または一時的にネットワークを切断）
+1. API_Meter が 5xx を返す状況を作成
+   （例：API_Meter サーバーを一時停止）
 
 2. 送信を実行
    ```bash
-   npm run cli -- --mode per_model --date 2025-12-06
+   npx tsx scripts/run-once.ts
    ```
 
 3. ログを確認
    ```
    期待するログ:
-   - "Retry attempt 1/3"
-   - "Retry attempt 2/3"
-   - "Retry attempt 3/3"
-   - "Max retries exceeded, saving to spool"
+   - リトライ試行のログ
+   - 最終的なエラーログ
    ```
 
 **合格基準**:
 - [ ] 指定回数のリトライが実行される
-- [ ] リトライ失敗後にスプール保存される
+- [ ] リトライ失敗後にエラーログが出力される
 
 ---
 
@@ -364,22 +403,18 @@ npm run check:all
 
 **目的**: 送信失敗時にスプールファイルが正しく保存されることを確認
 
+**注意**: run-once.ts スクリプトはスプール保存機能を持ちません。この機能はスケジューラ経由での実行時のみ動作します。
+
 **手順**:
 
-1. 送信失敗を発生させる（T-06 または T-08 を利用）
-
-2. スプールディレクトリを確認
+1. スプールディレクトリを確認
    ```bash
    ls -la data/spool/
-   ```
-
-3. スプールファイルの内容を確認
-   ```bash
-   cat data/spool/*.json | jq .
+   ls -la data/failed/
    ```
 
 **合格基準**:
-- [ ] data/spool/ にファイルが保存される
+- [ ] スケジューラ実行時に送信失敗すると data/spool/ にファイルが保存される
 - [ ] ファイル内容が ApiMeterRequest 形式である
 - [ ] version フィールドが "2.0.0" である
 
@@ -387,32 +422,23 @@ npm run check:all
 
 ### T-10: スプールファイルの再送
 
-**目的**: スプールファイルが次回実行時に再送されることを確認
+**目的**: CLI でスプールファイルを再送できることを確認
 
 **手順**:
 
-1. スプールファイルが存在することを確認
+1. 失敗ファイルが存在することを確認
    ```bash
-   ls data/spool/
+   npm run cli -- list
    ```
 
-2. 正しい認証情報で再実行
+2. ファイルを再送
    ```bash
-   npm run cli -- --mode per_model --date 2025-12-06
+   npm run cli -- resend --file <filename>
+   # または
+   npm run cli -- resend --all
    ```
 
 3. ログを確認
-   ```
-   期待するログ:
-   - "Found X spool files to resend"
-   - "Resending spool file: xxx.json"
-   - "Spool file sent successfully"
-   ```
-
-4. スプールファイルが削除されたことを確認
-   ```bash
-   ls data/spool/
-   ```
 
 **合格基準**:
 - [ ] スプールファイルが再送される
@@ -420,122 +446,97 @@ npm run check:all
 
 ---
 
-### T-11: 冪等性（同一データの再送）
+### T-11: list コマンド
 
-**目的**: 同じデータを複数回送信しても重複が発生しないことを確認
-
-**手順**:
-
-1. 同じ日付のデータを2回送信
-   ```bash
-   npm run cli -- --mode per_model --date 2025-12-06
-   npm run cli -- --mode per_model --date 2025-12-06
-   ```
-
-2. ログを確認
-   ```
-   期待するログ（2回目）:
-   - "200 OK"
-   - "inserted: 0, updated: X"  # すべて更新扱い
-   ```
-
-3. API_Meter 管理画面で確認
-   - レコード数が増えていないこと
-   - updated_at が更新されていること
-
-**合格基準**:
-- [ ] 2回目の送信で inserted: 0 となる
-- [ ] API_Meter 上のレコード数が増えない
-- [ ] source_event_id が同一であること
-
----
-
-### T-12: --dry-run オプション
-
-**目的**: ドライランモードで実際の送信が行われないことを確認
+**目的**: 失敗ファイル一覧が正しく表示されることを確認
 
 **手順**:
 
-1. ドライランで実行
+1. 実行
    ```bash
-   npm run cli -- --mode per_model --date 2025-12-06 --dry-run
+   npm run cli -- list
    ```
 
-2. ログを確認
-   ```
-   期待するログ:
-   - "Dry run mode - skipping API_Meter send"
-   - 集計結果が表示される
-   ```
+2. 出力を確認
+   - ファイル名、レコード数、作成日時が表示されること
+   - ファイルがない場合は "No failed files" が表示されること
 
 **合格基準**:
-- [ ] API_Meter への送信が行われない
-- [ ] 集計結果がログに出力される
+- [ ] 失敗ファイル一覧が正しく表示される
+- [ ] ファイルがない場合に適切なメッセージが表示される
 
 ---
 
-### T-13: --date オプション
+### T-12: resend コマンド
 
-**目的**: 指定した日付のデータのみが処理されることを確認
+**目的**: 失敗ファイルの再送が正しく動作することを確認
 
 **手順**:
 
-1. 特定の日付を指定
+1. 失敗ファイルを確認
    ```bash
-   npm run cli -- --mode per_model --date 2025-12-01
+   npm run cli -- list
    ```
 
-2. ログを確認
+2. 特定ファイルを再送
+   ```bash
+   npm run cli -- resend --file <filename>
    ```
-   期待するログ:
-   - "Filtering data for date: 2025-12-01"
-   - usage_date が 2025-12-01 のレコードのみ
+
+3. 全ファイルを再送
+   ```bash
+   npm run cli -- resend --all
    ```
 
 **合格基準**:
-- [ ] 指定した日付のデータのみが処理される
-- [ ] 他の日付のデータが含まれない
+- [ ] 指定したファイルが再送される
+- [ ] --all で全ファイルが再送される
+- [ ] 成功時にファイルが削除される
 
 ---
 
-### T-14: per_user モードのスキップ
+### T-13: watermark コマンド
 
-**目的**: API_Meter 非対応モードが正しくスキップされることを確認
+**目的**: ウォーターマーク管理が正しく動作することを確認
 
 **手順**:
 
-1. per_user モードで実行
+1. 現在のウォーターマークを表示
    ```bash
-   npm run cli -- --mode per_user --date 2025-12-06
+   npm run cli -- watermark show
    ```
 
-2. ログを確認
+2. ウォーターマークをリセット
+   ```bash
+   npm run cli -- watermark reset --date 2025-12-01T00:00:00.000Z
    ```
-   期待するログ:
-   - "per_user mode is not supported for API_Meter integration"
-   - API_Meter への送信は行われない
+
+3. 確認プロンプトで "y" を入力
+
+4. リセット後の値を確認
+   ```bash
+   npm run cli -- watermark show
    ```
 
 **合格基準**:
-- [ ] スキップメッセージが出力される
-- [ ] エラーなく完了する
+- [ ] show で現在の値が表示される
+- [ ] reset で確認プロンプトが表示される
+- [ ] リセット後に新しい値が反映される
 
 ---
 
-## 4. テスト結果サマリー
+## 5. テスト結果サマリー
 
 ### 必須テスト項目
 
 | No. | テスト項目 | 結果 | 実施日 | 確認者 |
 |-----|----------|------|-------|-------|
-| T-01 | per_model モードでの送信 | | | |
-| T-02 | all モードでの送信 | | | |
-| T-03 | プロバイダー名の正規化 | | | |
-| T-04 | モデル名の標準化 | | | |
-| T-05 | Bearer Token 認証 | | | |
-| T-06 | 認証エラー（401） | | | |
-| T-11 | 冪等性（同一データの再送） | | | |
-| T-13 | --date オプション | | | |
+| T-01 | データ取得・送信 | | | |
+| T-02 | プロバイダー名のクレンジング | | | |
+| T-03 | モデル名のクレンジング | | | |
+| T-04 | Bearer Token 認証 | | | |
+| T-05 | 認証エラー（401） | | | |
+| T-06 | 冪等性（同一データの再送） | | | |
 
 ### 推奨テスト項目
 
@@ -545,12 +546,13 @@ npm run check:all
 | T-08 | リトライ動作 | | | |
 | T-09 | 送信失敗時のスプール保存 | | | |
 | T-10 | スプールファイルの再送 | | | |
-| T-12 | --dry-run オプション | | | |
-| T-14 | per_user モードのスキップ | | | |
+| T-11 | list コマンド | | | |
+| T-12 | resend コマンド | | | |
+| T-13 | watermark コマンド | | | |
 
 ---
 
-## 5. トラブルシューティング
+## 6. トラブルシューティング
 
 ### よくある問題と対処法
 
@@ -565,18 +567,18 @@ npm run build
 
 ```bash
 # 確認事項
-echo $API_METER_TOKEN
+echo $EXTERNAL_API_TOKEN
 echo $API_METER_TENANT_ID
 
 # トークンの再設定
-export API_METER_TOKEN=correct-token
+export EXTERNAL_API_TOKEN=correct-token
 ```
 
 #### 問題3: ネットワークエラー
 
 ```bash
 # 接続確認
-curl -I $API_METER_URL
+curl -I $EXTERNAL_API_URL
 
 # プロキシ設定確認
 echo $HTTP_PROXY
@@ -587,18 +589,18 @@ echo $HTTPS_PROXY
 
 ```bash
 # 認証情報確認
-echo $DIFY_CONSOLE_USER_EMAIL
-echo $DIFY_WORKSPACE_ID
+echo $DIFY_EMAIL
+echo $DIFY_API_BASE_URL
 
-# 日付範囲確認
-npm run cli -- --mode per_model --date 2025-12-06 --dry-run
+# 期間設定確認
+echo $DIFY_FETCH_PERIOD
 ```
 
 ---
 
-## 6. 付録
+## 7. 付録
 
-### 6.1 ログレベルの設定
+### 7.1 ログレベルの設定
 
 | レベル | 用途 |
 |-------|------|
@@ -611,7 +613,7 @@ npm run cli -- --mode per_model --date 2025-12-06 --dry-run
 export LOG_LEVEL=debug
 ```
 
-### 6.2 テストデータの確認
+### 7.2 テストデータの確認
 
 API_Meter に送信されるデータ形式:
 
@@ -624,6 +626,7 @@ API_Meter に送信されるデータ形式:
     "exporter_version": "1.1.0",
     "export_timestamp": "2025-12-06T10:00:00.000Z",
     "aggregation_period": "daily",
+    "source_system": "dify",
     "date_range": {
       "start": "2025-12-06T00:00:00.000Z",
       "end": "2025-12-06T00:00:00.000Z"
@@ -632,8 +635,8 @@ API_Meter に送信されるデータ形式:
   "records": [
     {
       "usage_date": "2025-12-06",
-      "provider": "aws-bedrock",
-      "model": "claude-3-5-sonnet",
+      "provider": "openai",
+      "model": "gpt-4o",
       "input_tokens": 10000,
       "output_tokens": 5000,
       "total_tokens": 15000,
@@ -655,10 +658,35 @@ API_Meter に送信されるデータ形式:
 - Dify から取得した値をクレンジング（小文字化・trim）してそのまま転送
 - マッピング・正規化は API_Meter 側で実施
 
+### 7.3 対応アプリモード
+
+dify-usage-exporter は以下の Dify アプリモードに対応しています。
+
+| アプリモード | 対応状況 | 取得方法 |
+|------------|---------|---------|
+| workflow | ✅ 対応 | `/workflow-runs` → `/node-executions` |
+| advanced-chat | ✅ 対応 | `/conversations` → `/messages` → `/node-executions` |
+| agent-chat | ✅ 対応 | `/conversations` → `/messages` → `/node-executions` |
+| chat | ✅ 対応 | `/apps/{id}` → `/statistics/token-costs` |
+| completion | ✅ 対応 | `/apps/{id}` → `/statistics/token-costs` |
+
+**各モードの取得方式**:
+
+1. **workflow / advanced-chat / agent-chat モード**:
+   - ワークフローのノード実行（`/node-executions`）から詳細なモデル別使用量を取得
+   - 入力/出力トークン数、プロバイダー、モデル名、コストを個別に取得可能
+
+2. **chat / completion モード（v1.2.0で追加）**:
+   - ワークフローを使用しないため、アプリ単位でトークン使用量を取得
+   - アプリ = モデルの1:1マッピング（1つのアプリは1つのモデルを使用）
+   - `/apps/{id}` APIでモデル設定を取得し、`/statistics/token-costs` APIで日次使用量を取得
+   - 入力/出力トークンの内訳はなく、合計トークン数のみ取得可能
+   - ユーザー別の内訳はなく、アプリ全体の集計値として記録
+
 ---
 
-**ドキュメントバージョン**: 1.1.0
+**ドキュメントバージョン**: 1.3.0
 **作成日**: 2025-12-07
-**更新日**: 2025-12-07
-**対象バージョン**: dify-usage-exporter v1.1.0
+**更新日**: 2025-12-14
+**対象バージョン**: dify-usage-exporter v1.2.0
 **関連ADR**: ADR 020 - Exporter正規化層の責務削減とデータ忠実性の確保

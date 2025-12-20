@@ -34,21 +34,21 @@ based_on: specs/stories/SPEC-CHANGE-001-api-meter-interface-update/plan.md
 
 ## 対象ファイル
 
-- [ ] src/types/spool.ts（更新）
-- [ ] src/sender/spool-manager.ts（更新）
-- [ ] src/sender/__tests__/spool-manager.test.ts（更新）
+- [x] src/types/spool.ts（更新）
+- [x] src/sender/spool-manager.ts（更新）
+- [x] src/sender/__tests__/spool-manager.test.ts（更新）
 
 ## 実装手順（TDD: Red-Green-Refactor）
 
 ### 1. Red Phase
-- [ ] 依存成果物の確認: `src/sender/external-api-sender.ts` が更新されている
-- [ ] `src/sender/__tests__/spool-manager.test.ts` を更新
-- [ ] 失敗するテストを追加:
+- [x] 依存成果物の確認: `src/sender/external-api-sender.ts` が更新されている
+- [x] `src/sender/__tests__/spool-manager.test.ts` を更新
+- [x] 失敗するテストを追加:
   - 旧形式スプールファイルの検出テスト
   - 旧形式 → 新形式変換のテスト
   - 変換失敗時の `data/failed/` 移動テスト
   - 新形式スプールファイルの保存・読み込みテスト
-- [ ] テスト実行して失敗を確認: `npm test src/sender/spool-manager.test.ts`
+- [x] テスト実行して失敗を確認: `npm test src/sender/spool-manager.test.ts`
 
 ### 2. Green Phase
 
@@ -221,12 +221,12 @@ export class SpoolManager {
 }
 ```
 
-- [ ] 追加したテストのみ実行して通ることを確認: `npm test src/sender/spool-manager.test.ts`
+- [x] 追加したテストのみ実行して通ることを確認: `npm test src/sender/spool-manager.test.ts`
 
 ### 3. Refactor Phase
-- [ ] エラーハンドリングの改善
-- [ ] ログ出力の充実化
-- [ ] 追加したテストが引き続き通ることを確認
+- [x] エラーハンドリングの改善
+- [x] ログ出力の充実化
+- [x] 追加したテストが引き続き通ることを確認
 
 ## 完了条件
 
@@ -250,16 +250,16 @@ export class SpoolManager {
 ## テストケース
 
 ### 正常系
-- [ ] 新形式スプールファイルの保存
-- [ ] 新形式スプールファイルの読み込み
-- [ ] 旧形式スプールファイルの検出
-- [ ] 旧形式 → 新形式変換成功
-- [ ] 変換後のファイルが正しく保存される
+- [x] 新形式スプールファイルの保存
+- [x] 新形式スプールファイルの読み込み
+- [x] 旧形式スプールファイルの検出
+- [x] 旧形式 → 新形式変換成功
+- [x] 変換後のファイルが正しく保存される
 
 ### 異常系
-- [ ] 旧形式変換失敗時に `data/failed/` へ移動
-- [ ] 不正な形式のスプールファイルを `data/failed/` へ移動
-- [ ] 変換後のファイルが zodスキーマでバリデーション成功
+- [x] 旧形式変換失敗時に `data/failed/` へ移動
+- [x] 不正な形式のスプールファイルを `data/failed/` へ移動
+- [x] 変換後のファイルが zodスキーマでバリデーション成功
 
 ## 注意事項
 

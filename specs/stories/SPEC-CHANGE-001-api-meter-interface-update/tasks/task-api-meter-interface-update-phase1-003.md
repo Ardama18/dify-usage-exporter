@@ -169,7 +169,7 @@ API_METER_URL=https://api-meter.example.com
 | API_METER_URL | API_MeterのエンドポイントURL | ✓ | URL |
 ```
 
-- [ ] README.mdの環境変数セクションを更新
+- [x] README.mdの環境変数セクションを更新
 
 ## 参考資料
 
