@@ -2,42 +2,42 @@
 
 ## 概要
 
-本ドキュメントは、**既存の Dify が動作している AWS EC2 インスタンス**に dify-usage-exporter を追加デプロイする手順を説明します。
+本ドキュメントは、AWS EC2 インスタンス上で dify-usage-exporter を Docker で運用する手順を説明します。
 
 ### システム構成
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  AWS EC2 インスタンス                                        │
-│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
-│  │     Dify        │    │    dify-usage-exporter          │ │
-│  │   (Docker)      │◄───│         (Docker)                │ │
-│  │                 │    │                                 │ │
-│  │  localhost:80   │    │  - Dify からデータ取得          │ │
-│  └─────────────────┘    │  - API_Meter へ送信             │ │
-│                         └─────────────────────────────────┘ │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │              dify-usage-exporter (Docker)               │ │
+│  │                                                         │ │
+│  │  1. Dify からデータ取得                                  │ │
+│  │  2. API_Meter へ送信                                    │ │
+│  └─────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼ HTTPS
-                    ┌───────────────────────────────┐
-                    │  API_Meter (Vercel)           │
-                    │  v0-cloud-api-meter.vercel.app│
-                    └───────────────────────────────┘
+          │                                │
+          ▼ HTTPS                          ▼ HTTPS
+┌───────────────────────┐    ┌───────────────────────────────┐
+│  Dify                 │    │  API_Meter (Vercel)           │
+│  dxj-sv-0328.ad.      │    │  v0-cloud-api-meter.vercel.app│
+│  dexerials.com        │    │                               │
+└───────────────────────┘    └───────────────────────────────┘
 ```
 
 ### 接続情報
 
 | サービス | URL | 備考 |
 |----------|-----|------|
-| Dify | `http://localhost` または `http://host.docker.internal` | EC2 内部アクセス |
-| API_Meter ダッシュボード | https://v0-cloud-api-meter.vercel.app/dashboard | 外部サービス |
+| Dify | https://dxj-sv-0328.ad.dexerials.com | `/apps` は含めない |
+| API_Meter ダッシュボード | https://v0-cloud-api-meter.vercel.app/dashboard | 確認用 |
 | API_Meter エンドポイント | https://v0-cloud-api-meter.vercel.app/api/integrations/dify/usage-data/receive | データ送信先 |
 
 ---
 
 ## 1. 前提条件
 
-### 1.1 既存環境の確認
+### 1.1 EC2 環境の確認
 
 EC2 に SSH 接続して以下を確認:
 
@@ -46,18 +46,23 @@ EC2 に SSH 接続して以下を確認:
 docker --version
 docker compose version
 
-# Dify コンテナが動作していることを確認
-docker ps | grep -i dify
+# Git がインストールされていることを確認
+git --version
 ```
 
-### 1.2 Dify への接続確認
+### 1.2 ネットワーク接続の確認
+
+EC2 から各サービスにアクセスできることを確認:
 
 ```bash
-# Dify が localhost でアクセス可能か確認
-curl -I http://localhost
-# または
-curl -I http://localhost:80
+# Dify への接続確認
+curl -I https://dxj-sv-0328.ad.dexerials.com
+
+# API_Meter への接続確認
+curl -I https://v0-cloud-api-meter.vercel.app
 ```
+
+> **注意**: セキュリティグループでアウトバウンド HTTPS (443) が許可されていることを確認してください。
 
 ---
 
@@ -89,14 +94,14 @@ nano .env
 
 ```bash
 # ============================================
-# Dify API 接続情報（同一EC2内のDify）
+# Dify API 接続情報
 # ============================================
-# Docker コンテナから EC2 ホストの Dify にアクセス
-DIFY_API_BASE_URL=http://host.docker.internal
+# Dify の URL（/apps は含めない）
+DIFY_API_BASE_URL=https://dxj-sv-0328.ad.dexerials.com
 
-# Dify の管理者アカウント
+# Dify の管理者アカウント（コンソールログイン用）
 DIFY_EMAIL=your-dify-admin-email@example.com
-DIFY_PASSWORD=your-dify-admin-password
+DIFY_PASSWORD=your-dify-password
 
 # ============================================
 # API_Meter 接続情報（Vercel）
@@ -125,21 +130,14 @@ NODE_ENV=production
 MAX_RETRY=3
 ```
 
-> **重要**:
-> - `DIFY_API_BASE_URL=http://host.docker.internal` は Docker コンテナから EC2 ホストにアクセスするための特殊なホスト名です
-> - `CRON_SCHEDULE` は **UTC** で設定します（JST -9時間）
+### 2.3 設定のポイント
 
-### 2.3 docker-compose.yml の確認
-
-既存の `docker-compose.yml` に `extra_hosts` 設定があることを確認:
-
-```yaml
-services:
-  dify-usage-exporter:
-    # ...
-    extra_hosts:
-      - "host.docker.internal:host-gateway"  # ← この設定が必要
-```
+| 設定項目 | 値 | 注意事項 |
+|---------|-----|---------|
+| DIFY_API_BASE_URL | `https://dxj-sv-0328.ad.dexerials.com` | `/apps` は **含めない** |
+| DIFY_EMAIL | Dify管理者のメール | コンソールにログインできるアカウント |
+| DIFY_PASSWORD | Difyパスワード | 特殊文字がある場合はクォートで囲む |
+| CRON_SCHEDULE | `0 16 * * *` | **UTC** で設定（JST -9時間） |
 
 ---
 
@@ -165,7 +163,7 @@ docker compose run --rm dify-usage-exporter node dist/index.js
 
 **成功時の出力例:**
 
-```
+```json
 {"level":"info","message":"実行開始",...}
 {"level":"info","message":"Difyログイン成功",...}
 {"level":"info","message":"アプリ一覧取得完了","count":4,...}
@@ -250,25 +248,48 @@ docker compose exec dify-usage-exporter node dist/cli/index.js --help
 **エラー:** `connect ECONNREFUSED` または `ETIMEDOUT`
 
 ```bash
-# コンテナ内から Dify への接続テスト
-docker compose run --rm dify-usage-exporter sh -c 'wget -q --spider http://host.docker.internal && echo "OK" || echo "NG"'
+# EC2 から Dify への接続テスト
+curl -I https://dxj-sv-0328.ad.dexerials.com
+
+# DNS 解決確認
+nslookup dxj-sv-0328.ad.dexerials.com
 ```
 
 **対処法:**
-1. Dify コンテナが起動しているか確認: `docker ps | grep dify`
-2. Dify のポートを確認: `curl http://localhost:80`
-3. `extra_hosts` 設定を確認
+1. EC2 のセキュリティグループでアウトバウンド 443 が許可されているか確認
+2. VPC の DNS 設定を確認
+3. ドメインが社内ネットワーク限定の場合、VPN や DirectConnect の設定を確認
 
-### 5.2 Dify ログイン失敗
+### 5.2 SSL 証明書エラー
+
+**エラー:** `UNABLE_TO_VERIFY_LEAF_SIGNATURE` または `CERT_HAS_EXPIRED`
+
+**対処法（自己署名証明書の場合）:**
+
+`.env` に以下を追加:
+```bash
+NODE_TLS_REJECT_UNAUTHORIZED=0
+```
+
+> **警告**: 本番環境では正規の SSL 証明書を使用することを推奨します。
+
+### 5.3 Dify ログイン失敗
 
 **エラー:** `401 Unauthorized` または `Invalid credentials`
 
+```bash
+# ログイン API の動作確認
+curl -X POST https://dxj-sv-0328.ad.dexerials.com/console/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"your-email@example.com","password":"your-password"}'
+```
+
 **対処法:**
 1. `.env` の `DIFY_EMAIL` と `DIFY_PASSWORD` を確認
-2. Dify 管理画面でログインできるか確認
+2. Dify 管理画面（https://dxj-sv-0328.ad.dexerials.com/apps）でログインできるか確認
 3. パスワードに特殊文字がある場合はクォートで囲む
 
-### 5.3 API_Meter 送信エラー
+### 5.4 API_Meter 送信エラー
 
 **エラー:** `401 AUTH_TOKEN_INVALID`
 
@@ -281,7 +302,7 @@ docker compose run --rm dify-usage-exporter sh -c 'wget -q --spider http://host.
 docker compose exec dify-usage-exporter printenv | grep -E "(EXTERNAL_API|API_METER)"
 ```
 
-### 5.4 スケジュールが動作しない
+### 5.5 スケジュールが動作しない
 
 ```bash
 # Cron 設定を確認
@@ -316,52 +337,28 @@ docker compose logs -f
 
 ---
 
-## 7. Dify ネットワークへの参加（オプション）
-
-Dify と同じ Docker ネットワークで動作させる場合:
-
-### 7.1 Dify のネットワーク名を確認
-
-```bash
-# Dify コンテナのネットワークを確認
-docker inspect $(docker ps -q --filter name=dify) --format='{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}'
-```
-
-### 7.2 docker-compose.yml を修正
-
-```yaml
-services:
-  dify-usage-exporter:
-    # ... 既存の設定 ...
-    networks:
-      - dify_default  # Dify のネットワーク名に合わせる
-    environment:
-      - DIFY_API_BASE_URL=http://nginx  # Dify の nginx コンテナ名
-
-networks:
-  dify_default:
-    external: true
-```
-
----
-
 ## 付録
 
 ### A. クイックスタート
 
 ```bash
-# デプロイ
+# 1. クローン
 cd ~/apps
 git clone https://github.com/Ardama18/dify-usage-exporter.git
 cd dify-usage-exporter
-cp .env.example .env
-nano .env  # 環境変数を設定
 
-# テスト実行
+# 2. 環境変数設定
+cp .env.example .env
+nano .env  # 以下を設定:
+           # - DIFY_API_BASE_URL=https://dxj-sv-0328.ad.dexerials.com
+           # - DIFY_EMAIL / DIFY_PASSWORD
+           # - EXTERNAL_API_TOKEN / API_METER_TENANT_ID
+
+# 3. テスト実行
 docker compose build
 docker compose run --rm dify-usage-exporter node dist/index.js
 
-# スケジュール起動
+# 4. スケジュール起動
 docker compose up -d
 ```
 
@@ -369,7 +366,7 @@ docker compose up -d
 
 | 変数名 | 必須 | 設定例 | 説明 |
 |--------|------|--------|------|
-| DIFY_API_BASE_URL | ○ | `http://host.docker.internal` | Dify API URL |
+| DIFY_API_BASE_URL | ○ | `https://dxj-sv-0328.ad.dexerials.com` | Dify URL（/apps 含めない） |
 | DIFY_EMAIL | ○ | `admin@example.com` | Dify 管理者メール |
 | DIFY_PASSWORD | ○ | `your-password` | Dify パスワード |
 | EXTERNAL_API_URL | ○ | `https://v0-cloud-api-meter.vercel.app/api/integrations/dify/usage-data/receive` | API_Meter エンドポイント |
@@ -387,3 +384,18 @@ docker compose up -d
 | 毎日 AM 6:00 | `0 21 * * *` |
 | 毎日 AM 9:00 | `0 0 * * *` |
 | 毎月 1日 AM 0:00 | `0 15 1 * *` |
+
+### D. 接続確認コマンド
+
+```bash
+# Dify への接続確認
+curl -I https://dxj-sv-0328.ad.dexerials.com
+
+# Dify ログイン API テスト
+curl -X POST https://dxj-sv-0328.ad.dexerials.com/console/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"your-email","password":"your-password"}'
+
+# API_Meter への接続確認
+curl -I https://v0-cloud-api-meter.vercel.app
+```
