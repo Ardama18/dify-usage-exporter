@@ -230,10 +230,11 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
     let accessToken: string | null = null
 
     for (const cookie of cookies) {
-      if (cookie.key === 'access_token') {
+      // Dify 1.9.x では __Host- プレフィックス付きCookie名を使用
+      if (cookie.key === '__Host-access_token' || cookie.key === 'access_token') {
         accessToken = cookie.value
       }
-      if (cookie.key === 'csrf_token') {
+      if (cookie.key === '__Host-csrf_token' || cookie.key === 'csrf_token') {
         csrfToken = cookie.value
       }
     }

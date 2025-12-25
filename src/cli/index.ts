@@ -6,6 +6,7 @@
 
 import { Command } from 'commander'
 import { bootstrapCli } from './bootstrap.js'
+import { createCheckCommand } from './commands/check.js'
 import { createListCommand } from './commands/list.js'
 import { createResendCommand } from './commands/resend.js'
 import { createWatermarkCommand } from './commands/watermark.js'
@@ -17,6 +18,7 @@ async function main(): Promise<void> {
   program.name('dify-usage-exporter').description('Dify usage data exporter CLI').version('1.0.0')
 
   // コマンド登録
+  program.addCommand(createCheckCommand(deps))
   program.addCommand(createListCommand(deps))
   program.addCommand(createResendCommand(deps))
   program.addCommand(createWatermarkCommand(deps))

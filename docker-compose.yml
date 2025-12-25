@@ -16,6 +16,7 @@ services:
       - DIFY_PASSWORD=${DIFY_PASSWORD}
       - EXTERNAL_API_URL=${EXTERNAL_API_URL}
       - EXTERNAL_API_TOKEN=${EXTERNAL_API_TOKEN}
+      - API_METER_TENANT_ID=${API_METER_TENANT_ID}
 
       # スケジュール設定
       - CRON_SCHEDULE=${CRON_SCHEDULE:-0 0 1 * *}  # デフォルト: 毎月1日 0:00
@@ -54,5 +55,14 @@ services:
         max-size: "10m"
         max-file: "3"
 
+    # Difyと同じネットワークに接続
+    networks:
+      - docker_default
+
 volumes:
   exporter-data:
+
+# Difyのネットワークを外部として参照
+networks:
+  docker_default:
+    external: true
