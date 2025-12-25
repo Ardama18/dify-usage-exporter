@@ -6,9 +6,7 @@
  */
 
 import axios, { type AxiosError, type AxiosResponse } from 'axios'
-import { wrapper } from 'axios-cookiejar-support'
 import { Command } from 'commander'
-import { CookieJar } from 'tough-cookie'
 import type { CliDependencies } from '../bootstrap.js'
 
 /**
@@ -21,6 +19,33 @@ interface ConnectionTestResult {
 }
 
 /**
+ * Set-Cookieヘッダーからトークンを抽出
+ */
+function extractCookieFromSetCookieHeader(
+  setCookieHeaders: string[] | undefined,
+  cookieName: string,
+): string | null {
+  if (!setCookieHeaders || setCookieHeaders.length === 0) {
+    return null
+  }
+
+  // __Host- プレフィックス付きとなしの両方を検索
+  const searchNames = [cookieName, `__Host-${cookieName}`]
+
+  for (const header of setCookieHeaders) {
+    for (const name of searchNames) {
+      const regex = new RegExp(`^${name}=([^;]+)`, 'i')
+      const match = header.match(regex)
+      if (match) {
+        return match[1]
+      }
+    }
+  }
+
+  return null
+}
+
+/**
  * Dify接続テストを実行
  */
 async function testDifyConnection(
@@ -28,8 +53,6 @@ async function testDifyConnection(
   email: string,
   password: string,
 ): Promise<ConnectionTestResult> {
-  const jar = new CookieJar()
-  const client = wrapper(axios.create({ jar, withCredentials: true }))
   const loginUrl = `${baseUrl.replace(/\/$/, '')}/console/api/login`
 
   console.log('\n🔍 Dify接続テスト開始')
@@ -37,7 +60,7 @@ async function testDifyConnection(
   console.log(`   Email: ${email}`)
 
   try {
-    const response: AxiosResponse = await client.post(
+    const response: AxiosResponse = await axios.post(
       loginUrl,
       {
         email,
@@ -61,20 +84,15 @@ async function testDifyConnection(
     console.log(`      レスポンスボディ: ${JSON.stringify(responseBody)}`)
     console.log(`      Set-Cookieヘッダー数: ${setCookieHeaders.length}`)
 
-    // Cookieを確認
-    const cookies = await jar.getCookies(baseUrl)
-    console.log(`\n   🍪 取得したCookie:`)
+    // Set-Cookieヘッダーから直接トークンを抽出
+    const accessToken = extractCookieFromSetCookieHeader(setCookieHeaders, 'access_token')
+    const refreshToken = extractCookieFromSetCookieHeader(setCookieHeaders, 'refresh_token')
+    const csrfToken = extractCookieFromSetCookieHeader(setCookieHeaders, 'csrf_token')
 
-    let hasAccessToken = false
-    let accessTokenCookieName = ''
-
-    for (const cookie of cookies) {
-      console.log(`      - ${cookie.key}: ${cookie.value.substring(0, 20)}...`)
-      if (cookie.key === '__Host-access_token' || cookie.key === 'access_token') {
-        hasAccessToken = true
-        accessTokenCookieName = cookie.key
-      }
-    }
+    console.log(`\n   🍪 Set-Cookieヘッダーから抽出したトークン:`)
+    console.log(`      - access_token: ${accessToken ? `${accessToken.substring(0, 20)}...` : '(なし)'}`)
+    console.log(`      - refresh_token: ${refreshToken ? `${refreshToken.substring(0, 20)}...` : '(なし)'}`)
+    console.log(`      - csrf_token: ${csrfToken ? `${csrfToken.substring(0, 20)}...` : '(なし)'}`)
 
     // Set-Cookieヘッダーの詳細
     if (setCookieHeaders.length > 0) {
@@ -103,20 +121,18 @@ async function testDifyConnection(
       }
     }
 
-    if (!hasAccessToken) {
+    if (!accessToken) {
       return {
         success: false,
-        message: 'アクセストークンCookieが取得できませんでした',
+        message: 'アクセストークンがSet-Cookieヘッダーから取得できませんでした',
         details: {
           statusCode,
           responseBody,
-          cookiesReceived: cookies.map((c) => c.key),
           setCookieHeaders: setCookieHeaders.map((h: string) => h.split('=')[0]),
           possibleCauses: [
             'Difyのバージョンによりcookie名が異なる可能性があります',
             '期待されるCookie名: __Host-access_token または access_token',
             'nginx等のプロキシがSet-Cookieヘッダーを削除している可能性があります',
-            'DIFY_API_BASE_URLをAPIコンテナ直接（例: http://docker-api-1:5001）に変更してみてください',
           ],
         },
       }
@@ -127,8 +143,11 @@ async function testDifyConnection(
       message: 'Dify接続成功',
       details: {
         statusCode,
-        accessTokenCookieName,
-        cookiesReceived: cookies.map((c) => c.key),
+        tokensExtracted: {
+          accessToken: !!accessToken,
+          refreshToken: !!refreshToken,
+          csrfToken: !!csrfToken,
+        },
       },
     }
   } catch (error) {

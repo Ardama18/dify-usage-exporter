@@ -15,7 +15,23 @@
       "Bash(npm run format:*)",
       "Bash(npx tsc:*)",
       "Bash(npx biome:*)",
-      "Bash(npm run lint:*)"
+      "Bash(npm run lint:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(test:*)",
+      "Bash(grep:*)",
+      "Bash(npm run check:all:*)",
+      "Bash(npm run test:performance:*)",
+      "Bash(npm run format:check:*)",
+      "Bash(npm run check:unused:*)",
+      "Bash(cat:*)",
+      "Bash(npm run test:*)",
+      "Bash(curl:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npm run cli:*)",
+      "Bash(LOG_LEVEL=debug npx tsx:*)",
+      "Bash(git push)",
+      "Bash(tree:*)"
     ]
   },
   "enabledMcpjsonServers": [
