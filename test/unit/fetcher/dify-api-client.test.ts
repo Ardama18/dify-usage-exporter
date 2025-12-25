@@ -35,34 +35,23 @@ vi.mock('axios', async () => {
 
   createMock.mockReturnValue(axiosInstance)
 
+  // ログイン用のSet-Cookieヘッダーを含むレスポンス
+  postMock.mockResolvedValue({
+    data: { result: 'success' },
+    headers: {
+      'set-cookie': [
+        '__Host-access_token=mock-access-token; Path=/; Secure; HttpOnly',
+        '__Host-csrf_token=mock-csrf-token; Path=/; Secure; HttpOnly',
+        '__Host-refresh_token=mock-refresh-token; Path=/; Secure; HttpOnly',
+      ],
+    },
+  })
+
   return {
     default: {
       create: createMock,
       post: postMock,
     },
-  }
-})
-
-// axios-cookiejar-supportをモック
-vi.mock('axios-cookiejar-support', async () => {
-  return {
-    wrapper: vi.fn((instance) => instance),
-  }
-})
-
-// tough-cookieをモック
-vi.mock('tough-cookie', async () => {
-  const mockCookies = [
-    { key: 'access_token', value: 'mock-access-token' },
-    { key: 'csrf_token', value: 'mock-csrf-token' },
-  ]
-
-  class MockCookieJar {
-    getCookies = vi.fn().mockResolvedValue(mockCookies)
-  }
-
-  return {
-    CookieJar: MockCookieJar,
   }
 })
 
@@ -132,11 +121,6 @@ describe('DifyApiClient', () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
-
       const getMock = vi.fn().mockResolvedValue({
         data: {
           data: [],
@@ -151,19 +135,13 @@ describe('DifyApiClient', () => {
 
       await client.fetchApps()
 
-      // ログインAPIが呼ばれることを確認（postが呼ばれる）
-      expect(axiosInstance.post).toBeDefined()
+      // ログインAPIが呼ばれることを確認（axios.postが呼ばれる）
+      expect(axios.default.post).toHaveBeenCalled()
     })
 
-    it('ログイン成功後にCookieが使用される', async () => {
+    it('ログイン成功後にSet-Cookieヘッダーからトークンが抽出される', async () => {
       const axios = await import('axios')
-      const { wrapper } = await import('axios-cookiejar-support')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
 
       const getMock = vi.fn().mockResolvedValue({
         data: {
@@ -178,8 +156,18 @@ describe('DifyApiClient', () => {
       const client = createDifyApiClient({ config, logger })
       await client.fetchApps()
 
-      // wrapperが呼ばれることを確認（Cookie Jar対応）
-      expect(wrapper).toHaveBeenCalled()
+      // ログインAPIが呼ばれることを確認
+      expect(axios.default.post).toHaveBeenCalledWith(
+        'https://api.dify.ai/console/api/login',
+        expect.objectContaining({
+          email: 'test@example.com',
+          password: 'test-password',
+        }),
+        expect.any(Object),
+      )
+
+      // ログイン成功のログが出力されることを確認
+      expect(logger.info).toHaveBeenCalledWith('Difyログイン成功')
     })
   })
 
@@ -187,11 +175,6 @@ describe('DifyApiClient', () => {
     it('baseURLが正しく設定される', async () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
 
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
@@ -213,11 +196,6 @@ describe('DifyApiClient', () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
-
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
       })
@@ -237,11 +215,6 @@ describe('DifyApiClient', () => {
     it('Content-Typeがapplication/jsonに設定される', async () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
 
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
@@ -264,11 +237,6 @@ describe('DifyApiClient', () => {
     it('User-Agentが設定される', async () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
 
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
@@ -295,11 +263,6 @@ describe('DifyApiClient', () => {
       const axiosRetry = await import('axios-retry')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
-
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
       })
@@ -316,11 +279,6 @@ describe('DifyApiClient', () => {
       const axios = await import('axios')
       const axiosRetry = await import('axios-retry')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
 
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
@@ -346,11 +304,6 @@ describe('DifyApiClient', () => {
       const axiosRetry = await import('axios-retry')
       const axiosRetryMock = axiosRetry.default as ReturnType<typeof vi.fn>
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
 
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
@@ -385,11 +338,6 @@ describe('DifyApiClient', () => {
       const axiosRetryMock = axiosRetry.default as ReturnType<typeof vi.fn>
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
-
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
       })
@@ -418,11 +366,6 @@ describe('DifyApiClient', () => {
       const axiosRetryMock = axiosRetry.default as ReturnType<typeof vi.fn>
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
-
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
       })
@@ -447,11 +390,6 @@ describe('DifyApiClient', () => {
       const axiosRetry = await import('axios-retry')
       const axiosRetryMock = axiosRetry.default as ReturnType<typeof vi.fn>
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
 
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
@@ -483,11 +421,6 @@ describe('DifyApiClient', () => {
       const axiosRetryMock = axiosRetry.default as ReturnType<typeof vi.fn>
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
-
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
       })
@@ -516,11 +449,6 @@ describe('DifyApiClient', () => {
       const axiosRetry = await import('axios-retry')
       const axiosRetryMock = axiosRetry.default as ReturnType<typeof vi.fn>
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
 
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
@@ -565,11 +493,6 @@ describe('DifyApiClient', () => {
       const axiosRetryMock = axiosRetry.default as ReturnType<typeof vi.fn>
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
-
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
       })
@@ -608,11 +531,6 @@ describe('DifyApiClient', () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
-
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
       })
@@ -628,11 +546,6 @@ describe('DifyApiClient', () => {
     it('レスポンスインターセプターが設定される', async () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
 
       const getMock = vi.fn().mockResolvedValue({
         data: { data: [], has_more: false },
@@ -651,11 +564,6 @@ describe('DifyApiClient', () => {
     it('/console/api/appsを呼び出す', async () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
 
       const getMock = vi.fn().mockResolvedValue({
         data: {
@@ -688,11 +596,6 @@ describe('DifyApiClient', () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
 
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
-
       const getMock = vi
         .fn()
         .mockResolvedValueOnce({
@@ -724,11 +627,6 @@ describe('DifyApiClient', () => {
     it('/console/api/apps/{appId}/statistics/token-costsを呼び出す', async () => {
       const axios = await import('axios')
       const { createDifyApiClient } = await import('../../../src/fetcher/dify-api-client.js')
-
-      // ログインAPIモック
-      vi.mocked(axios.default.create().post).mockResolvedValue({
-        data: { result: 'success' },
-      })
 
       const getMock = vi.fn().mockResolvedValue({
         data: {

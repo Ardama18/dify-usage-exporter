@@ -76,6 +76,17 @@ vi.mock('axios', () => {
           },
         }
       }),
+      // ログイン用のSet-Cookieヘッダーを含むレスポンス（axios.post直接呼び出し用）
+      post: vi.fn().mockResolvedValue({
+        data: { result: 'success' },
+        headers: {
+          'set-cookie': [
+            '__Host-access_token=mock-access-token; Path=/; Secure; HttpOnly',
+            '__Host-csrf_token=mock-csrf-token; Path=/; Secure; HttpOnly',
+            '__Host-refresh_token=mock-refresh-token; Path=/; Secure; HttpOnly',
+          ],
+        },
+      }),
     },
   }
 })
@@ -86,22 +97,6 @@ vi.mock('axios-retry', () => ({
   exponentialDelay: vi.fn((retryCount: number) => 100 * 2 ** (retryCount - 1)),
   isNetworkOrIdempotentRequestError: vi.fn(() => false),
 }))
-
-// Cookie Jar関連のモック
-vi.mock('axios-cookiejar-support', () => ({
-  wrapper: vi.fn((instance) => instance),
-}))
-
-vi.mock('tough-cookie', () => {
-  const mockCookies = [
-    { key: 'access_token', value: 'mock-access-token' },
-    { key: 'csrf_token', value: 'mock-csrf-token' },
-  ]
-  class MockCookieJar {
-    getCookies = vi.fn().mockResolvedValue(mockCookies)
-  }
-  return { CookieJar: MockCookieJar }
-})
 
 // ============================================
 // ヘルパー関数

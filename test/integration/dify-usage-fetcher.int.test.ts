@@ -19,25 +19,34 @@ import type { EnvConfig } from '../../src/types/env.js'
 import { createWatermarkManager } from '../../src/watermark/watermark-manager.js'
 
 // axiosをモック
-vi.mock('axios')
+vi.mock('axios', () => {
+  const createMock = vi.fn()
+  const postMock = vi.fn()
+
+  // ログイン用のSet-Cookieヘッダーを含むレスポンス
+  postMock.mockResolvedValue({
+    data: { result: 'success' },
+    headers: {
+      'set-cookie': [
+        '__Host-access_token=mock-access-token; Path=/; Secure; HttpOnly',
+        '__Host-csrf_token=mock-csrf-token; Path=/; Secure; HttpOnly',
+        '__Host-refresh_token=mock-refresh-token; Path=/; Secure; HttpOnly',
+      ],
+    },
+  })
+
+  return {
+    default: {
+      create: createMock,
+      post: postMock,
+    },
+  }
+})
 vi.mock('axios-retry', () => ({
   default: vi.fn(),
   isNetworkOrIdempotentRequestError: vi.fn(),
   exponentialDelay: vi.fn(),
 }))
-vi.mock('axios-cookiejar-support', () => ({
-  wrapper: vi.fn((instance) => instance),
-}))
-vi.mock('tough-cookie', () => {
-  const mockCookies = [
-    { key: 'access_token', value: 'mock-access-token' },
-    { key: 'csrf_token', value: 'mock-csrf-token' },
-  ]
-  class MockCookieJar {
-    getCookies = vi.fn().mockResolvedValue(mockCookies)
-  }
-  return { CookieJar: MockCookieJar }
-})
 
 // ============================================
 // ヘルパー関数
@@ -654,10 +663,14 @@ describe('FR-5: エラーリトライ 統合テスト', () => {
       message: 'Request failed with status code 401',
       config: { url: '/console/api/login' },
     }
+    // 新実装では axios.post を直接使用するため、axios.post をモック
     const postMock = vi.fn().mockRejectedValue(authError)
+    const originalPost = vi.mocked(axios.post).getMockImplementation()
+    vi.mocked(axios.post).mockImplementation(postMock)
+
     const axiosInstance = {
       get: vi.fn(),
-      post: postMock,
+      post: vi.fn(),
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
@@ -670,8 +683,26 @@ describe('FR-5: エラーリトライ 統合テスト', () => {
     const client = createDifyApiClient({ config, logger })
 
     // Act & Assert
-    await expect(client.fetchApps()).rejects.toThrow()
-    expect(postMock).toHaveBeenCalledTimes(1) // リトライなし
+    try {
+      await expect(client.fetchApps()).rejects.toThrow()
+      expect(postMock).toHaveBeenCalledTimes(1) // リトライなし
+    } finally {
+      // モックを元に戻す
+      if (originalPost) {
+        vi.mocked(axios.post).mockImplementation(originalPost)
+      } else {
+        vi.mocked(axios.post).mockResolvedValue({
+          data: { result: 'success' },
+          headers: {
+            'set-cookie': [
+              '__Host-access_token=mock-access-token; Path=/; Secure; HttpOnly',
+              '__Host-csrf_token=mock-csrf-token; Path=/; Secure; HttpOnly',
+              '__Host-refresh_token=mock-refresh-token; Path=/; Secure; HttpOnly',
+            ],
+          },
+        })
+      }
+    }
   })
 
   // AC-5-3: 429エラーでRetry-After対応

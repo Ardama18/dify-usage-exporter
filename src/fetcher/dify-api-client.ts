@@ -8,9 +8,7 @@
  */
 
 import axios, { type AxiosError, type AxiosInstance } from 'axios'
-import { wrapper } from 'axios-cookiejar-support'
 import axiosRetry from 'axios-retry'
-import { CookieJar } from 'tough-cookie'
 import type { Logger } from '../logger/winston-logger.js'
 import type {
   DifyAppDetail,
@@ -187,6 +185,37 @@ export interface DifyApiClient {
 }
 
 /**
+ * Set-Cookieヘッダーから特定のCookie値を抽出する
+ * @param setCookieHeaders Set-Cookieヘッダーの配列
+ * @param cookieName 取得したいCookie名（__Host-プレフィックスも自動で検索）
+ * @returns Cookie値、見つからない場合はnull
+ */
+function extractCookieFromSetCookieHeader(
+  setCookieHeaders: string[] | undefined,
+  cookieName: string,
+): string | null {
+  if (!setCookieHeaders || setCookieHeaders.length === 0) {
+    return null
+  }
+
+  // __Host- プレフィックス付きとプレフィックスなしの両方を検索
+  const searchNames = [cookieName, `__Host-${cookieName}`]
+
+  for (const header of setCookieHeaders) {
+    for (const name of searchNames) {
+      // Cookie名=値 の形式でマッチ
+      const regex = new RegExp(`^${name}=([^;]+)`, 'i')
+      const match = header.match(regex)
+      if (match) {
+        return match[1]
+      }
+    }
+  }
+
+  return null
+}
+
+/**
  * DifyApiClientを作成する
  * @param deps 依存関係（EnvConfig, Logger）
  * @returns DifyApiClientインスタンス
@@ -194,14 +223,15 @@ export interface DifyApiClient {
 export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
   const { config, logger } = deps
 
-  // Cookie Jarでセッション管理（CSRF対策含む）
-  const jar = new CookieJar()
   let client: AxiosInstance | null = null
   let csrfToken: string | null = null
+  let accessToken: string | null = null
+  let refreshToken: string | null = null
   let isLoggedIn = false
 
   /**
-   * Dify Console APIにログイン（Cookie経由で認証）
+   * Dify Console APIにログイン
+   * Set-Cookieヘッダーから直接トークンを抽出（HTTP + Secure属性対応）
    */
   async function login(): Promise<void> {
     const baseUrl = config.DIFY_API_BASE_URL.replace(/\/$/, '')
@@ -209,10 +239,8 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
 
     logger.debug('Difyログイン試行', { email: config.DIFY_EMAIL })
 
-    // Cookie Jar対応のaxiosインスタンスでログイン
-    const loginClient = wrapper(axios.create({ jar, withCredentials: true }))
-
-    await loginClient.post<DifyLoginResponse>(
+    // ログインリクエスト（レスポンスヘッダーを取得するためwrapperなし）
+    const response = await axios.post<DifyLoginResponse>(
       loginUrl,
       {
         email: config.DIFY_EMAIL,
@@ -225,26 +253,60 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
       },
     )
 
-    // Cookie JarからCSRFトークンを取得
-    const cookies = await jar.getCookies(baseUrl)
-    let accessToken: string | null = null
+    // Set-Cookieヘッダーからトークンを抽出
+    const setCookieHeaders = response.headers['set-cookie'] as string[] | undefined
 
-    for (const cookie of cookies) {
-      // Dify 1.9.x では __Host- プレフィックス付きCookie名を使用
-      if (cookie.key === '__Host-access_token' || cookie.key === 'access_token') {
-        accessToken = cookie.value
-      }
-      if (cookie.key === '__Host-csrf_token' || cookie.key === 'csrf_token') {
-        csrfToken = cookie.value
-      }
-    }
+    logger.debug('Set-Cookieヘッダー確認', {
+      count: setCookieHeaders?.length ?? 0,
+      headers: setCookieHeaders?.map((h) => h.split('=')[0]),
+    })
+
+    // アクセストークン取得（__Host-access_token または access_token）
+    accessToken = extractCookieFromSetCookieHeader(setCookieHeaders, 'access_token')
+
+    // CSRFトークン取得
+    csrfToken = extractCookieFromSetCookieHeader(setCookieHeaders, 'csrf_token')
+
+    // リフレッシュトークン取得（後続リクエスト用）
+    refreshToken = extractCookieFromSetCookieHeader(setCookieHeaders, 'refresh_token')
 
     if (!accessToken) {
+      logger.error('アクセストークン取得失敗', {
+        setCookieCount: setCookieHeaders?.length ?? 0,
+        setCookieNames: setCookieHeaders?.map((h) => h.split('=')[0]),
+      })
       throw new Error('Difyログイン失敗: アクセストークンを取得できませんでした')
     }
 
+    logger.debug('トークン取得成功', {
+      hasAccessToken: !!accessToken,
+      hasCsrfToken: !!csrfToken,
+      hasRefreshToken: !!refreshToken,
+    })
+
     isLoggedIn = true
     logger.info('Difyログイン成功')
+  }
+
+  /**
+   * Cookieヘッダー文字列を生成
+   * 抽出したトークンからCookie: ヘッダー値を生成する
+   */
+  function buildCookieHeader(): string {
+    const cookies: string[] = []
+
+    // __Host-プレフィックス付きでCookieを設定（Dify 1.9.x対応）
+    if (accessToken) {
+      cookies.push(`__Host-access_token=${accessToken}`)
+    }
+    if (csrfToken) {
+      cookies.push(`__Host-csrf_token=${csrfToken}`)
+    }
+    if (refreshToken) {
+      cookies.push(`__Host-refresh_token=${refreshToken}`)
+    }
+
+    return cookies.join('; ')
   }
 
   /**
@@ -256,19 +318,15 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
     }
 
     if (!client) {
-      // Cookie Jar対応のaxiosインスタンスを作成
-      client = wrapper(
-        axios.create({
-          jar,
-          withCredentials: true,
-          baseURL: config.DIFY_API_BASE_URL.replace(/\/$/, ''),
-          timeout: config.DIFY_FETCH_TIMEOUT_MS,
-          headers: {
-            'Content-Type': 'application/json',
-            'User-Agent': 'dify-usage-exporter/1.0.0',
-          },
-        }),
-      )
+      // 通常のaxiosインスタンスを作成（Cookie Jarは使用しない）
+      client = axios.create({
+        baseURL: config.DIFY_API_BASE_URL.replace(/\/$/, ''),
+        timeout: config.DIFY_FETCH_TIMEOUT_MS,
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'dify-usage-exporter/1.0.0',
+        },
+      })
 
       // リトライ設定（ADR 002, ADR 007準拠）
       axiosRetry(client, {
@@ -301,8 +359,13 @@ export function createDifyApiClient(deps: DifyApiClientDeps): DifyApiClient {
         },
       })
 
-      // リクエストインターセプター（CSRFトークン追加、ログ出力）
+      // リクエストインターセプター（Cookie・CSRFトークン追加、ログ出力）
       client.interceptors.request.use((requestConfig) => {
+        // 手動でCookieヘッダーを設定
+        const cookieHeader = buildCookieHeader()
+        if (cookieHeader) {
+          requestConfig.headers['Cookie'] = cookieHeader
+        }
         // CSRFトークンをヘッダーに追加
         if (csrfToken) {
           requestConfig.headers['X-CSRF-Token'] = csrfToken
