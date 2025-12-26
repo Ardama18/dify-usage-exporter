@@ -178,7 +178,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
   describe('Happy Path: 送信成功', () => {
     it('should send records successfully with 200 response', async () => {
       // Arrange: モックAPI（200レスポンス）
-      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/').reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // Act: 送信実行
       await sender.send(testRequest)
@@ -190,7 +190,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
 
     it('should send records successfully with 201 response', async () => {
       // Arrange: モックAPI（201レスポンス）
-      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/').reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // Act: 送信実行
       await sender.send(testRequest)
@@ -205,9 +205,9 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
     it('should retry on 503 error and succeed', async () => {
       // Arrange: モックAPI（1回目: 503、2-4回目: 成功）
       // axios-retryが遅延付きでリトライするため、複数回の成功レスポンスを用意
-      nock(API_BASE_URL).post('/v1/usage').reply(503, { error: 'Service Unavailable' })
+      nock(API_BASE_URL).post('/').reply(503, { error: 'Service Unavailable' })
       nock(API_BASE_URL)
-        .post('/v1/usage')
+        .post('/')
         .times(3)
         .reply(200, { inserted: 1, updated: 0, total: 1 })
 
@@ -221,8 +221,8 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
 
     it('should retry on 500 error and succeed', async () => {
       // Arrange: モックAPI（1回目: 500、2回目: 成功）
-      nock(API_BASE_URL).post('/v1/usage').reply(500, { error: 'Internal Server Error' })
-      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/').reply(500, { error: 'Internal Server Error' })
+      nock(API_BASE_URL).post('/').reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // Act: 送信実行
       await sender.send(testRequest)
@@ -234,8 +234,8 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
 
     it('should retry on 429 error and succeed', async () => {
       // Arrange: モックAPI（1回目: 429、2回目: 成功）
-      nock(API_BASE_URL).post('/v1/usage').reply(429, { error: 'Too Many Requests' })
-      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/').reply(429, { error: 'Too Many Requests' })
+      nock(API_BASE_URL).post('/').reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // Act: 送信実行
       await sender.send(testRequest)
@@ -250,7 +250,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
     it('should save to spool after max retries', async () => {
       // Arrange: モックAPI（4回とも500エラー → リトライ上限）
       nock(API_BASE_URL)
-        .post('/v1/usage')
+        .post('/')
         .times(4) // 初回 + リトライ3回
         .reply(500, { error: 'Internal Server Error' })
 
@@ -277,7 +277,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
   describe.skip('Exception Pattern 3: 409 Conflict → 成功扱い', () => {
     it('should treat 409 as success', async () => {
       // Arrange: モックAPI（409レスポンス）
-      nock(API_BASE_URL).post('/v1/usage').reply(409, { message: 'Duplicate data' })
+      nock(API_BASE_URL).post('/').reply(409, { message: 'Duplicate data' })
 
       // Act: 送信実行
       await sender.send(testRequest)
@@ -291,7 +291,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
   describe.skip('スプール再送フロー: スプール保存 → 再送成功', () => {
     it('should resend spooled files successfully', async () => {
       // Step 1: スプール保存（リトライ上限）
-      nock(API_BASE_URL).post('/v1/usage').times(4).reply(500, { error: 'Internal Server Error' })
+      nock(API_BASE_URL).post('/').times(4).reply(500, { error: 'Internal Server Error' })
 
       await sender.send(testRequest)
 
@@ -300,7 +300,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
       expect(spoolExists).toBe(true)
 
       // Step 2: 再送実行（成功）
-      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/').reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // biome-ignore lint/suspicious/noExplicitAny: スプール機能は未実装のためskip
       await (sender as any).resendSpooled()
@@ -312,12 +312,12 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
 
     it('should increment retryCount on resend failure', async () => {
       // Step 1: スプール保存
-      nock(API_BASE_URL).post('/v1/usage').times(4).reply(500, { error: 'Internal Server Error' })
+      nock(API_BASE_URL).post('/').times(4).reply(500, { error: 'Internal Server Error' })
 
       await sender.send(testRequest)
 
       // Step 2: 再送失敗（retryCountインクリメント）
-      nock(API_BASE_URL).post('/v1/usage').times(4).reply(500, { error: 'Still failing' })
+      nock(API_BASE_URL).post('/').times(4).reply(500, { error: 'Still failing' })
 
       // biome-ignore lint/suspicious/noExplicitAny: スプール機能は未実装のためskip
       await (sender as any).resendSpooled()
@@ -337,14 +337,14 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
 
     it('should move to failed after max spool retries', async () => {
       // Step 1: スプール保存
-      nock(API_BASE_URL).post('/v1/usage').times(4).reply(500, { error: 'Initial failure' })
+      nock(API_BASE_URL).post('/').times(4).reply(500, { error: 'Initial failure' })
 
       await sender.send(testRequest)
 
       // Step 2: 10回再送失敗を繰り返す
       for (let i = 0; i < 10; i++) {
         nock(API_BASE_URL)
-          .post('/v1/usage')
+          .post('/')
           .times(4)
           .reply(500, { error: `Failure ${i + 1}` })
 
@@ -371,14 +371,14 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
 
     it('should send notification when moved to failed', async () => {
       // Step 1: スプール保存
-      nock(API_BASE_URL).post('/v1/usage').times(4).reply(500, { error: 'Initial failure' })
+      nock(API_BASE_URL).post('/').times(4).reply(500, { error: 'Initial failure' })
 
       await sender.send(testRequest)
 
       // Step 2: 10回再送失敗を繰り返す
       for (let i = 0; i < 10; i++) {
         nock(API_BASE_URL)
-          .post('/v1/usage')
+          .post('/')
           .times(4)
           .reply(500, { error: `Failure ${i + 1}` })
 
@@ -405,14 +405,14 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
       )
 
       // Step 1: スプール保存
-      nock(API_BASE_URL).post('/v1/usage').times(4).reply(500, { error: 'Initial failure' })
+      nock(API_BASE_URL).post('/').times(4).reply(500, { error: 'Initial failure' })
 
       await sender.send(testRequest)
 
       // Step 2: 10回再送失敗を繰り返す
       for (let i = 0; i < 10; i++) {
         nock(API_BASE_URL)
-          .post('/v1/usage')
+          .post('/')
           .times(4)
           .reply(500, { error: `Failure ${i + 1}` })
 
@@ -432,7 +432,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
   describe('エッジケース', () => {
     it('should handle non-retryable errors (400)', async () => {
       // Arrange: モックAPI（400エラー、リトライしない）
-      nock(API_BASE_URL).post('/v1/usage').reply(400, { error: 'Bad Request' })
+      nock(API_BASE_URL).post('/').reply(400, { error: 'Bad Request' })
 
       // Act & Assert: エラーがスローされる
       await expect(sender.send(testRequest)).rejects.toThrow()
@@ -444,7 +444,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
 
     it('should handle non-retryable errors (401)', async () => {
       // Arrange: モックAPI（401エラー、リトライしない）
-      nock(API_BASE_URL).post('/v1/usage').reply(401, { error: 'Unauthorized' })
+      nock(API_BASE_URL).post('/').reply(401, { error: 'Unauthorized' })
 
       // Act & Assert: エラーがスローされる
       await expect(sender.send(testRequest)).rejects.toThrow()
@@ -474,7 +474,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
         ],
       }
 
-      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 3, updated: 0, total: 3 })
+      nock(API_BASE_URL).post('/').reply(200, { inserted: 3, updated: 0, total: 3 })
 
       // Act: 送信実行
       await sender.send(multipleRecords)

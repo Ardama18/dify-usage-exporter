@@ -185,7 +185,7 @@ describe('API_Meter Integration Test', { concurrent: false }, () => {
       ]
 
       // Arrange: モックAPI（成功レスポンス）
-      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/').reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // Act: Normalize → Transform → Send
       const normalizer = createNormalizer()
@@ -251,7 +251,7 @@ describe('API_Meter Integration Test', { concurrent: false }, () => {
       ]
 
       // Arrange: モックAPI
-      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/').reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // Act
       const normalizer = createNormalizer()
@@ -323,7 +323,7 @@ describe('API_Meter Integration Test', { concurrent: false }, () => {
       ]
 
       // Arrange: モックAPI
-      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 2, updated: 0, total: 2 })
+      nock(API_BASE_URL).post('/').reply(200, { inserted: 2, updated: 0, total: 2 })
 
       // Act
       const normalizer = createNormalizer()
@@ -379,8 +379,8 @@ describe('API_Meter Integration Test', { concurrent: false }, () => {
       ]
 
       // Arrange: モックAPI（1回目: 429、2回目: 成功）
-      nock(API_BASE_URL).post('/v1/usage').reply(429, { error: 'Too Many Requests' })
-      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/').reply(429, { error: 'Too Many Requests' })
+      nock(API_BASE_URL).post('/').reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // Act
       const normalizer = createNormalizer()
@@ -433,7 +433,7 @@ describe('API_Meter Integration Test', { concurrent: false }, () => {
 
       // Arrange: モックAPI（4回とも500エラー → リトライ上限）
       nock(API_BASE_URL)
-        .post('/v1/usage')
+        .post('/')
         .times(4) // 初回 + リトライ3回
         .reply(500, { error: 'Internal Server Error' })
 
@@ -503,7 +503,7 @@ describe('API_Meter Integration Test', { concurrent: false }, () => {
       await fs.writeFile(legacySpoolPath, JSON.stringify(legacySpoolFile))
 
       // Arrange: モックAPI（成功レスポンス）
-      nock(API_BASE_URL).post('/v1/usage').reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/').reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // Act: スプール再送（旧形式→新形式変換を含む）
       const httpClient = new HttpClient(logger, config)

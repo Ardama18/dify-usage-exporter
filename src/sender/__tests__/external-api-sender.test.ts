@@ -122,7 +122,7 @@ describe('ExternalApiSender', () => {
       await sender.send(testRequest)
 
       // Assert
-      expect(mockHttpClient.post).toHaveBeenCalledWith('/v1/usage', testRequest)
+      expect(mockHttpClient.post).toHaveBeenCalledWith('', testRequest)
       expect(mockLogger.info).toHaveBeenCalledWith(
         expect.stringContaining('Successfully sent'),
         expect.objectContaining({
@@ -144,7 +144,7 @@ describe('ExternalApiSender', () => {
       await sender.send(testRequest)
 
       // Assert
-      expect(mockHttpClient.post).toHaveBeenCalledWith('/v1/usage', testRequest)
+      expect(mockHttpClient.post).toHaveBeenCalledWith('', testRequest)
       expect(mockMetrics.sendSuccess).toBe(1)
     })
 

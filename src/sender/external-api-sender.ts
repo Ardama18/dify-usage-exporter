@@ -51,8 +51,8 @@ export class ExternalApiSender implements ISender {
    */
   async send(request: ApiMeterRequest): Promise<void> {
     try {
-      // 1. 外部APIへ送信（POST /v1/usage）
-      const response = await this.httpClient.post('/v1/usage', request)
+      // 1. 外部APIへ送信（EXTERNAL_API_URLがエンドポイントを含むため空文字列を指定）
+      const response = await this.httpClient.post('', request)
 
       // 2. 200 OKレスポンス: 成功（inserted/updated確認）
       this.handleSuccessResponse(response, request)
