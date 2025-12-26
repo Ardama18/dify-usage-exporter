@@ -50,6 +50,17 @@ export class ExternalApiSender implements ISender {
    * @throws {Error} - 送信失敗時
    */
   async send(request: ApiMeterRequest): Promise<void> {
+    // 送信前サマリーログ（info レベルで API Meter 通信を可視化）
+    const totalCost = request.records.reduce((sum, r) => sum + r.cost_actual, 0)
+    this.logger.info('Sending to API Meter', {
+      tenant_id: request.tenant_id,
+      recordCount: request.records.length,
+      dateRange: request.export_metadata.date_range,
+      totalCostUSD: totalCost.toFixed(4),
+      providers: [...new Set(request.records.map((r) => r.provider))],
+      models: [...new Set(request.records.map((r) => r.model))],
+    })
+
     try {
       // 1. 外部APIへ送信（EXTERNAL_API_URLがエンドポイントを含むため空文字列を指定）
       const response = await this.httpClient.post('', request)

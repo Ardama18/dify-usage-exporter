@@ -98,9 +98,10 @@ export class HttpClient {
           export_metadata: payload.export_metadata,
           recordCount: Array.isArray(payload.records) ? payload.records.length : 0,
           // 最初のレコードをサンプルとして出力
-          sampleRecord: Array.isArray(payload.records) && payload.records.length > 0
-            ? payload.records[0]
-            : null,
+          sampleRecord:
+            Array.isArray(payload.records) && payload.records.length > 0
+              ? payload.records[0]
+              : null,
         })
       }
 

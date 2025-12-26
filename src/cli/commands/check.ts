@@ -90,8 +90,12 @@ async function testDifyConnection(
     const csrfToken = extractCookieFromSetCookieHeader(setCookieHeaders, 'csrf_token')
 
     console.log(`\n   🍪 Set-Cookieヘッダーから抽出したトークン:`)
-    console.log(`      - access_token: ${accessToken ? `${accessToken.substring(0, 20)}...` : '(なし)'}`)
-    console.log(`      - refresh_token: ${refreshToken ? `${refreshToken.substring(0, 20)}...` : '(なし)'}`)
+    console.log(
+      `      - access_token: ${accessToken ? `${accessToken.substring(0, 20)}...` : '(なし)'}`,
+    )
+    console.log(
+      `      - refresh_token: ${refreshToken ? `${refreshToken.substring(0, 20)}...` : '(なし)'}`,
+    )
     console.log(`      - csrf_token: ${csrfToken ? `${csrfToken.substring(0, 20)}...` : '(なし)'}`)
 
     // Set-Cookieヘッダーの詳細
@@ -114,7 +118,9 @@ async function testDifyConnection(
           possibleCauses: [
             statusCode === 401 ? 'メールアドレスまたはパスワードが間違っています' : null,
             statusCode === 403 ? 'アクセス権限がありません' : null,
-            statusCode === 404 ? 'ログインAPIエンドポイントが見つかりません（URLを確認してください）' : null,
+            statusCode === 404
+              ? 'ログインAPIエンドポイントが見つかりません（URLを確認してください）'
+              : null,
             statusCode >= 500 ? 'Difyサーバーでエラーが発生しています' : null,
           ].filter(Boolean),
         },

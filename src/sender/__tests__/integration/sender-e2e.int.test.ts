@@ -206,10 +206,7 @@ describe('ExternalApiSender E2E Integration Tests', { concurrent: false }, () =>
       // Arrange: モックAPI（1回目: 503、2-4回目: 成功）
       // axios-retryが遅延付きでリトライするため、複数回の成功レスポンスを用意
       nock(API_BASE_URL).post('/').reply(503, { error: 'Service Unavailable' })
-      nock(API_BASE_URL)
-        .post('/')
-        .times(3)
-        .reply(200, { inserted: 1, updated: 0, total: 1 })
+      nock(API_BASE_URL).post('/').times(3).reply(200, { inserted: 1, updated: 0, total: 1 })
 
       // Act: 送信実行
       await sender.send(testRequest)
