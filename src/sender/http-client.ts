@@ -82,35 +82,21 @@ export class HttpClient {
       },
     })
 
-    // 3. リクエストインターセプター（API Meter通信をinfo-levelで可視化）
+    // 3. リクエストインターセプター
     this.client.interceptors.request.use((requestConfig) => {
-      this.logger.info('API Meter Request', {
+      this.logger.debug('HTTP Request', {
         method: requestConfig.method?.toUpperCase(),
         url: `${config.EXTERNAL_API_URL}${requestConfig.url}`,
-        headers: this.maskToken(requestConfig.headers as Record<string, unknown>),
       })
-
-      // リクエストボディの全データをログ出力
-      if (requestConfig.data) {
-        const payload = requestConfig.data as Record<string, unknown>
-        this.logger.info('API Meter Request Body', {
-          tenant_id: payload.tenant_id,
-          export_metadata: payload.export_metadata,
-          recordCount: Array.isArray(payload.records) ? payload.records.length : 0,
-          records: payload.records, // 全レコードを表示
-        })
-      }
-
       return requestConfig
     })
 
-    // 4. レスポンスインターセプター（API Meter通信をinfo-levelで可視化）
+    // 4. レスポンスインターセプター
     this.client.interceptors.response.use(
       (response) => {
-        this.logger.info('API Meter Response', {
+        this.logger.debug('HTTP Response', {
           status: response.status,
           statusText: response.statusText,
-          data: response.data, // 全レスポンスデータを表示
         })
         return response
       },
@@ -210,19 +196,5 @@ export class HttpClient {
           retryCount,
         })
     }
-  }
-
-  /**
-   * トークンマスク
-   * ログ出力時に認証トークンをマスクする
-   * @param headers HTTPヘッダー
-   * @returns マスク済みヘッダー
-   */
-  private maskToken(headers: Record<string, unknown>): Record<string, unknown> {
-    const masked = { ...headers }
-    if (masked.Authorization && typeof masked.Authorization === 'string') {
-      masked.Authorization = 'Bearer ***MASKED***'
-    }
-    return masked
   }
 }

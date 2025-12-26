@@ -185,6 +185,59 @@ function aggregateData(
     modelRecords: aggregationResult.modelRecords.length,
   })
 
+  // アプリ毎のデータサマリーをログ出力（Difyとの一致確認用）
+  if (aggregationResult.modelRecords.length > 0) {
+    // アプリ毎にグループ化
+    const appSummary = new Map<
+      string,
+      {
+        app_name: string
+        total_tokens: number
+        total_cost: number
+        models: Set<string>
+        providers: Set<string>
+        record_count: number
+      }
+    >()
+
+    for (const record of aggregationResult.modelRecords) {
+      const key = record.app_id
+      const existing = appSummary.get(key)
+
+      if (existing) {
+        existing.total_tokens += record.total_tokens
+        existing.total_cost += Number.parseFloat(record.total_price)
+        existing.models.add(record.model_name)
+        existing.providers.add(record.model_provider)
+        existing.record_count += 1
+      } else {
+        appSummary.set(key, {
+          app_name: record.app_name,
+          total_tokens: record.total_tokens,
+          total_cost: Number.parseFloat(record.total_price),
+          models: new Set([record.model_name]),
+          providers: new Set([record.model_provider]),
+          record_count: 1,
+        })
+      }
+    }
+
+    // アプリ毎のサマリーをログ出力
+    logger.info('=== アプリ毎のデータサマリー（Dify確認用） ===')
+    for (const [appId, summary] of appSummary) {
+      logger.info(`App: ${summary.app_name}`, {
+        app_id: appId,
+        app_name: summary.app_name,
+        total_tokens: summary.total_tokens,
+        total_cost_usd: summary.total_cost.toFixed(6),
+        providers: [...summary.providers],
+        models: [...summary.models],
+        record_count: summary.record_count,
+      })
+    }
+    logger.info('=== アプリ毎サマリー終了 ===')
+  }
+
   return { aggregationResult, totalAggregatedRecords }
 }
 
