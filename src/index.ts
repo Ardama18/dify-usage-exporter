@@ -389,6 +389,15 @@ export async function main(): Promise<void> {
           modelRecordCount: aggregationResult.modelRecords.length,
         })
 
+        // デバッグ用: 送信ペイロードの詳細をログ出力
+        logger.debug('送信ペイロード詳細（旧形式）', {
+          aggregation_period: payload.aggregation_period,
+          output_mode: payload.output_mode,
+          fetch_period: payload.fetch_period,
+          sampleAppRecord: aggregationResult.appRecords[0] || null,
+          sampleWorkspaceRecord: aggregationResult.workspaceRecords[0] || null,
+        })
+
         const response = await axios.post(config.EXTERNAL_API_URL, payload, {
           headers: {
             'Content-Type': 'application/json',
@@ -410,8 +419,13 @@ export async function main(): Promise<void> {
       }
     } catch (error) {
       const err = error as Error
+      // デバッグ用: エラーレスポンスの詳細をログ出力
+      const axiosErr = error as { response?: { status?: number; data?: unknown } }
       logger.error('エクスポートジョブ失敗', {
         message: err.message,
+        status: axiosErr.response?.status,
+        responseData: axiosErr.response?.data,
+        fullErrorResponse: JSON.stringify(axiosErr.response?.data, null, 2),
       })
       collector.getMetrics().sendFailed = 1
     } finally {
