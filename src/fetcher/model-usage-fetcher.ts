@@ -331,6 +331,7 @@ export function createModelUsageFetcher(deps: ModelUsageFetcherDeps): ModelUsage
   /**
    * advanced-chat / agent-chat モードのアプリからモデル使用量を取得
    * /chat-conversations → /chat-messages → workflow_run_id → /node-executions
+   * ワークフローデータがない場合は、token-costs APIへフォールバック
    */
   async function fetchFromChatApp(
     app: DifyApp,
@@ -355,6 +356,7 @@ export function createModelUsageFetcher(deps: ModelUsageFetcherDeps): ModelUsage
 
       // 2. 各会話のメッセージを取得
       const processedWorkflowRunIds = new Set<string>()
+      const recordsBeforeCount = records.length
 
       for (const conv of conversations) {
         try {
@@ -410,11 +412,26 @@ export function createModelUsageFetcher(deps: ModelUsageFetcherDeps): ModelUsage
         }
       }
 
-      logger.debug('チャットアプリ処理完了', {
-        appId: app.id,
-        appName: app.name,
-        workflowRunCount: processedWorkflowRunIds.size,
-      })
+      // 4. ワークフローデータが取得できなかった場合、token-costs APIへフォールバック
+      const recordsAddedCount = records.length - recordsBeforeCount
+      if (recordsAddedCount === 0 && conversations.length > 0) {
+        logger.info('ワークフローデータなし、token-costs APIへフォールバック', {
+          appId: app.id,
+          appName: app.name,
+          mode: app.mode,
+          conversationCount: conversations.length,
+        })
+
+        // chat/completionアプリと同じ処理を実行
+        await fetchFromSimpleChatApp(app, startTimestamp, endTimestamp, records, errors)
+      } else {
+        logger.debug('チャットアプリ処理完了', {
+          appId: app.id,
+          appName: app.name,
+          workflowRunCount: processedWorkflowRunIds.size,
+          recordsAdded: recordsAddedCount,
+        })
+      }
     } catch (error) {
       const errorMsg = `会話取得エラー: ${app.name}`
       logger.warn(errorMsg, { error })
