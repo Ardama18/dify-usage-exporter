@@ -19,10 +19,22 @@ import type { SpoolManager } from './spool-manager.js'
  * API_Meterレスポンス形式
  * 200 OKレスポンスで返される情報
  */
-interface ApiMeterResponse {
+export interface ApiMeterResponse {
   inserted: number
   updated: number
   total: number
+}
+
+/**
+ * 送信結果
+ */
+export interface SendResult {
+  success: boolean
+  recordCount: number
+  inserted?: number
+  updated?: number
+  total?: number
+  error?: string
 }
 
 /**
@@ -47,15 +59,16 @@ export class ExternalApiSender implements ISender {
    * 変換済みデータを外部APIへ送信（ApiMeterRequest形式）
    *
    * @param request - API_Meterリクエスト
+   * @returns 送信結果
    * @throws {Error} - 送信失敗時
    */
-  async send(request: ApiMeterRequest): Promise<void> {
+  async send(request: ApiMeterRequest): Promise<SendResult> {
     try {
       // 1. 外部APIへ送信（EXTERNAL_API_URLがエンドポイントを含むため空文字列を指定）
       const response = await this.httpClient.post('', request)
 
       // 2. 200 OKレスポンス: 成功（inserted/updated確認）
-      this.handleSuccessResponse(response, request)
+      return this.handleSuccessResponse(response, request)
     } catch (error) {
       // 3. エラー処理: リトライ上限到達時はスプール保存
       await this.handleSendErrorWithSpool(error, request)
@@ -69,8 +82,9 @@ export class ExternalApiSender implements ISender {
    *
    * @param response - axiosレスポンス
    * @param request - API_Meterリクエスト
+   * @returns 送信結果
    */
-  private handleSuccessResponse(response: AxiosResponse, request: ApiMeterRequest): void {
+  private handleSuccessResponse(response: AxiosResponse, request: ApiMeterRequest): SendResult {
     const recordCount = request.records.length
     this._metrics.sendSuccess += recordCount
 
@@ -86,8 +100,18 @@ export class ExternalApiSender implements ISender {
           total: data.total,
         },
       )
-    } else {
-      this.logger.info(`Successfully sent ${recordCount} records`, { recordCount })
+      return {
+        success: true,
+        recordCount,
+        inserted: data.inserted,
+        updated: data.updated,
+        total: data.total,
+      }
+    }
+    this.logger.info(`Successfully sent ${recordCount} records`, { recordCount })
+    return {
+      success: true,
+      recordCount,
     }
   }
 

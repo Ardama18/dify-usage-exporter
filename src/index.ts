@@ -20,7 +20,7 @@ import { createMetricsCollector } from './monitoring/metrics-collector.js'
 import { createMetricsReporter } from './monitoring/metrics-reporter.js'
 import { createNormalizer } from './normalizer/normalizer.js'
 import { createScheduler } from './scheduler/cron-scheduler.js'
-import { ExternalApiSender } from './sender/external-api-sender.js'
+import { ExternalApiSender, type SendResult } from './sender/external-api-sender.js'
 import { HttpClient } from './sender/http-client.js'
 import { SpoolManager } from './sender/spool-manager.js'
 import { setupGracefulShutdown } from './shutdown/graceful-shutdown.js'
@@ -302,7 +302,10 @@ async function sendToApiMeter(
     metrics,
   )
 
+  // 送信結果を集計
+  const results: SendResult[] = []
   let totalSent = 0
+
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i]
     logger.info(`Sending batch ${i + 1}/${batches.length}`, {
@@ -314,7 +317,8 @@ async function sendToApiMeter(
     const transformResult = transformer.transform(batch)
 
     // Send（API_Meterへ送信）
-    await sender.send(transformResult.request)
+    const result = await sender.send(transformResult.request)
+    results.push(result)
 
     totalSent += batch.length
     logger.info(`Batch ${i + 1}/${batches.length} sent successfully`, {
@@ -323,10 +327,24 @@ async function sendToApiMeter(
     })
   }
 
+  // API_Meter送信結果サマリー
+  const totalInserted = results.reduce((sum, r) => sum + (r.inserted ?? 0), 0)
+  const totalUpdated = results.reduce((sum, r) => sum + (r.updated ?? 0), 0)
+  const totalInApiMeter = results.reduce((sum, r) => sum + (r.total ?? 0), 0)
+
+  logger.info('=== API_Meter送信結果サマリー ===')
   logger.info('API_Meter送信完了', {
     recordCount: totalSent,
     batchCount: batches.length,
+    apiMeterResponse: {
+      inserted: totalInserted,
+      updated: totalUpdated,
+      total: totalInApiMeter,
+    },
   })
+  logger.info(`送信レコード数: ${totalSent}件`)
+  logger.info(`API_Meter結果: 新規=${totalInserted}件, 更新=${totalUpdated}件, 合計=${totalInApiMeter}件`)
+  logger.info('=== API_Meter送信結果サマリー終了 ===')
 }
 
 export async function main(): Promise<void> {
