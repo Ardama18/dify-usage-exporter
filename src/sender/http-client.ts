@@ -82,38 +82,35 @@ export class HttpClient {
       },
     })
 
-    // 3. リクエストインターセプター
+    // 3. リクエストインターセプター（API Meter通信をinfo-levelで可視化）
     this.client.interceptors.request.use((requestConfig) => {
-      this.logger.debug('HTTP Request', {
-        method: requestConfig.method,
-        url: requestConfig.url,
-        headers: this.maskToken(requestConfig.headers),
+      this.logger.info('API Meter Request', {
+        method: requestConfig.method?.toUpperCase(),
+        url: `${config.EXTERNAL_API_URL}${requestConfig.url}`,
+        headers: this.maskToken(requestConfig.headers as Record<string, unknown>),
       })
 
-      // デバッグ用: リクエストボディの詳細をログ出力
+      // リクエストボディの全データをログ出力
       if (requestConfig.data) {
         const payload = requestConfig.data as Record<string, unknown>
-        this.logger.debug('HTTP Request Body (debug)', {
+        this.logger.info('API Meter Request Body', {
           tenant_id: payload.tenant_id,
           export_metadata: payload.export_metadata,
           recordCount: Array.isArray(payload.records) ? payload.records.length : 0,
-          // 最初のレコードをサンプルとして出力
-          sampleRecord:
-            Array.isArray(payload.records) && payload.records.length > 0
-              ? payload.records[0]
-              : null,
+          records: payload.records, // 全レコードを表示
         })
       }
 
       return requestConfig
     })
 
-    // 4. レスポンスインターセプター
+    // 4. レスポンスインターセプター（API Meter通信をinfo-levelで可視化）
     this.client.interceptors.response.use(
       (response) => {
-        this.logger.debug('HTTP Response', {
+        this.logger.info('API Meter Response', {
           status: response.status,
           statusText: response.statusText,
+          data: response.data, // 全レスポンスデータを表示
         })
         return response
       },

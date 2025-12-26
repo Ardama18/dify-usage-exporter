@@ -168,9 +168,11 @@ describe('HttpClient', () => {
 
       await httpClient.post('/usage', testData)
 
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('HTTP Request'),
+      // API Meter Requestログが出力され、トークンがマスクされていることを確認
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        'API Meter Request',
         expect.objectContaining({
+          method: 'POST',
           headers: expect.objectContaining({
             Authorization: 'Bearer ***MASKED***',
           }),
