@@ -2,7 +2,7 @@
  * 期間計算ユーティリティ
  *
  * DIFY_FETCH_PERIODに基づいて取得期間を計算する。
- * current_month, last_month, current_week, last_week, customに対応。
+ * today, yesterday, current_month, last_month, current_week, last_week, customに対応。
  */
 
 import type { FetchPeriod } from '../types/env.js'
@@ -30,6 +30,12 @@ export function calculateDateRange(
   const now = new Date()
 
   switch (period) {
+    case 'today':
+      return getTodayRange(now)
+
+    case 'yesterday':
+      return getYesterdayRange(now)
+
     case 'current_month':
       return getCurrentMonthRange(now)
 
@@ -49,6 +55,33 @@ export function calculateDateRange(
       // デフォルトは今月
       return getCurrentMonthRange(now)
   }
+}
+
+/**
+ * 今日の期間を取得
+ * @param now 基準日
+ * @returns 今日の開始日と終了日（同じ日）
+ */
+function getTodayRange(now: Date): DateRange {
+  const startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+
+  return { startDate, endDate }
+}
+
+/**
+ * 昨日の期間を取得
+ * @param now 基準日
+ * @returns 昨日の開始日と終了日（同じ日）
+ */
+function getYesterdayRange(now: Date): DateRange {
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+
+  const startDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate())
+  const endDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate())
+
+  return { startDate, endDate }
 }
 
 /**

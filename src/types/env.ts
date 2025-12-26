@@ -2,6 +2,8 @@ import { z } from 'zod'
 
 // 期間指定モード
 export const fetchPeriodEnum = z.enum([
+  'today', // 今日
+  'yesterday', // 昨日
   'current_month', // 今月
   'last_month', // 先月
   'current_week', // 今週
