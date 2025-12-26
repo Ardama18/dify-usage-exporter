@@ -303,29 +303,11 @@ export function createModelUsageFetcher(deps: ModelUsageFetcherDeps): ModelUsage
         end: endTimestamp,
       })
 
-      // ステータス別に集計
-      const statusCounts = workflowRuns.reduce(
-        (acc, run) => {
-          acc[run.status] = (acc[run.status] || 0) + 1
-          return acc
-        },
-        {} as Record<string, number>,
-      )
-
       logger.info('ワークフロー実行一覧取得完了', {
         appId: app.id,
-        appName: app.name,
         count: workflowRuns.length,
-        statusCounts, // ← succeeded/failed/stoppedの内訳
-        firstRunDate: workflowRuns[0]?.created_at
-          ? new Date(workflowRuns[0].created_at * 1000).toISOString()
-          : null,
-        lastRunDate: workflowRuns[workflowRuns.length - 1]?.created_at
-          ? new Date(workflowRuns[workflowRuns.length - 1].created_at * 1000).toISOString()
-          : null,
       })
 
-      let appTotalTokens = 0
       for (const run of workflowRuns) {
         try {
           const nodeExecutions = await difyClient.fetchNodeExecutions({
@@ -337,7 +319,6 @@ export function createModelUsageFetcher(deps: ModelUsageFetcherDeps): ModelUsage
             const record = extractModelUsageFromNodeExecution(node, app.id, app.name, run.id, null, logger)
             if (record) {
               records.push(record)
-              appTotalTokens += record.total_tokens
             }
           }
         } catch (error) {
@@ -345,16 +326,6 @@ export function createModelUsageFetcher(deps: ModelUsageFetcherDeps): ModelUsage
           logger.warn(errorMsg, { error })
           errors.push(errorMsg)
         }
-      }
-
-      // アプリごとのトークン合計をログ出力（Difyとの比較用）
-      if (appTotalTokens > 0) {
-        logger.info('ワークフローアプリ トークン集計', {
-          appId: app.id,
-          appName: app.name,
-          totalTokens: appTotalTokens,
-          workflowRunCount: workflowRuns.length,
-        })
       }
     } catch (error) {
       const errorMsg = `ワークフロー実行取得エラー: ${app.name}`
