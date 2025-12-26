@@ -23,8 +23,8 @@ services:
 
       # 期間・集計設定
       - DIFY_FETCH_PERIOD=${DIFY_FETCH_PERIOD:-current_month}
-      - DIFY_AGGREGATION_PERIOD=${DIFY_AGGREGATION_PERIOD:-monthly}
-      - DIFY_OUTPUT_MODE=${DIFY_OUTPUT_MODE:-both}
+      - DIFY_AGGREGATION_PERIOD=${DIFY_AGGREGATION_PERIOD:-daily}
+      - DIFY_OUTPUT_MODE=${DIFY_OUTPUT_MODE:-per_model}
 
       # オプション設定
       - LOG_LEVEL=${LOG_LEVEL:-info}
