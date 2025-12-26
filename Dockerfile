@@ -28,6 +28,10 @@ COPY --from=builder /app/package*.json ./
 RUN npm ci --only=production && \
     npm cache clean --force
 
+# データディレクトリを作成し、適切な所有権を設定
+RUN mkdir -p /app/data/spool /app/data/failed && \
+    chown -R exporter:nodejs /app/data
+
 # 非rootユーザーに切り替え
 USER exporter
 
