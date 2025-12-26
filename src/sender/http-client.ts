@@ -89,6 +89,21 @@ export class HttpClient {
         url: requestConfig.url,
         headers: this.maskToken(requestConfig.headers),
       })
+
+      // デバッグ用: リクエストボディの詳細をログ出力
+      if (requestConfig.data) {
+        const payload = requestConfig.data as Record<string, unknown>
+        this.logger.debug('HTTP Request Body (debug)', {
+          tenant_id: payload.tenant_id,
+          export_metadata: payload.export_metadata,
+          recordCount: Array.isArray(payload.records) ? payload.records.length : 0,
+          // 最初のレコードをサンプルとして出力
+          sampleRecord: Array.isArray(payload.records) && payload.records.length > 0
+            ? payload.records[0]
+            : null,
+        })
+      }
+
       return requestConfig
     })
 
@@ -147,6 +162,8 @@ export class HttpClient {
         this.logger.error('Bad Request (400)', {
           message: 'Invalid request format',
           details: data,
+          // デバッグ用: エラーレスポンスの全体をJSON文字列で出力
+          fullResponse: JSON.stringify(data, null, 2),
           retryCount,
         })
         break
