@@ -171,16 +171,22 @@ function extractModelUsageFromNodeExecution(
   appName: string,
   workflowRunId: string,
   fallbackUserContext?: UserContext | null,
+  logger?: Logger,
 ): ModelUsageRecord | null {
-  // LLMノード以外はスキップ
-  if (node.node_type !== 'llm') {
-    return null
-  }
-
-  // process_dataからモデル情報を取得
+  // process_dataからモデル情報を取得（usageがあるノードのみ処理）
   const processData = node.process_data
   if (!processData || !processData.usage) {
     return null
+  }
+
+  // LLM以外のノードタイプでもトークンを消費する場合がある
+  // 例: agent, question-classifier, parameter-extractor, knowledge-retrieval
+  if (node.node_type !== 'llm' && logger) {
+    logger.debug('非LLMノードからトークン情報を取得', {
+      nodeType: node.node_type,
+      nodeTitle: node.title,
+      totalTokens: processData.usage.total_tokens,
+    })
   }
 
   const usage = processData.usage
@@ -310,7 +316,7 @@ export function createModelUsageFetcher(deps: ModelUsageFetcherDeps): ModelUsage
           })
 
           for (const node of nodeExecutions) {
-            const record = extractModelUsageFromNodeExecution(node, app.id, app.name, run.id)
+            const record = extractModelUsageFromNodeExecution(node, app.id, app.name, run.id, null, logger)
             if (record) {
               records.push(record)
             }
@@ -394,6 +400,7 @@ export function createModelUsageFetcher(deps: ModelUsageFetcherDeps): ModelUsage
                   app.name,
                   workflowRunId,
                   userContext,
+                  logger,
                 )
                 if (record) {
                   records.push(record)
