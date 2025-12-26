@@ -251,15 +251,50 @@ async function sendToApiMeter(
   logger: ReturnType<typeof createLogger>,
   metrics: ReturnType<ReturnType<typeof createMetricsCollector>['getMetrics']>,
 ): Promise<void> {
+  // デバッグ: フィルタ前のレコード内容を確認
+  logger.info('API_Meter送信前レコード確認', {
+    totalModelRecords: aggregationResult.modelRecords.length,
+    aggregationPeriod: config.DIFY_AGGREGATION_PERIOD,
+    period_types: [...new Set(aggregationResult.modelRecords.map((r) => r.period_type))],
+    apps: [...new Set(aggregationResult.modelRecords.map((r) => r.app_name))],
+  })
+
   // 日別データのフィルタリング（period_type === 'daily'のみ）
   const dailyRecords = aggregationResult.modelRecords.filter(
     (record) => record.period_type === 'daily',
   )
 
+  // デバッグ: フィルタ後のレコード内容を確認
+  logger.info('dailyRecordsフィルタ後', {
+    dailyRecordsCount: dailyRecords.length,
+    apps: [...new Set(dailyRecords.map((r) => r.app_name))],
+  })
+
+  // デバッグ: 同じモデルを使用するアプリの重複確認
+  const modelAppMap = new Map<string, Set<string>>()
+  for (const record of dailyRecords) {
+    const modelKey = `${record.period}|${record.model_provider}|${record.model_name}`
+    if (!modelAppMap.has(modelKey)) {
+      modelAppMap.set(modelKey, new Set())
+    }
+    modelAppMap.get(modelKey)?.add(record.app_name)
+  }
+  // 複数アプリが同じモデルを使用している場合のみ警告
+  for (const [modelKey, apps] of modelAppMap) {
+    if (apps.size > 1) {
+      logger.warn('同じモデルを複数アプリが使用（API Meter側で上書きの可能性）', {
+        modelKey,
+        apps: [...apps],
+        appCount: apps.size,
+      })
+    }
+  }
+
   if (dailyRecords.length === 0) {
     logger.warn('No daily records for API_Meter', {
       aggregationPeriod: config.DIFY_AGGREGATION_PERIOD,
       totalModelRecords: aggregationResult.modelRecords.length,
+      sampleRecord: aggregationResult.modelRecords[0],
     })
     return
   }
